@@ -16,6 +16,10 @@ public class NatsConsumerProperties {
     private String dlqStream = "WEBHOOKS_INBOUND_DLQ";
     private String dlqSubject = "webhooks.inbound.dlq.events";
     private String durableConsumer = "webhooks-inbound-worker";
+    private int replicas = 1;
+    private int workerConcurrency = 4;
+    private Duration ackWait = Duration.ofSeconds(60);
+    private Duration inFlightLease = Duration.ofSeconds(30);
     private String idempotencyBucket = "WEBHOOK_IDEMPOTENCY";
     private Duration idempotencyTtl = Duration.ofHours(24);
     private int maxDeliver = 5;

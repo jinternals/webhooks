@@ -4,11 +4,9 @@ import io.nats.client.Connection;
 import io.nats.client.JetStream;
 import io.nats.client.JetStreamApiException;
 import io.nats.client.JetStreamManagement;
-import io.nats.client.JetStreamSubscription;
 import io.nats.client.KeyValue;
 import io.nats.client.KeyValueManagement;
 import io.nats.client.Nats;
-import io.nats.client.PullSubscribeOptions;
 import io.nats.client.api.AckPolicy;
 import io.nats.client.api.ConsumerConfiguration;
 import io.nats.client.api.KeyValueConfiguration;
@@ -41,6 +39,7 @@ public class NatsConsumerJetStreamConfiguration {
                         .subjects(properties.getSubject())
                         .storageType(StorageType.File)
                         .retentionPolicy(RetentionPolicy.WorkQueue)
+                        .replicas(properties.getReplicas())
                         .duplicateWindow(Duration.ofMinutes(10))
                         .build());
         ensureStream(
@@ -50,6 +49,7 @@ public class NatsConsumerJetStreamConfiguration {
                         .subjects(properties.getDlqSubject())
                         .storageType(StorageType.File)
                         .retentionPolicy(RetentionPolicy.Limits)
+                        .replicas(properties.getReplicas())
                         .build());
 
         jsm.addOrUpdateConsumer(
@@ -58,7 +58,7 @@ public class NatsConsumerJetStreamConfiguration {
                         .durable(properties.getDurableConsumer())
                         .filterSubject(properties.getSubject())
                         .ackPolicy(AckPolicy.Explicit)
-                        .ackWait(Duration.ofSeconds(30))
+                        .ackWait(properties.getAckWait())
                         .maxDeliver(properties.getMaxDeliver())
                         .build());
         return connection.jetStream();
@@ -71,6 +71,7 @@ public class NatsConsumerJetStreamConfiguration {
         KeyValueConfiguration kvConfig = KeyValueConfiguration.builder()
                 .name(properties.getIdempotencyBucket())
                 .storageType(StorageType.File)
+                .replicas(properties.getReplicas())
                 .ttl(properties.getIdempotencyTtl())
                 .maxHistoryPerKey(1)
                 .build();
@@ -78,26 +79,27 @@ public class NatsConsumerJetStreamConfiguration {
             kvm.getStatus(properties.getIdempotencyBucket());
             kvm.update(kvConfig);
         } catch (JetStreamApiException notFound) {
-            kvm.create(kvConfig);
+            try {
+                kvm.create(kvConfig);
+            } catch (JetStreamApiException createdConcurrently) {
+                kvm.update(kvConfig);
+            }
         }
         return connection.keyValue(properties.getIdempotencyBucket());
     }
 
-    @Bean
-    JetStreamSubscription inboundPullSubscription(JetStream jetStream, NatsConsumerProperties properties)
-            throws IOException, JetStreamApiException {
-        return jetStream.subscribe(
-                properties.getSubject(),
-                PullSubscribeOptions.bind(properties.getStream(), properties.getDurableConsumer()));
-    }
-
-    private static void ensureStream(JetStreamManagement jsm, StreamConfiguration config)
+    /** Race-safe across M consumer instances booting simultaneously. */
+    static void ensureStream(JetStreamManagement jsm, StreamConfiguration config)
             throws IOException, JetStreamApiException {
         try {
             jsm.getStreamInfo(config.getName());
             jsm.updateStream(config);
         } catch (JetStreamApiException notFound) {
-            jsm.addStream(config);
+            try {
+                jsm.addStream(config);
+            } catch (JetStreamApiException createdConcurrently) {
+                jsm.updateStream(config);
+            }
         }
     }
 }

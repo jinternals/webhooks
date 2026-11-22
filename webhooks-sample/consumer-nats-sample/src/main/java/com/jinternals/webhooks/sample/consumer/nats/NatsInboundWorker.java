@@ -5,6 +5,7 @@ import com.jinternals.webhooks.consumer.dispatch.HandlerFailureListener;
 import io.nats.client.JetStream;
 import io.nats.client.JetStreamSubscription;
 import io.nats.client.Message;
+import io.nats.client.PullSubscribeOptions;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
@@ -17,9 +18,12 @@ import org.springframework.context.SmartLifecycle;
 import org.springframework.stereotype.Component;
 
 /**
- * Durable NATS JetStream worker that drains {@code WEBHOOKS_INBOUND} and executes downstream business logic
- * with explicit {@code ackSync} / {@code nakWithDelay} and poison-message routing to
- * {@code WEBHOOKS_INBOUND_DLQ}.
+ * Multi-instance-safe NATS JetStream worker draining {@code WEBHOOKS_INBOUND}.
+ *
+ * <p>Each virtual-thread worker owns its own {@link JetStreamSubscription} bound to the shared durable pull
+ * consumer ({@code webhooks-inbound-worker}) and fetches one message at a time ({@code fetch(1, 1s)}) so
+ * messages are balanced cleanly across all running consumer pods without head-of-line {@code ackWait}
+ * starvation.
  */
 @Component
 public class NatsInboundWorker implements SmartLifecycle {
@@ -27,24 +31,21 @@ public class NatsInboundWorker implements SmartLifecycle {
     private static final Logger log = LoggerFactory.getLogger(NatsInboundWorker.class);
 
     private final JetStream jetStream;
-    private final JetStreamSubscription subscription;
     private final ObjectMapper objectMapper;
     private final ContactProjectionService projectionService;
     private final HandlerFailureListener failureListener;
     private final NatsConsumerProperties properties;
 
     private final AtomicBoolean running = new AtomicBoolean(false);
-    private ExecutorService poller;
+    private ExecutorService workers;
 
     public NatsInboundWorker(
             JetStream jetStream,
-            JetStreamSubscription subscription,
             ObjectMapper objectMapper,
             ContactProjectionService projectionService,
             HandlerFailureListener failureListener,
             NatsConsumerProperties properties) {
         this.jetStream = jetStream;
-        this.subscription = subscription;
         this.objectMapper = objectMapper;
         this.projectionService = projectionService;
         this.failureListener = failureListener;
@@ -59,19 +60,18 @@ public class NatsInboundWorker implements SmartLifecycle {
     @Override
     public void start() {
         if (running.compareAndSet(false, true)) {
-            poller = Executors.newSingleThreadExecutor(r -> {
-                Thread t = new Thread(r, "nats-inbound-worker");
-                t.setDaemon(true);
-                return t;
-            });
-            poller.submit(this::pollLoop);
+            workers = Executors.newVirtualThreadPerTaskExecutor();
+            int concurrency = Math.max(1, properties.getWorkerConcurrency());
+            for (int i = 0; i < concurrency; i++) {
+                workers.submit(this::pollLoop);
+            }
         }
     }
 
     @Override
     public void stop() {
-        if (running.compareAndSet(true, false) && poller != null) {
-            poller.shutdownNow();
+        if (running.compareAndSet(true, false) && workers != null) {
+            workers.shutdownNow();
         }
     }
 
@@ -81,16 +81,19 @@ public class NatsInboundWorker implements SmartLifecycle {
     }
 
     private void pollLoop() {
-        while (running.get() && !Thread.currentThread().isInterrupted()) {
-            try {
-                List<Message> batch = subscription.fetch(10, Duration.ofSeconds(1));
+        try {
+            JetStreamSubscription sub = jetStream.subscribe(
+                    properties.getSubject(),
+                    PullSubscribeOptions.bind(properties.getStream(), properties.getDurableConsumer()));
+            while (running.get() && !Thread.currentThread().isInterrupted()) {
+                List<Message> batch = sub.fetch(1, Duration.ofSeconds(1));
                 for (Message msg : batch) {
                     processOne(msg);
                 }
-            } catch (Exception e) {
-                if (running.get()) {
-                    log.warn("Inbound NATS poll iteration failed: {}", e.getMessage());
-                }
+            }
+        } catch (Exception e) {
+            if (running.get()) {
+                log.warn("Inbound NATS worker exited: {}", e.getMessage());
             }
         }
     }

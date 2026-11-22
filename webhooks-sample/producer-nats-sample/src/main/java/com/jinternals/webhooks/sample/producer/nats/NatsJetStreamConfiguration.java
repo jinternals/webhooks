@@ -4,9 +4,7 @@ import io.nats.client.Connection;
 import io.nats.client.JetStream;
 import io.nats.client.JetStreamApiException;
 import io.nats.client.JetStreamManagement;
-import io.nats.client.JetStreamSubscription;
 import io.nats.client.Nats;
-import io.nats.client.PullSubscribeOptions;
 import io.nats.client.api.AckPolicy;
 import io.nats.client.api.ConsumerConfiguration;
 import io.nats.client.api.RetentionPolicy;
@@ -38,6 +36,7 @@ public class NatsJetStreamConfiguration {
                         .subjects(properties.getSubject())
                         .storageType(StorageType.File)
                         .retentionPolicy(RetentionPolicy.WorkQueue)
+                        .replicas(properties.getReplicas())
                         .duplicateWindow(Duration.ofMinutes(10))
                         .build());
         ensureStream(
@@ -47,6 +46,7 @@ public class NatsJetStreamConfiguration {
                         .subjects(properties.getDlqSubject())
                         .storageType(StorageType.File)
                         .retentionPolicy(RetentionPolicy.Limits)
+                        .replicas(properties.getReplicas())
                         .build());
 
         jsm.addOrUpdateConsumer(
@@ -55,27 +55,24 @@ public class NatsJetStreamConfiguration {
                         .durable(properties.getDurableConsumer())
                         .filterSubject(properties.getSubject())
                         .ackPolicy(AckPolicy.Explicit)
-                        .ackWait(Duration.ofSeconds(30))
+                        .ackWait(properties.getAckWait())
                         .maxDeliver(properties.getMaxDeliver())
                         .build());
         return connection.jetStream();
     }
 
-    @Bean
-    JetStreamSubscription outboundPullSubscription(JetStream jetStream, NatsProducerProperties properties)
-            throws IOException, JetStreamApiException {
-        return jetStream.subscribe(
-                properties.getSubject(),
-                PullSubscribeOptions.bind(properties.getStream(), properties.getDurableConsumer()));
-    }
-
-    private static void ensureStream(JetStreamManagement jsm, StreamConfiguration config)
+    /** Race-safe across N producer instances booting simultaneously. */
+    static void ensureStream(JetStreamManagement jsm, StreamConfiguration config)
             throws IOException, JetStreamApiException {
         try {
             jsm.getStreamInfo(config.getName());
             jsm.updateStream(config);
         } catch (JetStreamApiException notFound) {
-            jsm.addStream(config);
+            try {
+                jsm.addStream(config);
+            } catch (JetStreamApiException createdConcurrently) {
+                jsm.updateStream(config);
+            }
         }
     }
 }

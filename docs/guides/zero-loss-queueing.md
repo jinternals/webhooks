@@ -124,6 +124,34 @@ sequenceDiagram
 
 ---
 
+## Multi-instance horizontal scaling (N producers × M consumers)
+
+Both `producer-nats-sample` and `consumer-nats-sample` are designed to run **multiple instances
+concurrently** behind load balancers with zero race conditions or dropped deliveries:
+
+1. **Race-free stream & KV bootstrap:** Stream (`addStream` / `updateStream`) and KeyValue (`create` /
+   `update`) provisioning handle concurrent cold-start races across pods starting at the same instant, with
+   configurable `sample.nats.replicas` (`1` locally; set to `3` on a 3-node HA NATS JetStream cluster).
+2. **Per-virtual-thread pull subscriptions (`fetch(1)`):** Every worker virtual thread owns its own
+   `JetStreamSubscription` handle bound to the shared durable pull consumer (`webhooks-outbound-relay` on
+   producers, `webhooks-inbound-worker` on consumers) and fetches **one message at a time** with
+   `ackWait = 60s` (`> connectTimeout + readTimeout`), preventing head-of-line `ackWait` starvation across
+   sibling pods when one destination or handler is slow.
+3. **Crash-safe cross-instance NATS KV idempotency (`NatsKvIdempotencyGuard`):**
+   - `"processed"` → returns `false` (`204` duplicate suppressed across all consumer pods).
+   - Active `"in-flight"` (`age ≤ in-flight-lease`, default `30s`) → returns a retryable `500` *without*
+     releasing the active pod's reservation, so the producer's NATS relay backs off (`nakWithDelay`) rather
+     than receiving a premature `204`.
+   - Expired `"in-flight"` (`age > in-flight-lease`, e.g. sibling pod killed with `SIGKILL`/`OOMKilled`
+     before `PublishAck`) → atomically reclaims the lease via optimistic CAS
+     `kv.update(key, "in-flight", entry.getRevision())` so **only one surviving pod wins** and persists the
+     event to `WEBHOOKS_INBOUND`.
+4. **Idempotent downstream projection:** `ContactProjectionService` upserts by `webhookId` (modeling SQL
+   `INSERT … ON CONFLICT DO NOTHING`) so even a worker crash between the DB commit and `msg.ackSync` is a
+   no-op when JetStream redelivers to another worker pod.
+
+---
+
 ## Running the zero-loss NATS stack
 
 ```bash

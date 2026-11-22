@@ -18,6 +18,7 @@ import com.jinternals.webhooks.producer.transport.WebhookTransport;
 import io.nats.client.JetStream;
 import io.nats.client.JetStreamSubscription;
 import io.nats.client.Message;
+import io.nats.client.PullSubscribeOptions;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.LinkedHashMap;
@@ -36,13 +37,16 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
 /**
- * Durable NATS JetStream relay worker that drains {@code WEBHOOKS_OUTBOUND} and delivers each webhook over
- * HTTP.
+ * Multi-instance-safe NATS JetStream relay worker draining {@code WEBHOOKS_OUTBOUND}.
  *
- * <p><strong>Standard Webhooks replay-window safety:</strong> every time an attempt is made — even hours
- * after the event was originally queued — this worker computes a <em>fresh</em> {@code webhook-timestamp}
- * and {@code webhook-signature} over the unchanged {@code webhook-id} and serialized envelope {@code body},
- * so the consumer's 5-minute replay window never rejects a legitimate delayed retry.
+ * <ul>
+ *   <li>All producer instances bind to the same durable pull consumer ({@code webhooks-outbound-relay});
+ *       each virtual-thread worker fetches <strong>one message at a time</strong> ({@code fetch(1, 1s)})
+ *       with {@code ackWait = 60s} ({@code > connectTimeout + readTimeout}) so slow destinations never cause
+ *       head-of-line {@code ackWait} expiry across sibling pods.</li>
+ *   <li>Every delivery attempt computes a <strong>fresh {@code webhook-timestamp} and
+ *       {@code webhook-signature}</strong> over the unchanged {@code webhook-id} and {@code body}.</li>
+ * </ul>
  */
 @Component
 public class NatsOutboundRelayWorker implements SmartLifecycle {
@@ -50,7 +54,6 @@ public class NatsOutboundRelayWorker implements SmartLifecycle {
     private static final Logger log = LoggerFactory.getLogger(NatsOutboundRelayWorker.class);
 
     private final JetStream jetStream;
-    private final JetStreamSubscription subscription;
     private final ObjectMapper objectMapper;
     private final WebhookProducerProperties producerProperties;
     private final NatsProducerProperties natsProperties;
@@ -61,11 +64,10 @@ public class NatsOutboundRelayWorker implements SmartLifecycle {
     private final Clock clock;
 
     private final AtomicBoolean running = new AtomicBoolean(false);
-    private ExecutorService poller;
+    private ExecutorService workers;
 
     public NatsOutboundRelayWorker(
             JetStream jetStream,
-            JetStreamSubscription subscription,
             ObjectMapper objectMapper,
             WebhookProducerProperties producerProperties,
             NatsProducerProperties natsProperties,
@@ -77,7 +79,6 @@ public class NatsOutboundRelayWorker implements SmartLifecycle {
             @Qualifier("webhookProducerRestClient") RestClient restClient,
             ObjectProvider<Clock> clockProvider) {
         this.jetStream = jetStream;
-        this.subscription = subscription;
         this.objectMapper = objectMapper;
         this.producerProperties = producerProperties;
         this.natsProperties = natsProperties;
@@ -97,19 +98,18 @@ public class NatsOutboundRelayWorker implements SmartLifecycle {
     @Override
     public void start() {
         if (running.compareAndSet(false, true)) {
-            poller = Executors.newSingleThreadExecutor(r -> {
-                Thread t = new Thread(r, "nats-outbound-relay");
-                t.setDaemon(true);
-                return t;
-            });
-            poller.submit(this::pollLoop);
+            workers = Executors.newVirtualThreadPerTaskExecutor();
+            int concurrency = Math.max(1, natsProperties.getWorkerConcurrency());
+            for (int i = 0; i < concurrency; i++) {
+                workers.submit(this::pollLoop);
+            }
         }
     }
 
     @Override
     public void stop() {
-        if (running.compareAndSet(true, false) && poller != null) {
-            poller.shutdownNow();
+        if (running.compareAndSet(true, false) && workers != null) {
+            workers.shutdownNow();
         }
     }
 
@@ -119,16 +119,22 @@ public class NatsOutboundRelayWorker implements SmartLifecycle {
     }
 
     private void pollLoop() {
-        while (running.get() && !Thread.currentThread().isInterrupted()) {
-            try {
-                List<Message> batch = subscription.fetch(10, Duration.ofSeconds(1));
+        // Each worker thread owns its own JetStreamSubscription handle bound to the shared durable consumer
+        // (io.nats.client.Subscription is not thread-safe across concurrent fetchers) and fetches 1 message
+        // at a time so ackWait starts only when this thread is ready to send immediately.
+        try {
+            JetStreamSubscription sub = jetStream.subscribe(
+                    natsProperties.getSubject(),
+                    PullSubscribeOptions.bind(natsProperties.getStream(), natsProperties.getDurableConsumer()));
+            while (running.get() && !Thread.currentThread().isInterrupted()) {
+                List<Message> batch = sub.fetch(1, Duration.ofSeconds(1));
                 for (Message msg : batch) {
                     deliverOne(msg);
                 }
-            } catch (Exception e) {
-                if (running.get()) {
-                    log.warn("Outbound NATS poll iteration failed: {}", e.getMessage());
-                }
+            }
+        } catch (Exception e) {
+            if (running.get()) {
+                log.warn("Outbound NATS relay worker exited: {}", e.getMessage());
             }
         }
     }

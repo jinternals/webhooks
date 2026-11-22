@@ -3,34 +3,55 @@ package com.jinternals.webhooks.sample.consumer.nats;
 import com.jinternals.webhooks.consumer.idempotency.IdempotencyGuard;
 import io.nats.client.JetStreamApiException;
 import io.nats.client.KeyValue;
+import io.nats.client.api.KeyValueEntry;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
+import java.time.Duration;
 import java.util.Base64;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 
 /**
- * Distributed, cross-instance {@link IdempotencyGuard} backed by a NATS JetStream {@link KeyValue} bucket.
+ * Multi-instance-safe {@link IdempotencyGuard} backed by a NATS JetStream {@link KeyValue} bucket:
  *
  * <ul>
- *   <li>{@link #tryBegin(String)} uses {@link KeyValue#create(String, byte[])} (atomic CAS on revision 0) so
- *       only one consumer instance reserves a {@code webhook-id};</li>
- *   <li>{@link #markProcessed(String)} updates the entry to {@code "processed"} after {@link DurableInboxHandlers}
- *       obtains a JetStream {@code PublishAck};</li>
- *   <li>{@link #release(String)} deletes the reservation if inbox persistence fails, allowing the sender's
- *       retry of the same {@code webhook-id} to succeed (zero webhook loss).</li>
+ *   <li>{@link #tryBegin(String)} performs an atomic {@code kv.create(key, "in-flight")} (CAS on revision 0).</li>
+ *   <li>If the key already exists:
+ *       <ul>
+ *         <li>{@code "processed"} -&gt; returns {@code false} ({@code 204} duplicate suppressed);</li>
+ *         <li>{@code "in-flight"} older than {@code in-flight-lease} (sibling pod crashed via {@code kill -9}
+ *             before persisting to {@code WEBHOOKS_INBOUND}) -&gt; atomically reclaims the lease via
+ *             {@code kv.update(key, "in-flight", entry.getRevision())} (CAS so only one pod wins!) and
+ *             returns {@code true};</li>
+ *         <li>{@code "in-flight"} still active -&gt; throws a retryable {@code 500} (without calling
+ *             {@link #release}) so the sender's NATS relay retries cleanly rather than receiving a false
+ *             {@code 204} before persistence completes.</li>
+ *       </ul>
+ *   </li>
+ *   <li>{@link #markProcessed(String)} writes {@code "processed"} after {@link DurableInboxHandlers} receives
+ *       its JetStream {@code PublishAck}.</li>
+ *   <li>{@link #release(String)} deletes the reservation when inbox persistence throws so the sender's retry
+ *       succeeds immediately.</li>
  * </ul>
  */
 @Component
 public class NatsKvIdempotencyGuard implements IdempotencyGuard {
 
+    private static final String STATE_PROCESSED = "processed";
     private static final byte[] IN_FLIGHT = "in-flight".getBytes(StandardCharsets.UTF_8);
-    private static final byte[] PROCESSED = "processed".getBytes(StandardCharsets.UTF_8);
+    private static final byte[] PROCESSED = STATE_PROCESSED.getBytes(StandardCharsets.UTF_8);
 
     private final KeyValue keyValue;
+    private final NatsConsumerProperties properties;
+    private final Clock clock;
 
-    public NatsKvIdempotencyGuard(KeyValue keyValue) {
+    public NatsKvIdempotencyGuard(
+            KeyValue keyValue, NatsConsumerProperties properties, ObjectProvider<Clock> clockProvider) {
         this.keyValue = keyValue;
+        this.properties = properties;
+        this.clock = clockProvider.getIfAvailable(Clock::systemUTC);
     }
 
     @Override
@@ -38,14 +59,39 @@ public class NatsKvIdempotencyGuard implements IdempotencyGuard {
         if (webhookId == null || webhookId.isBlank()) {
             return true;
         }
+        String key = encodeKey(webhookId);
         try {
-            keyValue.create(encodeKey(webhookId), IN_FLIGHT);
+            keyValue.create(key, IN_FLIGHT);
             return true;
         } catch (JetStreamApiException alreadyExists) {
-            // Key already exists (NATS error 10071 wrong last sequence): already in-flight or processed.
-            return false;
+            return resolveExistingEntry(key, webhookId);
         } catch (IOException e) {
             throw new IllegalStateException("Failed to reserve webhook-id in NATS KV: " + webhookId, e);
+        }
+    }
+
+    private boolean resolveExistingEntry(String key, String webhookId) {
+        try {
+            KeyValueEntry entry = keyValue.get(key);
+            if (entry == null) {
+                keyValue.create(key, IN_FLIGHT);
+                return true;
+            }
+            if (STATE_PROCESSED.equals(entry.getValueAsString())) {
+                return false;
+            }
+            Duration age = Duration.between(entry.getCreated().toInstant(), clock.instant());
+            if (age.compareTo(properties.getInFlightLease()) > 0) {
+                keyValue.update(key, IN_FLIGHT, entry.getRevision());
+                return true;
+            }
+            throw new IllegalStateException(
+                    "Webhook " + webhookId + " is currently in-flight on another consumer instance");
+        } catch (JetStreamApiException casLost) {
+            throw new IllegalStateException(
+                    "Concurrent in-flight contention for webhook " + webhookId + "; retry", casLost);
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to inspect webhook-id in NATS KV: " + webhookId, e);
         }
     }
 

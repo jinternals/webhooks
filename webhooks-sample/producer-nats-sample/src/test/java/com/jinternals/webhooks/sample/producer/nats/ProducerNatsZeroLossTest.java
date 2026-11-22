@@ -12,7 +12,6 @@ import com.jinternals.webhooks.sample.producer.nats.client.CrmWebhooks;
 import com.jinternals.webhooks.sample.producer.nats.events.ContactCreated;
 import com.sun.net.httpserver.HttpServer;
 import io.nats.client.JetStream;
-import io.nats.client.JetStreamSubscription;
 import io.nats.client.Message;
 import io.nats.client.PublishOptions;
 import io.nats.client.api.PublishAck;
@@ -136,11 +135,6 @@ class ProducerNatsZeroLossTest {
                         return ack;
                     });
             return js;
-        }
-
-        @Bean
-        JetStreamSubscription outboundPullSubscription() {
-            return mock(JetStreamSubscription.class);
         }
     }
 
