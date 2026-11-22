@@ -5,6 +5,9 @@
 # The producer exposes POST /publish/contact-created on :9090; triggering it signs and sends a
 # contact.created webhook to the consumer's /webhooks/crm on :9091. Both apps share the demo secret.
 #
+# ⚠️ DEMO ONLY — the secrets below are PUBLIC (whsec_MfKQ… is the Standard Webhooks spec's test secret).
+# Never reuse them in a real deployment; inject your own from a secret manager.
+#
 # Build context is the repository root (..), so each Dockerfile can install the webhooks-* libraries
 # from source before building the sample.
 services:

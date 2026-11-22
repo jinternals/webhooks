@@ -1,3 +1,6 @@
+# ⚠️ DEMO ONLY — the secret/key defaults below are PUBLIC (published in this repo). Never use them in
+# production: supply your own via DEMO_WEBHOOK_SECRET, DEMO_V2A_PRIVATE_KEY, etc. whsec_MfKQ… is the
+# Standard Webhooks spec's test secret; the whsk_ PRIVATE key is a sample-only key pair — anyone can sign with it.
 server:
   port: 9090
 

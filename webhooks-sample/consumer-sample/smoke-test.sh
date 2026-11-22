@@ -6,6 +6,7 @@
 #
 # Signed content is "<id>.<timestamp>.<body>"; the header is "webhook-signature: v1,<base64 hmac>".
 # The demo secret's base64 body (after the whsec_ prefix) is the HMAC key.
+# ⚠️ DEMO ONLY — every secret/key in this script is public; never use them outside the samples.
 #
 # Usage:  ./smoke-test.sh        (consumer must already be running on :9091)
 #   Start it:  (from sample/) mvn -pl consumer-sample spring-boot:run

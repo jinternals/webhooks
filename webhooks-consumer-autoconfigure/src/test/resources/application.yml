@@ -1,3 +1,4 @@
+# Test fixture only: whsec_MfKQ… is the Standard Webhooks spec's public test secret — never use it for real.
 webhooks:
   consumer:
     endpoints:

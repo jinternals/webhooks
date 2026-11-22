@@ -1,3 +1,6 @@
+# ⚠️ DEMO ONLY — the secret/key defaults below are PUBLIC (published in this repo). Never use them in
+# production: supply your own via CRM_WEBHOOK_SECRET, CRM_V2A_PUBLIC_KEY, BILLING_WEBHOOK_SECRET, etc.
+# whsec_MfKQ… is the Standard Webhooks spec's test secret; the whpk_ key is a sample-only key pair.
 server:
   port: 9091
 

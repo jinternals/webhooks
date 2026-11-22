@@ -21,6 +21,19 @@ payload, and runs the matching `@WebhookHandler`. A parallel **asymmetric** path
 `POST /publish/contact-created-v2a` → `POST /webhooks/crm-v2a` — shows the same flow signed with Ed25519
 (`v2a`) instead of HMAC (`v1`), so you can compare the two schemes side by side.
 
+> [!CAUTION]
+> **Demo credentials — never use them in production.** Every secret and key in this directory
+> (`application.yaml`, `docker-compose.yml`, `smoke-test.sh`, `load-test.*`, `requests.http`) is public:
+>
+> - `whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw` is the well-known test secret from the
+>   [Standard Webhooks](https://www.standardwebhooks.com/) specification.
+> - The `whsk_4uKP…` / `whpk_uWKK…` Ed25519 key pair was generated solely for these samples.
+>
+> Because they are published in this repository, anyone can forge a webhook signed with them. In a real
+> deployment, generate your own secrets/keys and supply them via the environment variables the configs
+> already read (`CRM_WEBHOOK_SECRET`, `BILLING_WEBHOOK_SECRET`, `CRM_V2A_PUBLIC_KEY`, `DEMO_WEBHOOK_SECRET`,
+> `DEMO_V2A_PRIVATE_KEY`, …) from a secret manager — never commit them.
+
 ## Prerequisites
 
 Build + install the libraries into your local Maven repo first (the samples resolve
