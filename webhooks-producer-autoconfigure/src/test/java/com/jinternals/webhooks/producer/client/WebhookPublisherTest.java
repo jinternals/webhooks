@@ -244,4 +244,127 @@ class WebhookPublisherTest {
         // Both signatures in one space-separated header, primary first (Standard Webhooks multi-sig).
         assertThat(sentHeaders.getValue().get(WebhookHeaders.SIGNATURE)).containsExactly("v1,newsig v1,oldsig");
     }
+
+    @Test
+    void refreshesAttemptTimestampAndSignatureAcrossRetriesWhileKeepingIdAndEnvelopeConstant() throws Exception {
+        // Standard Webhooks spec: every time an attempt is retried, the attempt's webhook-timestamp (and
+        // signature over msg_id.timestamp.payload) is updated, while webhook-id and the event's original
+        // envelope timestamp remain the same.
+        java.util.concurrent.atomic.AtomicLong epochSeconds =
+                new java.util.concurrent.atomic.AtomicLong(1_700_000_000L);
+        java.time.Clock mutableClock = new java.time.Clock() {
+            @Override
+            public java.time.ZoneId getZone() {
+                return java.time.ZoneOffset.UTC;
+            }
+
+            @Override
+            public java.time.Clock withZone(java.time.ZoneId zone) {
+                return this;
+            }
+
+            @Override
+            public java.time.Instant instant() {
+                return java.time.Instant.ofEpochSecond(epochSeconds.get());
+            }
+        };
+
+        List<Map<String, List<String>>> attemptHeaders = new java.util.ArrayList<>();
+        List<String> attemptBodies = new java.util.ArrayList<>();
+        WebhookTransport flakyBackend = (url, headers, body) -> {
+            attemptHeaders.add(headers);
+            attemptBodies.add(body);
+            if (attemptHeaders.size() == 1) {
+                epochSeconds.addAndGet(120L); // 2 minutes elapsed during backoff before retry
+                throw new com.jinternals.webhooks.producer.transport.WebhookDeliveryException("try again", 503);
+            }
+        };
+
+        WebhookProducerProperties.Retry retryProps = new WebhookProducerProperties.Retry();
+        retryProps.setMaxAttempts(2);
+        retryProps.setInitialBackoff(java.time.Duration.ZERO);
+        retryProps.setMaxBackoff(java.time.Duration.ZERO);
+        retryProps.setJitter(0.0);
+        WebhookTransport retrying = new com.jinternals.webhooks.producer.transport.RetryingWebhookTransport(
+                flakyBackend,
+                new com.jinternals.webhooks.producer.security.AllowAllDestinationUrlValidator(),
+                retryProps);
+
+        String realSecret = "whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw";
+        when(secretProvider.secretsFor(crm)).thenReturn(List.of(realSecret));
+        WebhookPublisher realSignedPublisher = new WebhookPublisher(
+                objectMapper,
+                new com.jinternals.webhooks.producer.sign.DefaultWebhookSigner(),
+                retrying,
+                secretProvider,
+                properties,
+                mutableClock);
+
+        realSignedPublisher.publish("crm", new ContactCreated());
+
+        assertThat(attemptHeaders).hasSize(2);
+        String firstId = attemptHeaders.get(0).get(WebhookHeaders.ID).get(0);
+        String secondId = attemptHeaders.get(1).get(WebhookHeaders.ID).get(0);
+        assertThat(secondId).isEqualTo(firstId);
+
+        assertThat(attemptHeaders.get(0).get(WebhookHeaders.TIMESTAMP)).containsExactly("1700000000");
+        assertThat(attemptHeaders.get(1).get(WebhookHeaders.TIMESTAMP)).containsExactly("1700000120");
+        assertThat(attemptHeaders.get(1).get(WebhookHeaders.SIGNATURE))
+                .isNotEqualTo(attemptHeaders.get(0).get(WebhookHeaders.SIGNATURE));
+
+        // Envelope body (including the event's original occurrence timestamp) is identical across attempts.
+        assertThat(attemptBodies.get(1)).isEqualTo(attemptBodies.get(0));
+        var envelope = objectMapper.readTree(attemptBodies.get(1));
+        assertThat(envelope.get("timestamp").asText()).isEqualTo("2023-11-14T22:13:20Z");
+    }
+
+    @Test
+    void refreshesAttemptTimestampAcrossRetriesWhenSigningDisabled() {
+        java.util.concurrent.atomic.AtomicLong epochSeconds =
+                new java.util.concurrent.atomic.AtomicLong(1_700_000_000L);
+        java.time.Clock mutableClock = new java.time.Clock() {
+            @Override
+            public java.time.ZoneId getZone() {
+                return java.time.ZoneOffset.UTC;
+            }
+
+            @Override
+            public java.time.Clock withZone(java.time.ZoneId zone) {
+                return this;
+            }
+
+            @Override
+            public java.time.Instant instant() {
+                return java.time.Instant.ofEpochSecond(epochSeconds.get());
+            }
+        };
+        when(signer.isEnabled()).thenReturn(false);
+
+        List<Map<String, List<String>>> attemptHeaders = new java.util.ArrayList<>();
+        WebhookTransport flakyBackend = (url, headers, body) -> {
+            attemptHeaders.add(headers);
+            if (attemptHeaders.size() == 1) {
+                epochSeconds.addAndGet(60L);
+                throw new com.jinternals.webhooks.producer.transport.WebhookDeliveryException("try again", 503);
+            }
+        };
+        WebhookProducerProperties.Retry retryProps = new WebhookProducerProperties.Retry();
+        retryProps.setMaxAttempts(2);
+        retryProps.setInitialBackoff(java.time.Duration.ZERO);
+        retryProps.setMaxBackoff(java.time.Duration.ZERO);
+        retryProps.setJitter(0.0);
+        WebhookTransport retrying = new com.jinternals.webhooks.producer.transport.RetryingWebhookTransport(
+                flakyBackend,
+                new com.jinternals.webhooks.producer.security.AllowAllDestinationUrlValidator(),
+                retryProps);
+
+        WebhookPublisher unsignedRetrying =
+                new WebhookPublisher(objectMapper, signer, retrying, secretProvider, properties, mutableClock);
+        unsignedRetrying.publish("crm", new ContactCreated());
+
+        assertThat(attemptHeaders).hasSize(2);
+        assertThat(attemptHeaders.get(0).get(WebhookHeaders.TIMESTAMP)).containsExactly("1700000000");
+        assertThat(attemptHeaders.get(1).get(WebhookHeaders.TIMESTAMP)).containsExactly("1700000060");
+        assertThat(attemptHeaders.get(1)).doesNotContainKey(WebhookHeaders.SIGNATURE);
+    }
 }

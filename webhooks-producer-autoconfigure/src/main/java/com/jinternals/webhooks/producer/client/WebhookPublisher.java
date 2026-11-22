@@ -10,12 +10,15 @@ import com.jinternals.webhooks.core.secret.SecretProvider;
 import com.jinternals.webhooks.producer.config.WebhookProducerProperties;
 import com.jinternals.webhooks.producer.config.WebhookProducerProperties.Destination;
 import com.jinternals.webhooks.producer.sign.WebhookSigner;
+import com.jinternals.webhooks.producer.transport.AttemptAwareWebhookTransport;
 import com.jinternals.webhooks.producer.transport.WebhookTransport;
 import io.micrometer.observation.annotation.Observed;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Supplier;
 
 /**
  * The engine behind every {@code @WebhookClient} proxy (see SPEC.md §19): given an event object and a
@@ -23,7 +26,12 @@ import java.util.UUID;
  * Standard Webhooks envelope, serializes it <strong>once</strong>, signs that exact byte payload, and
  * hands the signed request to the pluggable {@link WebhookTransport}.
  *
- * <p>Stateless and thread-safe. No retry, no persistence — a failed delivery throws to the caller.
+ * <p>When paired with an {@link AttemptAwareWebhookTransport} (such as the default
+ * {@link com.jinternals.webhooks.producer.transport.RetryingWebhookTransport}), each retry updates
+ * {@code webhook-timestamp} and re-computes {@code webhook-signature} while preserving the original
+ * {@code webhook-id} and serialized envelope {@code timestamp}, per the Standard Webhooks specification.
+ *
+ * <p>Stateless and thread-safe.
  */
 public class WebhookPublisher {
 
@@ -32,6 +40,7 @@ public class WebhookPublisher {
     private final WebhookTransport transport;
     private final SecretProvider<Destination> secretProvider;
     private final WebhookProducerProperties properties;
+    private final Clock clock;
 
     public WebhookPublisher(
             ObjectMapper objectMapper,
@@ -39,11 +48,22 @@ public class WebhookPublisher {
             WebhookTransport transport,
             SecretProvider<Destination> secretProvider,
             WebhookProducerProperties properties) {
+        this(objectMapper, signer, transport, secretProvider, properties, Clock.systemUTC());
+    }
+
+    public WebhookPublisher(
+            ObjectMapper objectMapper,
+            WebhookSigner signer,
+            WebhookTransport transport,
+            SecretProvider<Destination> secretProvider,
+            WebhookProducerProperties properties,
+            Clock clock) {
         this.objectMapper = objectMapper;
         this.signer = signer;
         this.transport = transport;
         this.secretProvider = secretProvider;
         this.properties = properties;
+        this.clock = clock;
     }
 
     /**
@@ -74,31 +94,56 @@ public class WebhookPublisher {
 
         String type = typeOf(event);
         String messageId = "msg_" + UUID.randomUUID();
-        Instant now = Instant.now();
+        Instant eventTimestamp = clock.instant();
 
-        String body = serialize(type, now, event);
+        String body = serialize(type, eventTimestamp, event);
 
-        Map<String, List<String>> headers;
+        Supplier<Map<String, List<String>>> headersSupplier;
         if (signer.isEnabled()) {
-            List<String> secrets = secretProvider.secretsFor(destination);
-            if (secrets.isEmpty()) {
-                throw new IllegalStateException(
-                        "No signing secret configured for webhook destination: " + destinationName);
-            }
-            String signature =
-                    sign(destinationName, secrets, destination.getEndpointId(), messageId, now.getEpochSecond(), body);
-            headers = Map.of(
-                    WebhookHeaders.ID, List.of(messageId),
-                    WebhookHeaders.TIMESTAMP, List.of(Long.toString(now.getEpochSecond())),
-                    WebhookHeaders.SIGNATURE, List.of(signature));
+            List<String> secrets = resolveSecrets(destinationName, destination);
+            headersSupplier = () -> signedHeaders(destination.getEndpointId(), secrets, messageId, body);
         } else {
             // Signing disabled (NoOpWebhookSigner): no secret required, no webhook-signature header.
-            headers = Map.of(
-                    WebhookHeaders.ID, List.of(messageId),
-                    WebhookHeaders.TIMESTAMP, List.of(Long.toString(now.getEpochSecond())));
+            headersSupplier = () -> unsignedHeaders(messageId);
         }
 
-        transport.send(destination.getUrl(), headers, body);
+        if (transport instanceof AttemptAwareWebhookTransport attemptAware) {
+            attemptAware.sendPerAttempt(destination.getUrl(), headersSupplier, body);
+        } else {
+            transport.send(destination.getUrl(), headersSupplier.get(), body);
+        }
+    }
+
+    private List<String> resolveSecrets(String destinationName, Destination destination) {
+        List<String> secrets = secretProvider.secretsFor(destination);
+        if (secrets.isEmpty()) {
+            throw new IllegalStateException("No signing secret configured for webhook destination: " + destinationName);
+        }
+        for (String secret : secrets) {
+            if (secret == null || secret.isBlank()) {
+                throw new IllegalStateException(
+                        "SecretProvider returned a null/blank signing secret for webhook destination: "
+                                + destinationName);
+            }
+        }
+        return secrets;
+    }
+
+    private Map<String, List<String>> signedHeaders(
+            String endpointId, List<String> secrets, String messageId, String body) {
+        long attemptSeconds = clock.instant().getEpochSecond();
+        String signature = sign(secrets, endpointId, messageId, attemptSeconds, body);
+        return Map.of(
+                WebhookHeaders.ID, List.of(messageId),
+                WebhookHeaders.TIMESTAMP, List.of(Long.toString(attemptSeconds)),
+                WebhookHeaders.SIGNATURE, List.of(signature));
+    }
+
+    private Map<String, List<String>> unsignedHeaders(String messageId) {
+        long attemptSeconds = clock.instant().getEpochSecond();
+        return Map.of(
+                WebhookHeaders.ID, List.of(messageId),
+                WebhookHeaders.TIMESTAMP, List.of(Long.toString(attemptSeconds)));
     }
 
     /**
@@ -107,26 +152,10 @@ public class WebhookPublisher {
      * {@code additional-secrets} configured for rotation it is a space-separated list of signatures over
      * the same payload, so a receiver that accepts the primary <em>or</em> any additional secret
      * verifies successfully — zero-downtime blue/green rotation.
-     *
-     * <p>Defends against a custom {@link SecretProvider} that returns a non-empty list containing a
-     * {@code null} or blank entry: such an entry is rejected with a message naming the destination, so a
-     * delivery is never signed with a bogus secret (nor sent unsigned). The default provider already drops
-     * blanks, so this guard only ever fires for a misbehaving override.
      */
-    private String sign(
-            String destinationName,
-            List<String> secrets,
-            String endpointId,
-            String messageId,
-            long timestamp,
-            String payload) {
+    private String sign(List<String> secrets, String endpointId, String messageId, long timestamp, String payload) {
         StringBuilder combined = new StringBuilder();
         for (String secret : secrets) {
-            if (secret == null || secret.isBlank()) {
-                throw new IllegalStateException(
-                        "SecretProvider returned a null/blank signing secret for webhook destination: "
-                                + destinationName);
-            }
             if (combined.length() > 0) {
                 combined.append(' ');
             }

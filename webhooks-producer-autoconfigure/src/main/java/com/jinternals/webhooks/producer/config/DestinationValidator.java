@@ -4,11 +4,11 @@ import com.jinternals.webhooks.core.config.WebhookConfigurationException;
 import com.jinternals.webhooks.core.secret.SecretProvider;
 import com.jinternals.webhooks.core.sign.Ed25519Keys;
 import com.jinternals.webhooks.core.sign.SigningSchemeValidator;
+import com.jinternals.webhooks.core.sign.SymmetricKeys;
 import com.jinternals.webhooks.producer.config.WebhookProducerProperties.Destination;
 import com.jinternals.webhooks.producer.security.DestinationUrlValidator;
 import com.jinternals.webhooks.producer.transport.SafeUrl;
 import com.jinternals.webhooks.producer.transport.WebhookDeliveryException;
-import com.standardwebhooks.Webhook;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.List;
@@ -130,7 +130,7 @@ public class DestinationValidator implements InitializingBean {
         }
     }
 
-    /** Validate a {@code whsec_} HMAC secret via the upstream library; Ed25519 keys are handled above. */
+    /** Validate a {@code whsec_} HMAC secret against the Standard Webhooks key rules; Ed25519 keys are handled above. */
     private void validateSymmetricSecret(String name, String base, String secret) {
         // Only whsk_ (private) or whsec_ secrets can reach here: any whpk_ (public) key was already rejected
         // by validateAsymmetric (a producer signs with the private key), so there is no whpk_ branch to test.
@@ -138,12 +138,13 @@ public class DestinationValidator implements InitializingBean {
             return; // asymmetric material already validated by SigningSchemeValidator
         }
         try {
-            new Webhook(secret);
-        } catch (Exception e) {
+            SymmetricKeys.decodeSecret(secret);
+        } catch (IllegalArgumentException e) {
             throw new WebhookConfigurationException(
                     "Invalid signing secret for webhook destination '" + name + "': " + e.getMessage(),
-                    "Provide a valid Standard Webhooks symmetric secret (whsec_ followed by Base64 key "
-                            + "material) for " + base + ".secret, or use a whsk_ Ed25519 private key for v2a.",
+                    "Provide a valid Standard Webhooks symmetric secret (whsec_ followed by Base64 encoding of "
+                            + "24 to 64 random bytes) for " + base + ".secret, or use a whsk_ Ed25519 private key "
+                            + "for v2a.",
                     e);
         }
     }

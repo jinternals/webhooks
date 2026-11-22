@@ -1,5 +1,7 @@
 package com.jinternals.webhooks.producer.sign;
 
+import com.jinternals.webhooks.core.sign.SigningSchemeValidator;
+import com.jinternals.webhooks.core.sign.SymmetricKeys;
 import com.standardwebhooks.Webhook;
 import com.standardwebhooks.exceptions.WebhookSigningException;
 
@@ -11,10 +13,6 @@ import com.standardwebhooks.exceptions.WebhookSigningException;
  *
  * <p>The {@code endpointId} argument is ignored: the symmetric scheme does not sign an endpoint id (each
  * endpoint has its own unique secret, which already binds a message to its endpoint).
- *
- * <p>A {@link Webhook} is constructed per sign. Construction only strips the {@code whsec_} prefix and
- * Base64-decodes the secret into a key array (no {@code Mac} is retained), so there is nothing worth caching
- * on a path that then computes an HMAC and performs a network POST.
  */
 public class HmacWebhookSigner implements WebhookSigner {
 
@@ -23,6 +21,7 @@ public class HmacWebhookSigner implements WebhookSigner {
         if (secret == null || secret.isBlank()) {
             throw new IllegalArgumentException("No signing secret configured for this destination");
         }
+        SigningSchemeValidator.requireValidMessageId(messageId);
         try {
             return doSign(newWebhook(secret), messageId, timestamp, payload);
         } catch (WebhookSigningException e) {
@@ -41,9 +40,9 @@ public class HmacWebhookSigner implements WebhookSigner {
 
     private Webhook newWebhook(String secret) {
         try {
-            return new Webhook(secret);
+            return new Webhook(SymmetricKeys.decodeSecret(secret));
         } catch (Exception e) {
-            // EmptyWebhookSecretException or invalid base64 — a misconfiguration.
+            // Invalid prefix, Base64, or key length — a misconfiguration.
             throw new IllegalStateException("Invalid webhook secret configured: " + e.getMessage(), e);
         }
     }

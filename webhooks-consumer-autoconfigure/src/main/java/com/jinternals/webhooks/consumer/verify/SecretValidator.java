@@ -6,7 +6,7 @@ import com.jinternals.webhooks.core.config.WebhookConfigurationException;
 import com.jinternals.webhooks.core.secret.SecretProvider;
 import com.jinternals.webhooks.core.sign.Ed25519Keys;
 import com.jinternals.webhooks.core.sign.SigningSchemeValidator;
-import com.standardwebhooks.Webhook;
+import com.jinternals.webhooks.core.sign.SymmetricKeys;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,7 +15,7 @@ import org.springframework.beans.factory.InitializingBean;
 /**
  * Validates every configured endpoint secret at <strong>startup</strong> (see SPEC.md §14a). Each
  * endpoint must resolve to at least one secret, each symmetric ({@code whsec_}) secret must be a well-formed
- * Standard Webhooks secret (constructing a {@link Webhook} would otherwise throw), and each asymmetric
+ * Standard Webhooks secret ({@code whsec_} prefix + Base64 key of 24..64 bytes), and each asymmetric
  * ({@code whpk_}) endpoint must satisfy the {@code v2a} rules — a well-formed Ed25519 public key and a valid,
  * dot-free {@code endpoint-id} (see SPEC.md §8e). A problem fails the context at boot — fast and loud —
  * instead of surfacing later as a per-request {@code 500} that a sender would retry forever.
@@ -81,7 +81,7 @@ public class SecretValidator implements InitializingBean {
         log.info("Validated {} secret(s) for webhook endpoint {}", secrets.size(), path);
     }
 
-    /** Validate a {@code whsec_} HMAC secret via the upstream library; Ed25519 keys are handled above. */
+    /** Validate a {@code whsec_} HMAC secret against the Standard Webhooks key rules; Ed25519 keys are handled above. */
     private void validateSymmetricSecret(String path, String secret) {
         // Only whpk_ (public) or whsec_ secrets can reach here: any whsk_ (private) key was already rejected
         // by validateAsymmetric (a consumer verifies with the public key), so there is no whsk_ branch to test.
@@ -89,12 +89,12 @@ public class SecretValidator implements InitializingBean {
             return; // asymmetric material already validated by SigningSchemeValidator
         }
         try {
-            new Webhook(secret);
-        } catch (Exception e) {
+            SymmetricKeys.decodeSecret(secret);
+        } catch (IllegalArgumentException e) {
             throw new WebhookConfigurationException(
                     "Invalid webhook secret for endpoint " + path + ": " + e.getMessage(),
-                    "Provide a valid Standard Webhooks symmetric secret (whsec_ followed by Base64 key "
-                            + "material) for this endpoint, or use a whpk_ Ed25519 public key for v2a.",
+                    "Provide a valid Standard Webhooks symmetric secret (whsec_ followed by Base64 encoding of "
+                            + "24 to 64 random bytes) for this endpoint, or use a whpk_ Ed25519 public key for v2a.",
                     e);
         }
     }

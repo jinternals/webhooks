@@ -101,10 +101,10 @@ public class WebhookConsumerAutoConfiguration {
     }
 
     /**
-     * Replay-window (timestamp freshness) policy (SPEC §8b). <strong>Off by default</strong>
-     * ({@link NoOpTimestampValidator}); when {@code webhooks.consumer.replay-window-enabled=true} it
-     * becomes a {@link ClockSkewTimestampValidator} with {@code webhooks.consumer.replay-tolerance}.
-     * Override with a {@code @Bean TimestampValidator} for a custom freshness policy.
+     * Replay-window (timestamp freshness) policy (SPEC §8b). <strong>On by default</strong>
+     * ({@link ClockSkewTimestampValidator} with {@code webhooks.consumer.replay-tolerance}, default 5m, per
+     * Standard Webhooks); when {@code webhooks.consumer.replay-window-enabled=false} it becomes a
+     * {@link NoOpTimestampValidator}. Override with a {@code @Bean TimestampValidator} for a custom policy.
      */
     @Bean
     @ConditionalOnMissingBean

@@ -87,17 +87,17 @@ public class WebhookProperties {
         /**
          * Replay-window (timestamp freshness) check (see SPEC.md §8b).
          *
-         * <p><strong>Disabled by default.</strong> When disabled, a correctly-signed request is accepted
-         * regardless of its {@code webhook-timestamp} age — the signature alone is trusted. When enabled,
-         * a request whose timestamp is outside {@code replay-tolerance} of the server clock (in either
-         * direction) is rejected with a {@code 400}, exactly as Standard Webhooks prescribes.
+         * <p><strong>Enabled by default</strong> (secure by default per the Standard Webhooks specification):
+         * a request whose {@code webhook-timestamp} is outside {@code replay-tolerance} of the server clock
+         * (in either direction) is rejected with a {@code 400}. Set to {@code false} to wire the
+         * {@link com.jinternals.webhooks.consumer.verify.NoOpTimestampValidator} and accept any correctly
+         * signed request regardless of timestamp age.
          *
          * <p><strong>Security note.</strong> The replay window is what lets a stateless consumer resist
-         * captured-request replay attacks. Leaving it off means an attacker who records one valid
-         * delivery can re-send it indefinitely. Enable it (and keep idempotency or idempotent handlers in
-         * mind) for internet-facing endpoints.
+         * captured-request replay attacks. Disabling it means an attacker who records one valid delivery can
+         * re-send it indefinitely.
          */
-        private boolean replayWindowEnabled = false;
+        private boolean replayWindowEnabled = true;
 
         /**
          * Allowed clock skew for the replay-window check when {@link #replayWindowEnabled} is true (see

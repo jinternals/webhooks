@@ -78,7 +78,7 @@ class WebhookConsumerAutoConfigurationTest {
 
     @Test
     void timestampValidatorAcceptsAnyAgeWhenReplayWindowDisabled() {
-        // Replay window off (default): the selected validator must accept even an ancient timestamp — the
+        // Replay window explicitly off: the selected validator must accept even an ancient timestamp — the
         // behaviour that distinguishes the no-op policy from the clock-skew one, without naming the class.
         WebhookProperties properties = new WebhookProperties();
         properties.getConsumer().setReplayWindowEnabled(false);
@@ -90,12 +90,11 @@ class WebhookConsumerAutoConfigurationTest {
     }
 
     @Test
-    void timestampValidatorRejectsStaleTimestampsWhenReplayWindowEnabled() {
-        // Replay window on: the selected validator must reject a timestamp outside the tolerance. Asserting
-        // the rejection (not the class) proves the clock-skew policy was chosen and is actually enforcing.
+    void timestampValidatorRejectsStaleTimestampsByDefault() {
+        // Replay window is enabled by default (Standard Webhooks secure-by-default): without setting
+        // replayWindowEnabled explicitly, the default properties must wire ClockSkewTimestampValidator and
+        // reject a stale timestamp. This pins both the branch and the default field value = true.
         WebhookProperties properties = new WebhookProperties();
-        properties.getConsumer().setReplayWindowEnabled(true);
-        properties.getConsumer().setReplayTolerance(Duration.ofMinutes(5));
 
         TimestampValidator validator = autoConfig.webhookTimestampValidator(properties);
 

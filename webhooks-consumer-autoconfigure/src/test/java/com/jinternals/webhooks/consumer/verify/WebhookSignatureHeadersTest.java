@@ -91,4 +91,28 @@ class WebhookSignatureHeadersTest {
                 .satisfies(e -> assertThat(((WebhookVerificationFailure) e).reason())
                         .isEqualTo(VerificationFailureReason.TIMESTAMP));
     }
+
+    @Test
+    void failsWithMissingHeadersWhenIdIsBlank() {
+        assertThatThrownBy(() -> WebhookSignatureHeaders.from(Map.of(
+                        WebhookHeaders.ID, List.of("   "),
+                        WebhookHeaders.TIMESTAMP, List.of("1700000000"),
+                        WebhookHeaders.SIGNATURE, List.of("v1,sig"))))
+                .isInstanceOf(WebhookVerificationFailure.class)
+                .satisfies(e -> assertThat(((WebhookVerificationFailure) e).reason())
+                        .isEqualTo(VerificationFailureReason.MISSING_HEADERS));
+    }
+
+    @Test
+    void failsWithSignatureReasonWhenIdContainsDelimiterDot() {
+        // Standard Webhooks spec: message id must not include '.' to prevent signed-content delimiter attacks.
+        assertThatThrownBy(() -> WebhookSignatureHeaders.from(Map.of(
+                        WebhookHeaders.ID, List.of("msg.evil"),
+                        WebhookHeaders.TIMESTAMP, List.of("1700000000"),
+                        WebhookHeaders.SIGNATURE, List.of("v1,sig"))))
+                .isInstanceOf(WebhookVerificationFailure.class)
+                .hasMessageContaining("must not contain '.'")
+                .satisfies(e -> assertThat(((WebhookVerificationFailure) e).reason())
+                        .isEqualTo(VerificationFailureReason.SIGNATURE));
+    }
 }

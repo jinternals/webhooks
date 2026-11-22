@@ -539,24 +539,22 @@ Two implementations ship, wired `@ConditionalOnMissingBean` from configuration:
 
 | Implementation | When | Behaviour |
 | --- | --- | --- |
-| `NoOpTimestampValidator` | **Default** (`replay-window-enabled=false`) | Accepts any timestamp. The signature alone is trusted. |
-| `ClockSkewTimestampValidator` | `replay-window-enabled=true` | Accepts only if `\|now − timestamp\| ≤ replay-tolerance` (default `5m`); otherwise throws `"Message timestamp too old"` / `"Message timestamp too new"`. |
+| `ClockSkewTimestampValidator` | **Default** (`replay-window-enabled=true`) | Accepts only if `\|now − timestamp\| ≤ replay-tolerance` (default `5m`); otherwise throws `"Message timestamp too old"` / `"Message timestamp too new"`. |
+| `NoOpTimestampValidator` | `replay-window-enabled=false` | Accepts any timestamp. The signature alone is trusted. |
 
 ```yaml
 webhooks:
   consumer:
-    replay-window-enabled: true   # default: false
+    replay-window-enabled: true   # default: true
     replay-tolerance: 5m          # allowed clock skew either direction (default: 5m)
 ```
 
 Publish your own `@Bean TimestampValidator` for a different freshness policy; the auto-configuration
 backs off.
 
-> **Security note — disabled by default.** Shipping the window off means the out-of-the-box consumer
-> accepts a correctly-signed request of *any* age, so a captured delivery can be replayed indefinitely.
-> This is a deliberate default for environments with legitimately delayed deliveries or unsynchronized
-> clocks, but it weakens replay protection. **Enable the window for internet-facing endpoints**, and pair
-> it with idempotency (§11) or idempotent handlers for defense in depth. The boundary is inclusive
+> **Security note — enabled by default.** Per the Standard Webhooks specification, the out-of-the-box
+> consumer enforces `replay-tolerance` (`5m`) so captured deliveries cannot be replayed indefinitely.
+> Pair it with idempotency (§11) or idempotent handlers for defense in depth. The boundary is inclusive
 > (`≤`), the check runs before any signature work, and an unparseable timestamp is always rejected with
 > `WebhookVerificationException("Invalid timestamp header")` regardless of the window setting.
 

@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.DoubleSupplier;
+import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -32,7 +33,7 @@ import org.slf4j.LoggerFactory;
  * is rethrown — the dead-letter hook (SPEC §20). The callback is isolated: a listener that throws is logged
  * and cannot change the caller-visible outcome.
  */
-public class RetryingWebhookTransport implements WebhookTransport {
+public class RetryingWebhookTransport implements AttemptAwareWebhookTransport {
 
     private static final Logger log = LoggerFactory.getLogger(RetryingWebhookTransport.class);
     private static final int TOO_MANY_REQUESTS = 429;
@@ -100,11 +101,17 @@ public class RetryingWebhookTransport implements WebhookTransport {
 
     @Override
     public void send(String url, Map<String, List<String>> headers, String body) {
+        sendPerAttempt(url, () -> headers, body);
+    }
+
+    @Override
+    public void sendPerAttempt(String url, Supplier<Map<String, List<String>>> headersSupplier, String body) {
         // Validate the destination once, before the loop: a disallowed URL is fatal, never retried.
         urlValidator.validate(url);
         // Bounded loop: every iteration either returns (success) or throws (fatal / attempts exhausted),
         // so there is no fall-through exit and no dead "unreachable throw" to cover.
         for (int attempt = 1; ; attempt++) {
+            Map<String, List<String>> headers = headersSupplier.get();
             try {
                 delegate.send(url, headers, body);
                 if (attempt > 1) {

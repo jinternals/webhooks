@@ -5,10 +5,11 @@ package com.jinternals.webhooks.consumer.verify;
  * <strong>extension point (SPI)</strong> for timestamp verification, factored out of
  * {@link WebhookVerifier} so the window is independently configurable, testable, and swappable.
  *
- * <p>The shipped implementations are {@link NoOpTimestampValidator} (default — the window is
- * <strong>disabled</strong>, any correctly-signed request is accepted regardless of age) and
- * {@link ClockSkewTimestampValidator} (opt-in — rejects a timestamp outside a configurable clock-skew
- * tolerance of the server clock, as Standard Webhooks prescribes).
+ * <p>The shipped implementations are {@link ClockSkewTimestampValidator} (default — rejects a timestamp
+ * outside a configurable clock-skew tolerance of the server clock, default 5 minutes, as Standard Webhooks
+ * prescribes) and {@link NoOpTimestampValidator} (wired when
+ * {@code webhooks.consumer.replay-window-enabled=false} — accepts any correctly-signed request regardless of
+ * age).
  *
  * <p>Provide your own {@code @Bean TimestampValidator} to implement a different freshness policy; the
  * auto-configuration backs off when a bean is already present ({@code @ConditionalOnMissingBean}).

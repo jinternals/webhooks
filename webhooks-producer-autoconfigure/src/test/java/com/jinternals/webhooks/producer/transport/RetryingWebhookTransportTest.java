@@ -535,4 +535,26 @@ class RetryingWebhookTransportTest {
             Thread.interrupted();
         }
     }
+
+    @Test
+    void sendPerAttemptReEvaluatesHeadersSupplierOnEveryRetry() {
+        List<String> observedTimestamps = new ArrayList<>();
+        AtomicInteger attemptClock = new AtomicInteger(1000);
+        WebhookTransport delegate = (url, headers, body) -> {
+            observedTimestamps.add(headers.get("webhook-timestamp").get(0));
+            if (observedTimestamps.size() < 3) {
+                throw new WebhookDeliveryException("down", 503);
+            }
+        };
+
+        retrying(delegate, retry(3))
+                .sendPerAttempt(
+                        URL,
+                        () -> Map.of(
+                                "webhook-id", List.of("msg_same"),
+                                "webhook-timestamp", List.of(Integer.toString(attemptClock.getAndAdd(5)))),
+                        BODY);
+
+        assertThat(observedTimestamps).containsExactly("1000", "1005", "1010");
+    }
 }

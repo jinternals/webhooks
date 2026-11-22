@@ -21,7 +21,7 @@ producer binds `webhooks.producer.*`. The two are independent — configure only
 | `max-body-size` | DataSize | `256KB` | Inbound body ceiling. A larger body is rejected `413` **before** verification, bounding memory/thread use. |
 | `signature-verification-enabled` | boolean | `true` | Verify the `webhook-signature` of every inbound request. **On by default.** Set `false` to accept all requests unsigned (wires the no-op verifier, needs no endpoint secret) — only when the transport is authenticated instead. Logs a prominent WARN at every startup while off. See [Verification → disabling verification](../guides/verification-and-security.md#disabling-verification). |
 | `validate-secrets-on-startup` | boolean | `true` | Validate every endpoint secret at boot; a missing/blank/invalid secret then fails fast instead of per-request `500`s. Skipped when `signature-verification-enabled=false` (no secret needed). |
-| `replay-window-enabled` | boolean | `false` | Enable timestamp-freshness checking. **Off by default** — enable for internet-facing endpoints. |
+| `replay-window-enabled` | boolean | `true` | Enable timestamp-freshness checking (`ClockSkewTimestampValidator`). **On by default** per Standard Webhooks; set `false` only if deliveries may be intentionally delayed without timestamp refresh. |
 | `replay-tolerance` | Duration | `5m` | Allowed clock skew when the replay window is on: accept only if `|now − webhook-timestamp| ≤ tolerance`. Ignored when disabled. |
 | `endpoints` | List&lt;Endpoint&gt; | *(empty)* | The configured receive paths (see [Endpoints](#endpoints-webhooksconsumerendpoints) below). Configure at least one to receive traffic. |
 

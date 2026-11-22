@@ -94,4 +94,17 @@ class Ed25519WebhookSignerTest {
         assertThatThrownBy(() -> signer.sign("whsk_not valid base64!!!", ENDPOINT_ID, MSG_ID, TIMESTAMP, PAYLOAD))
                 .isInstanceOf(IllegalArgumentException.class);
     }
+
+    @Test
+    void rejectsInvalidMessageId() {
+        assertThatThrownBy(() -> signer.sign(PRIVATE_KEY, ENDPOINT_ID, null, TIMESTAMP, PAYLOAD))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("message-id is required");
+        assertThatThrownBy(() -> signer.sign(PRIVATE_KEY, ENDPOINT_ID, "   ", TIMESTAMP, PAYLOAD))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("message-id is required");
+        assertThatThrownBy(() -> signer.sign(PRIVATE_KEY, ENDPOINT_ID, "msg.evil", TIMESTAMP, PAYLOAD))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("must not contain '.'");
+    }
 }

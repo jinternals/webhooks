@@ -247,22 +247,21 @@ once the tolerance elapses and is rejected.
 ```yaml
 webhooks:
   consumer:
-    replay-window-enabled: true      # DISABLED by default
+    replay-window-enabled: true      # ENABLED by default
     replay-tolerance: 5m             # |now − webhook-timestamp| must be ≤ this
 ```
 
-> **Disabled by default — enable it for internet-facing endpoints.** With the window off, the signature
-> alone is trusted and a captured delivery can be replayed indefinitely. The default is off because many
-> deployments sit behind a trusted gateway and because enabling it requires reasonably synced clocks. For
-> any endpoint reachable from the public internet, **turn it on**, keep clocks in NTP sync, and pair it with
-> idempotent handlers (a legitimate same-timestamp retry is still a duplicate). See
-> [SPEC §8b](../reference/SPEC.md#8b-replay-window-timestamp-freshness).
+> **Enabled by default.** Out of the box, `ClockSkewTimestampValidator` rejects captured deliveries
+> outside `replay-tolerance` (`5m`). Keep clocks in NTP sync and pair it with idempotent handlers (a
+> legitimate retry within the window is still a duplicate). Only set `replay-window-enabled: false`
+> when replaying historical fixtures or behind an asynchronous store-and-forward queue that does not
+> refresh `webhook-timestamp`. See [SPEC §8b](../reference/SPEC.md#8b-replay-window-timestamp-freshness).
 
-| Trade-off | Window **off** (default) | Window **on** |
+| Trade-off | Window **on** (default) | Window **off** (`false`) |
 | --- | --- | --- |
-| Replay resistance | none — signature trusted forever | bounded to `replay-tolerance` |
-| Clock requirement | none | sender & receiver within tolerance |
-| Best for | behind a trusted gateway | internet-facing endpoints |
+| Replay resistance | bounded to `replay-tolerance` | none — signature trusted forever |
+| Clock requirement | sender & receiver within tolerance | none |
+| Best for | production & internet-facing endpoints | offline fixture replay |
 
 ---
 

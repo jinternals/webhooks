@@ -135,4 +135,18 @@ public final class SigningSchemeValidator {
     public static boolean isEndpointIdIgnored(String endpointId, List<String> secrets) {
         return endpointId != null && !endpointId.isBlank() && !usesAsymmetric(secrets);
     }
+
+    /**
+     * Enforce the Standard Webhooks {@code webhook-id} invariant on the signing path: non-blank and free of
+     * {@code '.'} (the delimiter separating {@code endpoint_id}, {@code msg_id}, {@code timestamp}, and
+     * {@code payload}).
+     */
+    public static void requireValidMessageId(String messageId) {
+        if (messageId == null || messageId.isBlank()) {
+            throw new IllegalArgumentException("message-id is required for webhook signing");
+        }
+        if (messageId.contains(".")) {
+            throw new IllegalArgumentException("message-id must not contain '.' — it is the signed-content delimiter");
+        }
+    }
 }

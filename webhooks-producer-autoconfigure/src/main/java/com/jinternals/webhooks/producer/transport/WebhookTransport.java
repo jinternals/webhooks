@@ -9,6 +9,7 @@ import java.util.Map;
  * a {@code @Bean WebhookTransport} to send asynchronously, through a queue, or with your own retry
  * policy. The producer core deliberately ships <strong>no</strong> retry or persistence.
  */
+@FunctionalInterface
 public interface WebhookTransport {
 
     /**

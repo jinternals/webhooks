@@ -29,15 +29,22 @@ final class WebhookSignatureHeaders {
     /**
      * Read and validate the required headers.
      *
-     * @throws WebhookVerificationFailure {@code MISSING_HEADERS} if any of the three is absent, or
-     *                                    {@code TIMESTAMP} if {@code webhook-timestamp} is not a long
+     * @throws WebhookVerificationFailure {@code MISSING_HEADERS} if any of the three is absent (or
+     *                                    {@code webhook-id} is blank), {@code SIGNATURE} if
+     *                                    {@code webhook-id} contains {@code '.'} (the signed-content
+     *                                    delimiter), or {@code TIMESTAMP} if {@code webhook-timestamp} is
+     *                                    not a long
      */
     static WebhookSignatureHeaders from(Map<String, List<String>> headers) throws WebhookVerificationFailure {
         String msgId = firstHeader(headers, WebhookHeaders.ID);
         String msgTimestamp = firstHeader(headers, WebhookHeaders.TIMESTAMP);
         String msgSignature = firstHeader(headers, WebhookHeaders.SIGNATURE);
-        if (msgId == null || msgTimestamp == null || msgSignature == null) {
+        if (msgId == null || msgId.isBlank() || msgTimestamp == null || msgSignature == null) {
             throw new WebhookVerificationFailure(VerificationFailureReason.MISSING_HEADERS, "Missing required headers");
+        }
+        if (msgId.contains(".")) {
+            throw new WebhookVerificationFailure(
+                    VerificationFailureReason.SIGNATURE, "Invalid webhook-id header: must not contain '.'");
         }
         long timestamp;
         try {

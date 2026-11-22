@@ -293,7 +293,7 @@ Flags that default to *enabled* can be turned off; features that default to *dis
 | Asynchronous handler execution | Disabled (`sync`) | `webhooks.consumer.handler.mode=async` to enable |
 | Per-type payload validation | Always on | Declare Bean Validation constraints on the `@WebhookType` class (`@NotBlank`, `@Positive`, …); no config |
 | Unknown-type rejection | Disabled (`ack-and-ignore`) | `webhooks.consumer.unknown-type-policy=reject` to enable |
-| Replay window (timestamp freshness) | **Disabled** | `webhooks.consumer.replay-window-enabled=true` to enable. See the [security note](#replay-window) and [SPEC §8b](./docs/reference/SPEC.md#8b-replay-window-timestamp-freshness). |
+| Replay window (timestamp freshness) | **Enabled** (`5m` tolerance) | `webhooks.consumer.replay-window-enabled=false` to disable. See [Replay window](#replay-window) and [SPEC §8b](./docs/reference/SPEC.md#8b-replay-window-timestamp-freshness). |
 | Consumer secret rotation | Disabled (single secret) | `webhooks.consumer.endpoints[].additional-secrets=[...]` to enable |
 | Producer secret rotation | Disabled (single secret) | `webhooks.producer.destinations.<name>.additional-secrets=[...]` to enable |
 | Producer retry (in-process) | **Enabled** (3 attempts) | `webhooks.producer.retry.max-attempts=1` to disable (one attempt, then throw). See [Producer retry](#producer-retry) and [SPEC §19b](./docs/reference/SPEC.md#19b-in-process-retry-no-persistence). |
@@ -486,18 +486,16 @@ is what lets a stateless consumer reject a stale, replayed delivery: a signature
 authenticity but not freshness, so without the window an attacker who records one valid request can
 re-send it indefinitely.
 
-> **Security note.** In this toolkit the replay window is **disabled by default**. Out of the box the
-> consumer accepts any correctly-signed request regardless of its age. This is a deliberate default for
-> environments where deliveries may be legitimately delayed or clocks are not synchronized, but it
-> weakens replay protection. **Enable the window for internet-facing endpoints**, and combine it with an
-> `IdempotencyGuard` or idempotent handlers for defense in depth.
+> **Secure by default.** Following the Standard Webhooks specification, the replay window is **enabled by
+> default** with a `5m` tolerance. Combine it with an `IdempotencyGuard` or idempotent handlers for
+> defense in depth against retries within the window.
 
-Enable it and, optionally, tune the tolerance:
+Tune the tolerance (or opt out if deliveries are intentionally delayed):
 
 ```yaml
 webhooks:
   consumer:
-    replay-window-enabled: true   # default: false
+    replay-window-enabled: true   # default: true
     replay-tolerance: 5m          # allowed clock skew in either direction (default: 5m)
 ```
 

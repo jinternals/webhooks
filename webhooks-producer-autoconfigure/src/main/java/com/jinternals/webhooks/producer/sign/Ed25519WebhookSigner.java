@@ -2,6 +2,7 @@ package com.jinternals.webhooks.producer.sign;
 
 import com.jinternals.webhooks.core.sign.Ed25519Keys;
 import com.jinternals.webhooks.core.sign.Ed25519Signatures;
+import com.jinternals.webhooks.core.sign.SigningSchemeValidator;
 import java.security.PrivateKey;
 
 /**
@@ -31,6 +32,7 @@ public class Ed25519WebhookSigner implements WebhookSigner {
         if (endpointId.contains(".")) {
             throw new IllegalArgumentException("endpoint-id must not contain '.' — it is the signed-content delimiter");
         }
+        SigningSchemeValidator.requireValidMessageId(messageId);
         PrivateKey privateKey = Ed25519Keys.decodePrivateKey(secret);
         String signature = Ed25519Signatures.sign(privateKey, endpointId, messageId, timestamp, payload);
         return Ed25519Signatures.VERSION + "," + signature;

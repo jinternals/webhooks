@@ -73,6 +73,26 @@ class HmacWebhookSignerTest {
     }
 
     @Test
+    void rejectsSymmetricSecretOutsideSpecKeyLength() {
+        assertThatThrownBy(() -> signer.sign("whsec_c2hvcnRrZXk=", null, "msg_1", 1L, "{}"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("between 24 and 64 bytes");
+    }
+
+    @Test
+    void rejectsInvalidMessageId() {
+        assertThatThrownBy(() -> signer.sign(SECRET, null, null, 1L, "{}"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("message-id is required");
+        assertThatThrownBy(() -> signer.sign(SECRET, null, "   ", 1L, "{}"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("message-id is required");
+        assertThatThrownBy(() -> signer.sign(SECRET, null, "msg.evil", 1L, "{}"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("must not contain '.'");
+    }
+
+    @Test
     void wrapsSigningExceptionAsIllegalState() {
         // A valid secret never fails to sign, but the library declares a checked exception we must
         // handle. Override the sign seam to force that path and assert it is wrapped.

@@ -140,6 +140,28 @@ class SigningSchemeValidatorTest {
                 .isFalse();
     }
 
+    // ---- requireValidMessageId ----
+
+    @Test
+    void requireValidMessageIdAcceptsNonBlankDotFreeId() {
+        org.assertj.core.api.Assertions.assertThatCode(
+                        () -> SigningSchemeValidator.requireValidMessageId("msg_2KWPBgLlAfxdpx2AI54pPJ85f4W"))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void requireValidMessageIdRejectsNullBlankAndDot() {
+        assertThatThrownBy(() -> SigningSchemeValidator.requireValidMessageId(null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("message-id is required");
+        assertThatThrownBy(() -> SigningSchemeValidator.requireValidMessageId("   "))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("message-id is required");
+        assertThatThrownBy(() -> SigningSchemeValidator.requireValidMessageId("msg.evil"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("must not contain '.'");
+    }
+
     @Test
     void utilityClassIsNotInstantiable() throws Exception {
         var ctor = SigningSchemeValidator.class.getDeclaredConstructor();

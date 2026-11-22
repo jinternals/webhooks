@@ -33,7 +33,7 @@ yours is wired everywhere the toolkit uses that type.
 | `HandlerExecutor` | `SyncHandlerExecutor` or `AsyncHandlerExecutor` (per `handler.mode`) | run handlers your own way (custom pool, virtual threads, external queue). |
 | `HandlerFailureListener` | `NoOpHandlerFailureListener` | capture async handler failures/timeouts (dead-letter, alert). See [Reliability](../guides/reliability.md#consumer-hook--handlerfailurelistener). |
 | `IdempotencyGuard` | `NoOpIdempotencyGuard`, or `InMemoryIdempotencyGuard` when `in-memory-idempotency=true` | share dedupe across instances (Redis, DB). |
-| `TimestampValidator` | `NoOpTimestampValidator`, or `ClockSkewTimestampValidator` when `replay-window-enabled=true` | implement a different freshness policy. |
+| `TimestampValidator` | `ClockSkewTimestampValidator` (`5m` default), or `NoOpTimestampValidator` when `replay-window-enabled=false` | implement a different freshness policy. |
 | `SecretValidator` | validates every endpoint secret at startup (skipped when verification is off) | customize or disable startup secret validation. |
 | `MetadataContributor` | *(none; opt-in)* | add provider-specific fields into `WebhookMetadata.attributes()`. |
 | `WebhookMetrics` | `MicrometerWebhookMetrics` (if a registry exists) or `NoOpWebhookMetrics` | emit to a non-Micrometer backend. See [Observability](../guides/observability.md#opt-in-metrics). |

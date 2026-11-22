@@ -1,5 +1,6 @@
 package com.jinternals.webhooks.consumer.verify;
 
+import com.jinternals.webhooks.core.sign.SymmetricKeys;
 import com.standardwebhooks.Webhook;
 import com.standardwebhooks.exceptions.WebhookSigningException;
 import java.nio.charset.StandardCharsets;
@@ -107,9 +108,9 @@ public class HmacWebhookVerifier implements WebhookVerifier {
 
     private Webhook newWebhook(String secret) {
         try {
-            return new Webhook(secret);
+            return new Webhook(SymmetricKeys.decodeSecret(secret));
         } catch (Exception e) {
-            // EmptyWebhookSecretException or invalid base64 — a misconfiguration.
+            // Invalid prefix, Base64, or key length — a misconfiguration.
             throw new IllegalStateException("Invalid webhook secret configured: " + e.getMessage(), e);
         }
     }

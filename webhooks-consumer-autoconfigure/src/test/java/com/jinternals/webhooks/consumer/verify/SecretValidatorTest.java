@@ -51,11 +51,19 @@ class SecretValidatorTest {
 
     @Test
     void failsFastWhenSecretMalformed() {
-        // non-empty but not valid base64 after the prefix handling -> Webhook ctor throws
+        // non-empty but lacking whsec_ prefix / invalid base64 / wrong key length -> rejected at startup
         WebhookProperties props = propsWith(endpoint("/w", "not-a-valid-secret!!!"));
         assertThatThrownBy(() -> new SecretValidator(props, provider).afterPropertiesSet())
                 .isInstanceOf(WebhookConfigurationException.class)
                 .hasMessageContaining("Invalid webhook secret");
+    }
+
+    @Test
+    void failsFastWhenSymmetricSecretIsShorterThan24Bytes() {
+        WebhookProperties props = propsWith(endpoint("/w", "whsec_c2hvcnRrZXk=")); // "shortkey" = 8 bytes
+        assertThatThrownBy(() -> new SecretValidator(props, provider).afterPropertiesSet())
+                .isInstanceOf(WebhookConfigurationException.class)
+                .hasMessageContaining("between 24 and 64 bytes");
     }
 
     @Test

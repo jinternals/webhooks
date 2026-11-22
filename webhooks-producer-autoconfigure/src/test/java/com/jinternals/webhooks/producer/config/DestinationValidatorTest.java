@@ -120,6 +120,16 @@ class DestinationValidatorTest {
     }
 
     @Test
+    void rejectsASymmetricSecretShorterThan24Bytes() {
+        WebhookProducerProperties properties =
+                propertiesWith("crm", "https://crm.example.com/webhooks", "whsec_c2hvcnRrZXk="); // 8 bytes
+
+        assertThatThrownBy(() -> validator(properties, allowAll).afterPropertiesSet())
+                .isInstanceOf(WebhookConfigurationException.class)
+                .hasMessageContaining("between 24 and 64 bytes");
+    }
+
+    @Test
     void skipsSecretValidationButStillValidatesUrlWhenSigningDisabled() {
         // With signing disabled (NoOpWebhookSigner), destinations need no secret — but MUST still have a valid URL.
         WebhookProducerProperties secretless = propertiesWith("crm", "https://crm.example.com/webhooks", null);
