@@ -1,32 +1,34 @@
 package com.jinternals.webhooks.consumer.registry;
 
-import static java.util.function.Function.identity;
-import static java.util.stream.Collectors.toMap;
-
 import com.jinternals.webhooks.core.annotations.WebhookType;
 import com.jinternals.webhooks.core.registry.WebhookTypeRegistry;
 import java.util.Collection;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import org.reflections.Reflections;
+import org.springframework.beans.factory.config.BeanDefinition;
+import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
+import org.springframework.core.type.filter.AnnotationTypeFilter;
+import org.springframework.util.ClassUtils;
 
 /**
  * Classpath scanner that discovers {@code @WebhookType}-annotated event classes and builds a
- * {@link WebhookTypeRegistry} (see SPEC.md §5, §14). The scanning concern — and its {@code reflections}
- * dependency — lives in the consumer module, not in {@code webhooks-core}, so core stays a pure wire-model
- * library with no classpath-scanning weight.
+ * {@link WebhookTypeRegistry} (see SPEC.md §5, §14). The scanning concern lives in the consumer module, not in
+ * {@code webhooks-core}, so core stays a pure wire-model library with no classpath-scanning weight.
+ *
+ * <p>Scanning uses Spring's {@link ClassPathScanningCandidateComponentProvider}, which reads class metadata with
+ * ASM (without loading every class on the classpath) and only loads the matching classes. A class is discovered
+ * when it is <em>directly</em> annotated with {@code @WebhookType} and is concrete and independent (top-level or
+ * {@code static} nested) — the only kinds of class Jackson can instantiate as an event payload. Base packages
+ * include their sub-packages.
  */
 public final class WebhookTypeScanner {
 
     private WebhookTypeScanner() {}
 
-    /** Scan a single base package for {@code @WebhookType} classes and build the registry. */
+    /** Scan a single base package (and its sub-packages) for {@code @WebhookType} classes and build the registry. */
     public static WebhookTypeRegistry scan(String basePackage) {
-        Set<Class<?>> eventClasses = new Reflections(basePackage).getTypesAnnotatedWith(WebhookType.class);
-        Map<String, Class<?>> byType = eventClasses.stream()
-                .collect(toMap(cls -> cls.getAnnotation(WebhookType.class).value(), identity()));
-        return new WebhookTypeRegistry(byType);
+        return scan(List.of(basePackage));
     }
 
     /**
@@ -37,10 +39,16 @@ public final class WebhookTypeScanner {
      * eagerly rather than silently coalesced.
      */
     public static WebhookTypeRegistry scan(Collection<String> basePackages) {
+        ClassPathScanningCandidateComponentProvider scanner = new ClassPathScanningCandidateComponentProvider(false);
+        // considerMetaAnnotations=false: only classes carrying @WebhookType itself (the type string is read
+        // from that annotation below).
+        scanner.addIncludeFilter(new AnnotationTypeFilter(WebhookType.class, false));
+        ClassLoader classLoader = ClassUtils.getDefaultClassLoader();
+
         Map<String, Class<?>> byType = new LinkedHashMap<>();
         for (String basePackage : basePackages) {
-            Set<Class<?>> eventClasses = new Reflections(basePackage).getTypesAnnotatedWith(WebhookType.class);
-            for (Class<?> eventClass : eventClasses) {
+            for (BeanDefinition candidate : scanner.findCandidateComponents(basePackage)) {
+                Class<?> eventClass = ClassUtils.resolveClassName(candidate.getBeanClassName(), classLoader);
                 String type = eventClass.getAnnotation(WebhookType.class).value();
                 Class<?> previous = byType.putIfAbsent(type, eventClass);
                 if (previous != null && previous != eventClass) {

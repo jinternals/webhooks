@@ -114,12 +114,12 @@ follows the house style of the `jinternals` projects.
 | `ProblemDetail` + `@ControllerAdvice` errors | `dynamic-rest-api` → `GlobalExceptionHandler` | Uniform RFC-7807 error responses. |
 | Per-type payload validation | `dynamic-rest-api` → `SchemaValidationService` | Bean Validation constraints on the `@WebhookType` class, enforced on the deserialized event (§6a). |
 | `@EventMapper("type")` on event classes | `jinternals-event-bus` → `EventMapper` | Our `@WebhookType("...")` annotation. |
-| Reflections type → class scan | `jinternals-event-bus` → `EventUtils.getTypeMapping` | Build the `type → Class` registry at startup. |
+| Classpath type → class scan | `jinternals-event-bus` → `EventUtils.getTypeMapping` | Build the `type → Class` registry at startup. |
 | `@EventListener` handler method marker | `jinternals-event-bus` → `EventListener` | Our `@WebhookHandler` method annotation. |
 | Event headers constants | `jinternals-event-bus` → `EventHeaders` | Mapped onto Standard Webhooks headers. |
 
-> `dynamic-rest-api` targets **Spring Boot 3.3 / Java 21**. We align to the same versions (the shipped
-> parent is Spring Boot 3.3.5); payload validation uses Bean Validation (Hibernate Validator via
+> `dynamic-rest-api` targets **Spring Boot 3.3 / Java 21**. We target Java 21 too; the shipped parent is
+> Spring Boot 3.5.16. Payload validation uses Bean Validation (Hibernate Validator via
 > `spring-boot-starter-validation`) rather than a JSON-schema engine.
 
 ---
@@ -217,7 +217,7 @@ Adapted from `EventUtils.getTypeMapping`. At startup, scan a base package for `@
 build the lookup map.
 
 The registry itself is a **pure, immutable map holder** that lives in `webhooks-core` and carries no
-scanning machinery (and so no `reflections` dependency):
+scanning machinery:
 
 ```java
 public class WebhookTypeRegistry {
@@ -233,8 +233,9 @@ public class WebhookTypeRegistry {
 ```
 
 Classpath scanning is a **consumer-side concern**, so it lives in the consumer-autoconfigure module as a
-separate `WebhookTypeScanner` (which owns the `reflections` dependency). The auto-configuration calls it to
-build the registry from the configured base packages:
+separate `WebhookTypeScanner`. It uses Spring's own `ClassPathScanningCandidateComponentProvider` (ASM-based
+metadata reading — no extra dependency, and only matching classes are loaded). The auto-configuration calls it
+to build the registry from the host application's auto-configuration packages:
 
 ```java
 public final class WebhookTypeScanner {
@@ -242,9 +243,15 @@ public final class WebhookTypeScanner {
     private WebhookTypeScanner() {}   // static utility; not instantiable
 
     public static WebhookTypeRegistry scan(Collection<String> basePackages) {
-        Reflections reflections = new Reflections(basePackages.toArray());
-        Map<String, Class<?>> byType = reflections.getTypesAnnotatedWith(WebhookType.class).stream()
-            .collect(toMap(c -> c.getAnnotation(WebhookType.class).value(), identity()));
+        var scanner = new ClassPathScanningCandidateComponentProvider(false);
+        scanner.addIncludeFilter(new AnnotationTypeFilter(WebhookType.class, false)); // direct annotation only
+        Map<String, Class<?>> byType = new LinkedHashMap<>();
+        for (String pkg : basePackages) {
+            for (BeanDefinition candidate : scanner.findCandidateComponents(pkg)) {
+                Class<?> c = ClassUtils.resolveClassName(candidate.getBeanClassName(), classLoader);
+                // putIfAbsent; two DIFFERENT classes claiming one type string -> IllegalStateException
+            }
+        }
         return new WebhookTypeRegistry(byType);
     }
 
@@ -254,8 +261,11 @@ public final class WebhookTypeScanner {
 }
 ```
 
-Keeping the scanner out of core means a producer (which never scans) does not drag in `reflections`, and
-the core artifact stays free of classpath-scanning weight.
+Only **concrete, independent** classes (top-level or `static` nested) directly annotated with `@WebhookType`
+are discovered — the kinds Jackson can instantiate. Base packages include their sub-packages.
+
+Keeping the scanner out of core means a producer (which never scans) carries no scanning code, and the core
+artifact stays free of classpath-scanning weight.
 
 Consumer flow: read `envelope.type` → `classOf(type)` → Jackson `convertValue(envelope.data, clazz)`.
 
@@ -1149,7 +1159,7 @@ webhooks/                              # parent POM (pom packaging), shared depe
 │   ├── annotations/      @WebhookHandler                 (consumer-only)
 │   ├── config/           WebhookProperties, WebhookConsumerAutoConfiguration (core beans),
 │   │                     WebhookConsumerWebAutoConfiguration (web-only)
-│   ├── registry/         WebhookTypeScanner              (Reflections classpath scan: type → class; owns reflections dep)
+│   ├── registry/         WebhookTypeScanner              (Spring classpath scan: type → class)
 │   ├── web/              WebhookEndpointRegistry, WebhookReceiveController, WebhookReceivePipeline,
 │   │                     RawBodyArgumentResolver, EndpointResolvingInterceptor, WebConfiguration
 │   ├── web/receive/      WebhookBodyVerifier, EventResolver, Resolution, WebhookRequestHeaders,
@@ -1197,12 +1207,12 @@ webhooks-sample/                                # STANDALONE DEMO APPS (NOT part
 ```
 
 **Core dependencies:** `jackson-databind` (the `Envelope.data` node), `spring-core`
-(`ReflectionUtils`). Core is deliberately **free of `org.reflections:reflections`** — classpath scanning
+(`ReflectionUtils`). Core deliberately has **no classpath-scanning code** — scanning
 of `@WebhookType` classes is a consumer concern (`WebhookTypeScanner`), so the shared artifact stays
-lean and a producer never transitively pulls the scanner.
+lean and a producer never carries the scanner.
 
-**Consumer dependencies:** `webhooks-core`, `spring-boot-starter-web`, `spring-boot-autoconfigure`,
-`org.reflections:reflections` (the `@WebhookType` scan, via `WebhookTypeScanner`),
+**Consumer dependencies:** `webhooks-core`, `spring-boot-starter-web`, `spring-boot-autoconfigure`
+(the `@WebhookType` scan uses Spring's `ClassPathScanningCandidateComponentProvider`, via `WebhookTypeScanner`),
 `io.micrometer:micrometer-observation` + `spring-boot-starter-aop` (the `@Observed` Observation API,
 §13), `com.standardwebhooks:standardwebhooks`, `spring-boot-starter-validation` (Hibernate Validator,
 §6a), Jackson (via Boot).

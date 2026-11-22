@@ -8,7 +8,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.3.5</version>
+        <version>3.5.16</version>
         <relativePath/>
     </parent>
 
@@ -68,12 +68,11 @@
     <properties>
         <java.version>21</java.version>
         <standardwebhooks.version>1.2.0</standardwebhooks.version>
-        <reflections.version>0.10.2</reflections.version>
 
         <!-- Quality gate tooling (see SPEC.md §16). -->
         <jacoco.version>0.8.12</jacoco.version>
-        <pitest.version>1.17.0</pitest.version>
-        <pitest-junit5.version>1.2.1</pitest-junit5.version>
+        <pitest.version>1.30.2</pitest.version>
+        <pitest-junit5.version>1.2.3</pitest-junit5.version>
 
         <!-- Code formatting (Spotless + Palantir Java Format: 4-space, 120-col — matches the house style). -->
         <spotless.version>2.44.5</spotless.version>
@@ -121,11 +120,6 @@
                 <groupId>com.standardwebhooks</groupId>
                 <artifactId>standardwebhooks</artifactId>
                 <version>${standardwebhooks.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.reflections</groupId>
-                <artifactId>reflections</artifactId>
-                <version>${reflections.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

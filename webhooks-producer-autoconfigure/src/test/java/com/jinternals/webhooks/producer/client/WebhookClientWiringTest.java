@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 /**
  * End-to-end wiring test for the {@code basePackages} selector: {@code @EnableWebhookClients} must scan
@@ -32,7 +32,7 @@ class WebhookClientWiringTest {
     @EnableWebhookClients(basePackages = "com.jinternals.webhooks.producer.fixtures.scan")
     static class TestApp {}
 
-    @MockBean
+    @MockitoBean
     private WebhookTransport transport;
 
     @Autowired

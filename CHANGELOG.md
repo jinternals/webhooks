@@ -24,4 +24,13 @@ contain breaking changes; they will always be called out under **Changed** or **
 - GitHub Actions CI (quality gate, samples, release-artifact check), weekly OWASP dependency scan, Dependabot.
 - Maven Central publishing setup (`release` profile).
 
+### Changed
+
+- Built against Spring Boot 3.5.16 (was 3.3.5).
+- `@WebhookType` discovery now uses Spring's `ClassPathScanningCandidateComponentProvider` instead of
+  `org.reflections` (unmaintained) — one fewer runtime dependency. Only concrete, independent (top-level or
+  `static` nested) classes directly annotated with `@WebhookType` are discovered.
+- Test tooling: PITest 1.30.2 / pitest-junit5-plugin 1.2.3 (JUnit Platform 1.12 support); `@MockBean` replaced
+  by `@MockitoBean`.
+
 [Unreleased]: https://github.com/jinternals/webhook/commits/main

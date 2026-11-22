@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.jinternals.webhooks.consumer.registry.typefixtures.alpha.AlphaEvent;
 import com.jinternals.webhooks.consumer.registry.typefixtures.beta.BetaEvent;
+import com.jinternals.webhooks.consumer.registry.typefixtures.shapes.Outer;
+import com.jinternals.webhooks.consumer.registry.typefixtures.shapes.sub.SubPackageEvent;
 import com.jinternals.webhooks.core.registry.WebhookTypeRegistry;
 import java.lang.reflect.Constructor;
 import java.util.List;
@@ -15,6 +17,7 @@ class WebhookTypeScannerTest {
     private static final String ALPHA_PKG = AlphaEvent.class.getPackageName();
     private static final String BETA_PKG = BetaEvent.class.getPackageName();
     private static final String DUP_PKG = "com.jinternals.webhooks.consumer.registry.typefixtures.dup";
+    private static final String SHAPES_PKG = Outer.class.getPackageName();
 
     @Test
     void scanFindsAnnotatedClassesInPackage() {
@@ -43,6 +46,26 @@ class WebhookTypeScannerTest {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("Duplicate @WebhookType(\"fixture.alpha\")")
                 .hasMessageContaining(AlphaEvent.class.getName());
+    }
+
+    @Test
+    void scanIncludesSubPackagesStaticNestedClassesAndRecords() {
+        WebhookTypeRegistry registry = WebhookTypeScanner.scan(SHAPES_PKG);
+        assertThat(registry.classOf("fixture.shapes.static-nested")).isEqualTo(Outer.StaticNestedEvent.class);
+        assertThat(registry.classOf("fixture.shapes.sub")).isEqualTo(SubPackageEvent.class);
+    }
+
+    @Test
+    void scanSkipsClassesJacksonCannotInstantiate() {
+        WebhookTypeRegistry registry = WebhookTypeScanner.scan(SHAPES_PKG);
+        assertThat(registry.classOf("fixture.shapes.inner")).isNull(); // non-static inner class
+        assertThat(registry.classOf("fixture.shapes.abstract")).isNull(); // abstract class
+    }
+
+    @Test
+    void scanOfAPackageWithNoEventClassesYieldsAnEmptyRegistry() {
+        WebhookTypeRegistry registry = WebhookTypeScanner.scan("com.jinternals.webhooks.consumer.registry.nonexistent");
+        assertThat(registry.classOf("fixture.alpha")).isNull();
     }
 
     @Test

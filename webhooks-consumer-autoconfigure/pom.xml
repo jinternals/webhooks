@@ -72,13 +72,6 @@
             <artifactId>standardwebhooks</artifactId>
         </dependency>
 
-        <!-- Classpath scanning for @WebhookType event classes (WebhookTypeScanner) lives here, in the
-             consumer, keeping webhooks-core free of the scanning dependency. -->
-        <dependency>
-            <groupId>org.reflections</groupId>
-            <artifactId>reflections</artifactId>
-        </dependency>
-
         <!-- Per-type payload validation via Bean Validation on the @WebhookType class (§6a). -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

@@ -76,7 +76,7 @@ The project is a Maven reactor of five library modules — `webhooks-core` plus 
 | Requirement | Version |
 | --- | --- |
 | Java | 21 |
-| Spring Boot | 3.3.x |
+| Spring Boot | 3.5.x |
 | Maven | 3.9 or later |
 
 ## Consumer quick start

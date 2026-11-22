@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 /**
  * Wiring test for the explicit {@code clients = {...}} selector — the zero-scan, refactor-safe path. The
@@ -31,7 +31,7 @@ class WebhookClientExplicitWiringTest {
     @EnableWebhookClients(clients = ExplicitCrmWebhooks.class)
     static class TestApp {}
 
-    @MockBean
+    @MockitoBean
     private WebhookTransport transport;
 
     @Autowired
