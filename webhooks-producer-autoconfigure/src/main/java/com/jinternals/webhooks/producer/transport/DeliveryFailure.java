@@ -1,5 +1,7 @@
 package com.jinternals.webhooks.producer.transport;
 
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -15,7 +17,8 @@ import java.util.Map;
  *
  * @param url       the destination URL the delivery was targeting
  * @param headers   the request headers, including the Standard Webhooks {@code webhook-*} headers, as
- *                  name -&gt; list of values (the signed, send-ready form)
+ *                  name -&gt; list of values (the signed, send-ready form); defensively copied into a
+ *                  deeply unmodifiable map
  * @param body      the raw JSON body exactly as signed
  * @param attempts  how many delivery attempts were made (always {@code >= 1}; {@code 1} for a fatal
  *                  failure that was never retried)
@@ -30,6 +33,23 @@ public record DeliveryFailure(
         int attempts,
         Reason reason,
         WebhookDeliveryException cause) {
+
+    /** Defensively freezes {@code headers} (both the outer map and each header's value list). */
+    public DeliveryFailure {
+        headers = freezeHeaders(headers);
+    }
+
+    private static Map<String, List<String>> freezeHeaders(Map<String, List<String>> headers) {
+        if (headers == null) {
+            return Map.of();
+        }
+        Map<String, List<String>> copy = new LinkedHashMap<>();
+        for (Map.Entry<String, List<String>> entry : headers.entrySet()) {
+            List<String> values = entry.getValue();
+            copy.put(entry.getKey(), values == null ? List.of() : List.copyOf(values));
+        }
+        return Collections.unmodifiableMap(copy);
+    }
 
     /** Why a delivery was given up. */
     public enum Reason {

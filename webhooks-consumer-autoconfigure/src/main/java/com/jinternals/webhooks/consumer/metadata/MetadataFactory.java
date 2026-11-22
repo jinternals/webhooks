@@ -7,7 +7,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.time.DateTimeException;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -63,8 +62,8 @@ public class MetadataFactory {
                 endpointPath,
                 clientIp(request),
                 event,
-                Collections.unmodifiableMap(headers),
-                Collections.unmodifiableMap(attributes));
+                headers,
+                attributes);
     }
 
     /**

@@ -1,9 +1,11 @@
 package com.jinternals.webhooks.consumer.model;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.jinternals.webhooks.core.annotations.Redact;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
@@ -88,5 +90,41 @@ class WebhookMetadataTest {
                 .contains("sourceIp=ip")
                 .contains("email=***REDACTED***")
                 .doesNotContain("a@b.c");
+    }
+
+    @Test
+    void defensivelyCopiesAndFreezesHeadersAndAttributesPreservingNullValues() {
+        Map<String, String> mutableHeaders = new HashMap<>();
+        mutableHeaders.put("webhook-id", "id-1");
+        mutableHeaders.put("x-empty", null);
+        Map<String, Object> mutableAttrs = new HashMap<>();
+        mutableAttrs.put("tenant", "acme");
+        mutableAttrs.put("nullable", null);
+
+        WebhookMetadata m =
+                new WebhookMetadata("t", "id-1", null, null, "/p", "ip", new Object(), mutableHeaders, mutableAttrs);
+
+        // Mutating caller maps after construction does not leak into the record.
+        mutableHeaders.put("injected", "evil");
+        mutableAttrs.put("injected", "evil");
+
+        assertThat(m.headers()).containsOnlyKeys("webhook-id", "x-empty");
+        assertThat(m.headers().get("webhook-id")).isEqualTo("id-1");
+        assertThat(m.headers().get("x-empty")).isNull();
+        assertThat(m.attributes()).containsOnlyKeys("tenant", "nullable");
+        assertThat(m.attributes().get("tenant")).isEqualTo("acme");
+
+        assertThatThrownBy(() -> m.headers().put("another", "v")).isInstanceOf(UnsupportedOperationException.class);
+        assertThatThrownBy(() -> m.attributes().put("another", "v")).isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    void nullHeadersAndAttributesDefaultToEmptyUnmodifiableMaps() {
+        WebhookMetadata m = new WebhookMetadata("t", "id-1", null, null, "/p", "ip", new Object(), null, null);
+
+        assertThat(m.headers()).isEmpty();
+        assertThat(m.attributes()).isEmpty();
+        assertThatThrownBy(() -> m.headers().put("k", "v")).isInstanceOf(UnsupportedOperationException.class);
+        assertThatThrownBy(() -> m.attributes().put("k", "v")).isInstanceOf(UnsupportedOperationException.class);
     }
 }

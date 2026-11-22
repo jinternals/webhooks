@@ -5,7 +5,6 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.util.ReflectionUtils;
 
 /**
@@ -15,8 +14,9 @@ import org.springframework.util.ReflectionUtils;
  * <p><strong>Performance:</strong> all reflection is done <em>once per class</em> and cached as a
  * precompiled {@link FieldPlan} array. Every call after the first for a given type does zero
  * annotation lookups and zero field discovery — it just iterates the cached plan and reads field
- * values through already-{@code setAccessible} {@link Field} handles. The cache is a
- * {@link ConcurrentHashMap}, so lookups are lock-free on the hot path.
+ * values through already-{@code setAccessible} {@link Field} handles. The cache is backed by
+ * {@link ClassValue}, so lookups are lock-free on the hot path and cached plans do not pin dynamic
+ * {@link ClassLoader}s across reloads (e.g. Spring Boot DevTools).
  *
  * <p>This is the <strong>only</strong> framework-sanctioned way to log an event. Calling a getter
  * for a {@code @Redact} field and logging it directly bypasses redaction — that is on you.
@@ -25,8 +25,16 @@ public final class WebhookRedactor {
 
     public static final String REDACTED = "***REDACTED***";
 
-    /** Cached, precompiled per-class render plan. Lock-free reads; computed once per type. */
-    private static final ConcurrentHashMap<Class<?>, FieldPlan[]> CACHE = new ConcurrentHashMap<>();
+    /**
+     * Cached, precompiled per-class render plan. Backed by {@link ClassValue} so reads are lock-free and
+     * entries are garbage-collected along with the target class's {@link ClassLoader}.
+     */
+    private static final ClassValue<FieldPlan[]> CACHE = new ClassValue<>() {
+        @Override
+        protected FieldPlan[] computeValue(Class<?> type) {
+            return compile(type);
+        }
+    };
 
     private WebhookRedactor() {}
 
@@ -43,7 +51,7 @@ public final class WebhookRedactor {
             return "null";
         }
         Class<?> type = event.getClass();
-        FieldPlan[] plan = CACHE.computeIfAbsent(type, WebhookRedactor::compile);
+        FieldPlan[] plan = CACHE.get(type);
 
         StringBuilder sb = new StringBuilder(type.getSimpleName()).append('{');
         for (int i = 0; i < plan.length; i++) {
@@ -73,7 +81,7 @@ public final class WebhookRedactor {
 
     /** True if the class declares at least one {@code @Redact} field (cached). */
     public static boolean hasRedactedFields(Class<?> type) {
-        FieldPlan[] plan = CACHE.computeIfAbsent(type, WebhookRedactor::compile);
+        FieldPlan[] plan = CACHE.get(type);
         for (FieldPlan fp : plan) {
             if (fp.redact()) {
                 return true;

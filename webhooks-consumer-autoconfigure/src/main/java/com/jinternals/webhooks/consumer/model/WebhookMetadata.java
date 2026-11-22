@@ -3,6 +3,8 @@ package com.jinternals.webhooks.consumer.model;
 import com.jinternals.webhooks.core.redact.WebhookRedactor;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -43,6 +45,15 @@ public record WebhookMetadata(
         // --- Escape hatch ---
         Map<String, String> headers, // all headers, lower-cased, signature + auth headers REDACTED
         Map<String, Object> attributes) {
+
+    /**
+     * Defensively copies and freezes {@code headers} and {@code attributes} (preserving nullable map
+     * values, e.g. empty header value lists flattened to {@code null} by {@code MetadataFactory}).
+     */
+    public WebhookMetadata {
+        headers = headers == null ? Map.of() : Collections.unmodifiableMap(new LinkedHashMap<>(headers));
+        attributes = attributes == null ? Map.of() : Collections.unmodifiableMap(new LinkedHashMap<>(attributes));
+    }
 
     /**
      * Lag between now and the delivery attempt (grows with retries). Empty when no valid
