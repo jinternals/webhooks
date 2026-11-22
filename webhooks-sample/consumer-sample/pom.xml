@@ -12,9 +12,9 @@
       Run:  mvn -pl consumer-sample spring-boot:run   (from sample/)
     -->
     <parent>
-        <groupId>com.jinternals.webhooks.sample</groupId>
+        <groupId>io.github.jinternals.webhooks.sample</groupId>
         <artifactId>webhooks-sample</artifactId>
-        <version>0.0.1-SNAPSHOT</version>
+        <version>0.1.0-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 
@@ -26,7 +26,7 @@
         <!-- The one dependency a receiver needs: the consumer starter pulls in the auto-configured
              listener and everything it requires (Spring MVC, Bean Validation, the SW verifier, …). -->
         <dependency>
-            <groupId>com.jinternals</groupId>
+            <groupId>io.github.jinternals</groupId>
             <artifactId>webhooks-consumer-starter</artifactId>
         </dependency>
 

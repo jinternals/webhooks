@@ -5,9 +5,9 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>com.jinternals</groupId>
+        <groupId>io.github.jinternals</groupId>
         <artifactId>webhooks-parent</artifactId>
-        <version>0.0.1-SNAPSHOT</version>
+        <version>0.1.0-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 
@@ -23,9 +23,57 @@
     -->
     <dependencies>
         <dependency>
-            <groupId>com.jinternals</groupId>
+            <groupId>io.github.jinternals</groupId>
             <artifactId>webhooks-producer-autoconfigure</artifactId>
             <version>${project.version}</version>
         </dependency>
     </dependencies>
+
+    <!--
+      Maven Central requires -sources and -javadoc jars for every jar artifact. This starter has no code, so
+      the `release` profile attaches placeholder jars containing only this module's README.md.
+    -->
+    <profiles>
+        <profile>
+            <id>release</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-jar-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>placeholder-sources</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>jar</goal>
+                                </goals>
+                                <configuration>
+                                    <classifier>sources</classifier>
+                                    <classesDirectory>${project.basedir}</classesDirectory>
+                                    <includes>
+                                        <include>README.md</include>
+                                    </includes>
+                                </configuration>
+                            </execution>
+                            <execution>
+                                <id>placeholder-javadoc</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>jar</goal>
+                                </goals>
+                                <configuration>
+                                    <classifier>javadoc</classifier>
+                                    <classesDirectory>${project.basedir}</classesDirectory>
+                                    <includes>
+                                        <include>README.md</include>
+                                    </includes>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

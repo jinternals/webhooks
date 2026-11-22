@@ -84,9 +84,9 @@ The project is a Maven reactor of five library modules — `webhooks-core` plus 
 
 ```xml
 <dependency>
-    <groupId>com.jinternals</groupId>
+    <groupId>io.github.jinternals</groupId>
     <artifactId>webhooks-consumer-starter</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
+    <version>0.1.0-SNAPSHOT</version>
 </dependency>
 ```
 
@@ -184,9 +184,9 @@ instrumented with a Micrometer `webhook.send` observation (see [Observability](#
 
 ```xml
 <dependency>
-    <groupId>com.jinternals</groupId>
+    <groupId>io.github.jinternals</groupId>
     <artifactId>webhooks-producer-starter</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
+    <version>0.1.0-SNAPSHOT</version>
 </dependency>
 ```
 

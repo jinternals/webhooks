@@ -11,7 +11,7 @@ secret rotation), and delivers it with in-process retry — **no storage**.
 
 ```xml
 <dependency>
-  <groupId>com.jinternals</groupId>
+  <groupId>io.github.jinternals</groupId>
   <artifactId>webhooks-producer-starter</artifactId>
   <version>${webhooks.version}</version>
 </dependency>

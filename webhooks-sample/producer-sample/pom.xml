@@ -12,9 +12,9 @@
       Run:  mvn -pl producer-sample spring-boot:run   (from sample/)
     -->
     <parent>
-        <groupId>com.jinternals.webhooks.sample</groupId>
+        <groupId>io.github.jinternals.webhooks.sample</groupId>
         <artifactId>webhooks-sample</artifactId>
-        <version>0.0.1-SNAPSHOT</version>
+        <version>0.1.0-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 
@@ -26,7 +26,7 @@
         <!-- The one dependency a sender needs: the producer starter pulls in the auto-configured
              @WebhookClient publishing machinery and everything it requires (Spring web, the SW signer, …). -->
         <dependency>
-            <groupId>com.jinternals</groupId>
+            <groupId>io.github.jinternals</groupId>
             <artifactId>webhooks-producer-starter</artifactId>
         </dependency>
 

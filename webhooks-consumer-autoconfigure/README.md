@@ -11,7 +11,7 @@ redaction-safe logging, and observability — with a deliberate **no-storage** d
 
 ```xml
 <dependency>
-  <groupId>com.jinternals</groupId>
+  <groupId>io.github.jinternals</groupId>
   <artifactId>webhooks-consumer-starter</artifactId>
   <version>${webhooks.version}</version>
 </dependency>

@@ -7,7 +7,7 @@ you rarely depend on it directly.
 
 ```xml
 <dependency>
-  <groupId>com.jinternals</groupId>
+  <groupId>io.github.jinternals</groupId>
   <artifactId>webhooks-core</artifactId>
   <version>${webhooks.version}</version>
 </dependency>

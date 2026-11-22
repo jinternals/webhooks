@@ -17,7 +17,7 @@ import org.springframework.beans.factory.InitializingBean;
 
 /**
  * Validates every configured producer destination at <strong>startup</strong> (see SPEC.md §19d), mirroring
- * the consumer's {@link com.jinternals.webhooks.consumer.verify.SecretValidator}. Each destination must have
+ * the consumer's {@code com.jinternals.webhooks.consumer.verify.SecretValidator}. Each destination must have
  * a non-blank, parseable URL with a host that passes the active {@link DestinationUrlValidator} guard
  * (so an allow-list miss is caught at boot, not on the first delivery), and must resolve to at least one
  * signing secret. A problem fails the context at boot — fast and loud — instead of surfacing later as the

@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd"
+         child.project.url.inherit.append.path="false">
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
@@ -11,12 +12,19 @@
         <relativePath/>
     </parent>
 
-    <groupId>com.jinternals</groupId>
+    <groupId>io.github.jinternals</groupId>
     <artifactId>webhooks-parent</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
+    <version>0.1.0-SNAPSHOT</version>
     <packaging>pom</packaging>
     <name>webhooks-parent</name>
     <description>Standard Webhooks for Spring Boot — shared core + consumer + producer (no storage)</description>
+    <!--
+      Project metadata required by Maven Central. These MUST be declared here: otherwise they are inherited
+      from spring-boot-starter-parent and every artifact would advertise Spring Boot's URL/SCM/developers.
+      The child.*.inherit.append.path="false" attributes stop Maven appending each module's artifactId.
+    -->
+    <url>https://github.com/jinternals/webhook</url>
+    <inceptionYear>2026</inceptionYear>
 
     <licenses>
         <license>
@@ -25,6 +33,29 @@
             <distribution>repo</distribution>
         </license>
     </licenses>
+
+    <developers>
+        <developer>
+            <id>pandeymradul</id>
+            <name>Mradul Pandey</name>
+            <email>pandeymradul@gmail.com</email>
+            <url>https://github.com/jinternals</url>
+        </developer>
+    </developers>
+
+    <scm child.scm.connection.inherit.append.path="false"
+         child.scm.developerConnection.inherit.append.path="false"
+         child.scm.url.inherit.append.path="false">
+        <connection>scm:git:https://github.com/jinternals/webhook.git</connection>
+        <developerConnection>scm:git:ssh://git@github.com/jinternals/webhook.git</developerConnection>
+        <url>https://github.com/jinternals/webhook</url>
+        <tag>HEAD</tag>
+    </scm>
+
+    <issueManagement>
+        <system>GitHub Issues</system>
+        <url>https://github.com/jinternals/webhook/issues</url>
+    </issueManagement>
 
     <modules>
         <module>webhooks-core</module>
@@ -51,32 +82,38 @@
              the `security-scan` profile — a full NVD scan is slow and network-bound, so it is kept off the
              default `verify`. -->
         <dependency-check.version>10.0.4</dependency-check.version>
+
+        <!-- Release / Maven Central publishing (used only by the `release` profile). -->
+        <maven-source-plugin.version>3.3.1</maven-source-plugin.version>
+        <maven-javadoc-plugin.version>3.11.2</maven-javadoc-plugin.version>
+        <maven-gpg-plugin.version>3.2.7</maven-gpg-plugin.version>
+        <central-publishing-plugin.version>0.7.0</central-publishing-plugin.version>
     </properties>
 
     <dependencyManagement>
         <dependencies>
             <dependency>
-                <groupId>com.jinternals</groupId>
+                <groupId>io.github.jinternals</groupId>
                 <artifactId>webhooks-core</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.jinternals</groupId>
+                <groupId>io.github.jinternals</groupId>
                 <artifactId>webhooks-consumer-autoconfigure</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.jinternals</groupId>
+                <groupId>io.github.jinternals</groupId>
                 <artifactId>webhooks-consumer-starter</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.jinternals</groupId>
+                <groupId>io.github.jinternals</groupId>
                 <artifactId>webhooks-producer-autoconfigure</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
-                <groupId>com.jinternals</groupId>
+                <groupId>io.github.jinternals</groupId>
                 <artifactId>webhooks-producer-starter</artifactId>
                 <version>${project.version}</version>
             </dependency>
@@ -286,6 +323,78 @@
                                 </goals>
                             </execution>
                         </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <!--
+          Maven Central release: `mvn -Prelease clean deploy`.
+          Attaches -sources and -javadoc jars, GPG-signs every artifact, and uploads the bundle to the Central
+          Portal (https://central.sonatype.com). Prerequisites:
+            1. The `io.github.jinternals` namespace verified on the Central Portal.
+            2. A Portal user token in ~/.m2/settings.xml as <server><id>central</id>…</server>.
+            3. A GPG key whose public half is published to a keyserver (keys.openpgp.org).
+          autoPublish is false: the upload is validated and staged, then you press "Publish" in the Portal.
+          The thin starters carry no code, so they attach small placeholder sources/javadoc jars (see their poms).
+        -->
+        <profile>
+            <id>release</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-source-plugin</artifactId>
+                        <version>${maven-source-plugin.version}</version>
+                        <executions>
+                            <execution>
+                                <id>attach-sources</id>
+                                <goals>
+                                    <goal>jar-no-fork</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-javadoc-plugin</artifactId>
+                        <version>${maven-javadoc-plugin.version}</version>
+                        <configuration>
+                            <!-- Don't fail a release on missing @param/@return tags; real errors still fail. -->
+                            <doclint>all,-missing</doclint>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <id>attach-javadocs</id>
+                                <goals>
+                                    <goal>jar</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-gpg-plugin</artifactId>
+                        <version>${maven-gpg-plugin.version}</version>
+                        <executions>
+                            <execution>
+                                <id>sign-artifacts</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>sign</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.sonatype.central</groupId>
+                        <artifactId>central-publishing-maven-plugin</artifactId>
+                        <version>${central-publishing-plugin.version}</version>
+                        <extensions>true</extensions>
+                        <configuration>
+                            <publishingServerId>central</publishingServerId>
+                            <autoPublish>false</autoPublish>
+                        </configuration>
                     </plugin>
                 </plugins>
             </build>

@@ -18,7 +18,7 @@ import org.springframework.web.servlet.HandlerMapping;
  * matched — read from {@link HandlerMapping#BEST_MATCHING_PATTERN_ATTRIBUTE} — not by raw
  * {@code getRequestURI()} equality. This is robust to the servlet context path, URL-encoding, and
  * trailing-slash/path-matching configuration, because the pattern is exactly the one
- * {@link WebhookEndpointRegistry} registered from {@link Endpoint#getPath()} (see SPEC.md §7).
+ * {@link WebhookEndpointRegistry} registered from {@code Endpoint.getPath()} (see SPEC.md §7).
  */
 public class EndpointResolvingInterceptor implements HandlerInterceptor {
 

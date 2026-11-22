@@ -30,7 +30,7 @@ event, and calls your `@WebhookHandler`. Both are auto-configured; you never wir
 
 ```xml
 <dependency>
-  <groupId>com.jinternals</groupId>
+  <groupId>io.github.jinternals</groupId>
   <artifactId>webhooks-consumer-starter</artifactId>
   <version>${webhooks.version}</version>
 </dependency>
@@ -91,7 +91,7 @@ routed to `onContactCreated`. An invalid signature never reaches your handler â€
 
 ```xml
 <dependency>
-  <groupId>com.jinternals</groupId>
+  <groupId>io.github.jinternals</groupId>
   <artifactId>webhooks-producer-starter</artifactId>
   <version>${webhooks.version}</version>
 </dependency>

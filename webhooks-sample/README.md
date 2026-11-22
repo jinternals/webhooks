@@ -37,7 +37,7 @@ payload, and runs the matching `@WebhookHandler`. A parallel **asymmetric** path
 ## Prerequisites
 
 Build + install the libraries into your local Maven repo first (the samples resolve
-`0.0.1-SNAPSHOT` from there):
+`0.1.0-SNAPSHOT` from there):
 
 ```bash
 # from the repository root — installs the starters + autoconfigure + core

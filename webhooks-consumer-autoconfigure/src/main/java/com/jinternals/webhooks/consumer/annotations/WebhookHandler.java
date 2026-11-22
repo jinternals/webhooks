@@ -9,7 +9,7 @@ import java.lang.annotation.Target;
 /**
  * Marks a method as a webhook handler (consumer-side, modelled on {@code @EventListener}).
  *
- * <p>The method must declare exactly one {@link WebhookType}-annotated event parameter, and may optionally
+ * <p>The method must declare exactly one {@link com.jinternals.webhooks.core.annotations.WebhookType}-annotated event parameter, and may optionally
  * declare a {@code WebhookMetadata} parameter (in either order). Examples:
  *
  * <pre>

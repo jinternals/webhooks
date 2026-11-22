@@ -23,7 +23,7 @@ import org.springframework.http.ResponseEntity;
  * {@code WebhookMetadata.webhookId()}.
  *
  * <p>A single endpoint accepts one <em>or</em> many event {@code type}s: the envelope's {@code type}
- * selects the handler, and the endpoint's optional type allow-list ({@link Endpoint#getTypes()})
+ * selects the handler, and the endpoint's optional type allow-list ({@code Endpoint.getTypes()})
  * constrains which types it will accept.
  */
 public class WebhookReceiveController {
