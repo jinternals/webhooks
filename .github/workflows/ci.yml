@@ -61,13 +61,18 @@ jobs:
       - name: Install libraries
         run: mvn -B -ntp install -DskipTests
 
-      - name: Build & test samples
-        run: mvn -B -ntp -f webhooks-sample/pom.xml verify
+      - name: Build & test samples (with Spotless check)
+        run: mvn -B -ntp -T 1C -Pformat -f webhooks-sample/pom.xml verify
 
-      # End-to-end: builds both sample images, runs them with docker compose, and asserts that a webhook
-      # published by the producer is verified and handled by the consumer.
-      - name: Docker integration test
+      # End-to-end Docker integration tests across quickstart (v1 + v2a), NATS JetStream zero-loss, and OAuth2 auth stacks.
+      - name: Docker integration test (quickstart v1 + v2a)
         run: bash webhooks-sample/integration-test.sh
+
+      - name: Docker integration test (NATS JetStream zero-loss)
+        run: bash webhooks-sample/integration-test-nats.sh
+
+      - name: Docker integration test (OAuth2 JWT + HMAC dual-layer auth)
+        run: bash webhooks-sample/integration-test-auth.sh
 
   javadoc:
     name: Release artifacts (sources + javadoc)

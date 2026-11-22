@@ -41,8 +41,10 @@ field masked, safe to log.
 import com.jinternals.webhooks.core.annotations.Redact;
 
 @WebhookType("contact.created")
-public record ContactCreated(String id, @Redact String email, @Redact String ssn) { }
+public record ContactCreated(String id, @Redact String email, @Redact(show = 4) String ssn) { }
 ```
+
+- `show` (`int`, default `0`) — number of trailing characters to leave visible (e.g. `@Redact(show = 4)` on `"123-45-6789"` renders `"***6789"`; if the value has `<= show` characters it is fully redacted).
 
 ```java
 @WebhookHandler
@@ -70,13 +72,15 @@ public class ContactHandlers {
     public void onCreated(ContactCreated event) { … }
 
     @WebhookHandler
-    public void onCreated(ContactCreated event, WebhookMetadata metadata) { … }   // metadata optional
+    public void onUpdated(ContactUpdated event, WebhookMetadata metadata) { … }   // metadata optional
+
+    @WebhookHandler
+    public void onDeleted(WebhookMetadata metadata, ContactDeleted event) { … }   // parameter order is flexible
 }
 ```
 
-- The first parameter is the `@WebhookType` event; it selects which handler runs.
-- An **optional** second parameter of type `WebhookMetadata` gives correlation/lag/header context.
-- Runs only **after** verification (and schema validation, if configured) — never on an unverified payload.
+- Must declare **one** `@WebhookType` event parameter (which selects the handler) and **optionally** one `WebhookMetadata` parameter, in **either order**.
+- Runs only **after** signature verification, strict JSON deserialization, and Jakarta Bean Validation — never on an unverified or invalid payload.
 - In `sync` mode a thrown handler becomes a `5xx` (sender retries); in `async` mode it routes to
   `HandlerFailureListener`. See [Reliability](../guides/reliability.md#sync-vs-async-handling).
 
@@ -92,10 +96,12 @@ public class ContactHandlers {
 | `eventLag()` | Optional&lt;Duration&gt; | `now − eventTimestamp`; empty if no body timestamp |
 | `endpointPath()` | String | the matched listen path |
 | `sourceIp()` | String | caller IP |
-| `header(name)` | Optional&lt;String&gt; | case-insensitive header lookup (**signature & auth headers redacted**) |
-| `headers()` | Map | all headers, lower-cased, `webhook-signature` and auth headers redacted |
+| `event()` | Object | the deserialized `@WebhookType` event instance (**contains unredacted fields — do not log directly**) |
+| `header(name)` | Optional&lt;String&gt; | case-insensitive header lookup (`webhook-signature`, `authorization`, `proxy-authorization`, `cookie` redacted) |
+| `headers()` | Map&lt;String, String&gt; | all headers, lower-cased, with `webhook-signature` and auth/cookie headers redacted |
 | `redactedEvent()` | String | the event with `@Redact` fields masked — log this |
-| `attributes()` | Map | provider-specific fields from a `MetadataContributor` |
+| `attributes()` | Map&lt;String, Object&gt; | provider-specific fields populated by `MetadataContributor` beans |
+| `attribute(name)` | Optional&lt;T&gt; | typed convenience lookup into `attributes()` |
 
 ---
 
@@ -131,12 +137,14 @@ class).
 import com.jinternals.webhooks.producer.annotations.EnableWebhookClients;
 
 @SpringBootApplication
-@EnableWebhookClients(basePackages = "com.example.webhooks")
+@EnableWebhookClients(clients = CrmWebhooks.class)   // or basePackages / basePackageClasses
 public class Application { }
 ```
 
-- `basePackages` — where to look for `@WebhookClient` interfaces.
-- Each discovered interface becomes an injectable bean.
+- `clients` (`Class<?>[]`, recommended) — explicit `@WebhookClient` interfaces registered directly with zero classpath scanning.
+- `basePackageClasses` (`Class<?>[]`) — refactor-safe anchor classes whose packages are scanned for `@WebhookClient` interfaces.
+- `basePackages` (`String[]`) — package names scanned for `@WebhookClient` interfaces.
+- If no selector is specified (`@EnableWebhookClients`), the package of the annotated configuration class is scanned by default; multiple selectors take the deduplicated union.
 
 ---
 

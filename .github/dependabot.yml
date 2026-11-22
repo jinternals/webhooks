@@ -33,6 +33,10 @@ updates:
     directories:
       - /webhooks-sample/consumer-sample
       - /webhooks-sample/producer-sample
+      - /webhooks-sample/consumer-nats-sample
+      - /webhooks-sample/producer-nats-sample
+      - /webhooks-sample/consumer-auth-sample
+      - /webhooks-sample/producer-auth-sample
     schedule:
       interval: weekly
 

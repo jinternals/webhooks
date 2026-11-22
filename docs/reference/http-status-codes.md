@@ -12,21 +12,26 @@ flowchart TD
     Cfg -- no --> C500a["500 (config error)"]
     Cfg -- yes --> Verify{"signature valid?<br/>(+ replay window)"}
     Verify -- no --> C400v["400 (verification failed)"]
-    Verify -- yes --> Type{"type known & accepted?"}
+    Verify -- yes --> Dedup{"duplicate webhook-id?"}
+    Dedup -- yes --> C204d["204 (duplicate ignored)"]
+    Dedup -- no --> Type{"type known & accepted?"}
     Type -- no --> Policy{"unknown-type-policy"}
-    Policy -- ack-and-ignore --> C204u["204 (ignored)"]
-    Policy -- reject --> C400t["400 (unknown type)"]
+    Policy -- "ack-and-ignore" --> C204u["204 (ignored)"]
+    Policy -- "reject" --> C400t["400 (unknown type)"]
     Type -- yes --> Validate{"payload valid?"}
     Validate -- no --> C400s["400 (validation failed)"]
-    Validate -- yes --> Handler{"handler outcome (sync)"}
-    Handler -- ok / async --> C204ok["204 (processed / accepted)"]
-    Handler -- threw (sync) --> C500h["500 (handler failed)"]
+    Validate -- yes --> HasH{"@WebhookHandler registered?"}
+    HasH -- no --> C500m["500 (missing handler)"]
+    HasH -- yes --> Handler{"handler outcome"}
+    Handler -- "ok / async" --> C204ok["204 (processed / accepted)"]
+    Handler -- "threw (sync)" --> C500h["500 (handler failed)"]
 ```
 
 **Text summary.** Size is checked first (`413` before the body is fully read), then endpoint config (`500` if
-missing), then signature/replay (`400`), then type routing (`204` or `400` per policy), then deserialize +
-payload validation (`400`), then dispatch. A clean `sync` handler or any `async` accept returns `204`; a
-thrown `sync` handler returns `500`.
+missing), then signature/replay (`400`), then optional `webhook-id` deduplication (`204`), then type routing
+(`204` or `400` per policy), then strict deserialize + Bean Validation (`400`), then handler lookup (`500` if
+missing in both `sync` and `async` modes), then dispatch. A clean `sync` handler or any `async` accept returns
+`204`; a thrown `sync` handler returns `500`.
 
 ---
 
@@ -47,8 +52,9 @@ thrown `sync` handler returns `500`.
   say." Under `ack-and-ignore` an unmodelled type also gets `204` so the sender **stops retrying** something
   you'll never handle.
 - **`400` for verification and validation.** These are client faults — a `4xx` tells a well-behaved sender to
-  stop retrying, because retrying an unauthentic or malformed request will never succeed. Each `400` carries a
-  low-cardinality `reason` for metrics (`missing-headers`, `no-secret`, `timestamp`, `signature`). See
+  stop retrying, because retrying an unauthentic or malformed request will never succeed. Verification
+  failures (`WebhookVerificationException`) also record a low-cardinality `reason` tag on
+  `webhook.verification.failed` (`missing-headers`, `no-secret`, `timestamp`, `signature`, `other`). See
   [Observability → metrics](../guides/observability.md#opt-in-metrics).
 - **`413` before verification.** The body-size check runs first so an oversized or slow POST is rejected
   without reading it all into memory — a cheap DoS guard. See
@@ -70,7 +76,7 @@ The producer isn't an HTTP server, but it **classifies** the status codes it *re
 | --- | --- | --- |
 | `2xx` | success | delivered — return normally |
 | `429`, `5xx` | retryable | retry with backoff (honors `Retry-After`) up to `max-attempts` |
-| other `4xx` | fatal | throw immediately — never retried |
+| `3xx` redirects, other `4xx` | fatal | redirects are never followed (`Redirect.NEVER`); throw immediately — never retried |
 | transport error (timeout, refused) | retryable | retry with backoff |
 
 See [Reliability → producer retry](../guides/reliability.md#producer-retry--backoff).

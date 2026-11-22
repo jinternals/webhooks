@@ -14,9 +14,9 @@ Fixes #
 
 ## Checklist
 
-- [ ] `mvn spotless:apply` run
+- [ ] `mvn spotless:apply` (and `mvn -f webhooks-sample/pom.xml spotless:apply` if samples changed) run
 - [ ] `mvn clean verify -Pmutation` passes locally (100% coverage and mutation score maintained — no thresholds lowered)
 - [ ] Tests added/updated that assert the new behaviour
-- [ ] Docs updated (`README.md`, `docs/`, `SPEC.md`) if behaviour or configuration changed
+- [ ] Docs updated (`README.md`, `docs/`, `docs/reference/SPEC.md`) if behaviour or configuration changed
 - [ ] `CHANGELOG.md` updated under **Unreleased** for user-visible changes
 - [ ] No real secrets, keys, or internal URLs in code, tests, or docs

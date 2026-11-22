@@ -24,22 +24,22 @@ with no extra flag.
 
 ```mermaid
 flowchart TD
-    In["POST with webhook-id / -timestamp / -signature"] --> H{"all three<br/>headers present?"}
-    H -- no --> R1["400 — reason: missing-headers"]
-    H -- yes --> S{"secret configured<br/>for endpoint?"}
+    In["POST with webhook-id / -timestamp / -signature"] --> S{"secret configured<br/>for endpoint?"}
     S -- no --> R2["400 — reason: no-secret"]
-    S -- yes --> T{"replay window<br/>enabled?"}
+    S -- yes --> H{"all three<br/>headers present?"}
+    H -- no --> R1["400 — reason: missing-headers"]
+    H -- yes --> T{"replay window<br/>enabled?"}
     T -- "yes & stale" --> R3["400 — reason: timestamp"]
-    T -- "no / fresh" --> V{"HMAC matches any<br/>candidate secret?"}
+    T -- "no / fresh" --> V{"v1 HMAC or v2a Ed25519<br/>matches any secret?"}
     V -- no --> R4["400 — reason: signature"]
     V -- yes --> OK["verified → continue pipeline"]
 ```
 
-**Text summary.** Verification checks, in order: all three signing headers present; a secret exists for the
-matched endpoint; (if the replay window is enabled) the timestamp is fresh; and the recomputed HMAC matches
-the primary secret or any rotation secret. The first failure returns `400` with a low-cardinality `reason`
-tag (`missing-headers`, `no-secret`, `timestamp`, `signature`) used by the metrics. See
-[Observability → metrics](./observability.md#opt-in-metrics).
+**Text summary.** Verification checks, in order: at least one secret/key exists for the matched endpoint; all
+three signing headers are present; (if the replay window is enabled) the timestamp is fresh; and the
+signature (`v1` HMAC or `v2a` Ed25519) matches the primary secret or any rotation secret. The first failure
+returns `400` with a low-cardinality `reason` tag (`no-secret`, `missing-headers`, `timestamp`, `signature`,
+`other`) used by the metrics. See [Observability → metrics](./observability.md#opt-in-metrics).
 
 ### Why verification is first
 
@@ -146,7 +146,7 @@ sequenceDiagram
     participant R as Receiver (holds whpk_ public key)
     Note over P,R: both configured with the SAME endpoint-id (never sent)
     P->>P: sign SHA-256(endpoint_id.msg_id.ts.payload) with private key
-    P->>R: POST  webhook-signature: v2a,<base64>
+    P->>R: POST  webhook-signature: v2a,(base64)
     R->>R: rebuild endpoint_id.msg_id.ts.payload from its own config
     R->>R: verify signature with public key → accept / 400
 ```
@@ -380,20 +380,21 @@ Webhook payloads often carry PII or secrets. Two mechanisms keep them out of you
    }
    ```
 
-2. **Signature redaction in headers.** `metadata.headers()` has `webhook-signature` redacted, and the signing
-   secret is never placed in metadata at all — so logging the header map can't leak signing material.
+2. **Signature and credential redaction in headers.** `metadata.headers()` redacts `webhook-signature`,
+   `authorization`, `proxy-authorization`, and `cookie`, and the signing secret is never placed in metadata
+   at all — so logging the header map can't leak signing or transport-auth material.
 
 ```mermaid
 flowchart LR
     Event["event with @Redact fields"] --> Red["WebhookRedactor"]
     Red --> Safe["redactedEvent(): masked string"]
-    Headers["raw headers"] --> R2["signature redacted"]
+    Headers["raw headers"] --> R2["signature & auth headers redacted"]
     R2 --> SafeH["metadata.headers(): safe to log"]
 ```
 
 **Text summary.** `@Redact` fields are masked by the `WebhookRedactor` behind `metadata.redactedEvent()`,
-and the signature header is stripped from `metadata.headers()`. Log those, never the raw event or raw
-headers. See [SPEC §9a](../reference/SPEC.md#9a-field-level-redaction--redact) and the
+and `webhook-signature` + standard auth/cookie headers are masked in `metadata.headers()`. Log those, never
+the raw event or raw headers. See [SPEC §9a](../reference/SPEC.md#9a-field-level-redaction--redact) and the
 [Annotations reference](../reference/annotations.md#redact).
 
 ---

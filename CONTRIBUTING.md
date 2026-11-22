@@ -21,7 +21,7 @@ filed as public issues — see [SECURITY.md](SECURITY.md).
 | --- | --- |
 | JDK | 21 |
 | Maven | 3.9+ |
-| Docker | optional — only for `webhooks-sample/integration-test.sh` |
+| Docker | optional — only for `webhooks-sample/integration-test*.sh` (`docker-compose*.yml`) |
 
 ## Building
 
@@ -43,7 +43,7 @@ The sample apps are a separate build that consumes the installed libraries:
 
 ```bash
 mvn install -DskipTests
-mvn -f webhooks-sample/pom.xml verify
+mvn -f webhooks-sample/pom.xml -Pformat verify
 ```
 
 ## Quality gate
@@ -74,8 +74,9 @@ Formatting is enforced with [Spotless](https://github.com/diffplug/spotless) +
 [Palantir Java Format](https://github.com/palantir/palantir-java-format) (4-space indent, 120 columns):
 
 ```bash
-mvn spotless:apply   # reformat in place — run before committing
-mvn -Pformat verify  # fail on any formatting violation
+mvn spotless:apply                                # format library reactor
+mvn -f webhooks-sample/pom.xml spotless:apply     # format sample reactor
+mvn -Pformat verify                               # fail on any formatting violation
 ```
 
 Other conventions:

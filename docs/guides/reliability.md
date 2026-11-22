@@ -25,10 +25,10 @@ flowchart TD
     Back --> Send
 ```
 
-**Text summary.** A `2xx` succeeds. A fatal `4xx` (anything but `429`) throws at once and is never retried. A
-retryable failure — `5xx`, `429`, or a transport error (timeout, connection refused) — is retried after a
-backoff until `max-attempts` is reached, then the last exception is thrown. The wait is a bounded
-`Thread.sleep` on the calling thread; nothing is queued or spooled.
+**Text summary.** A `2xx` succeeds. A `3xx` redirect (`Redirect.NEVER`) or fatal `4xx` (anything but `429`)
+throws at once and is never retried. A retryable failure — `5xx`, `429`, or a transport error (timeout,
+connection refused) — is retried after a backoff until `max-attempts` is reached, then the last exception is
+thrown. The wait is a bounded `Thread.sleep` on the calling thread; nothing is queued or spooled.
 
 ### Backoff formula
 
@@ -99,7 +99,7 @@ unusable falling back to pure exponential backoff:
 | --- | --- | --- |
 | `Retry-After: 120` | `Duration.ofSeconds(120)` | delta-seconds — the common form |
 | `Retry-After: -5` | `Duration.ZERO` | a negative delta clamps to zero (never a negative sleep) |
-| `Retry-After: Wed, 21 Oct 2015 07:28:00 GMT` | `now − date`, or `ZERO` if past | RFC 1123 HTTP-date |
+| `Retry-After: Wed, 21 Oct 2015 07:28:00 GMT` | `date − now`, or `ZERO` if past | RFC 1123 HTTP-date |
 | `Retry-After: soon` | ignored | unparseable → pure exponential backoff |
 | *(absent)* | ignored | pure exponential backoff |
 

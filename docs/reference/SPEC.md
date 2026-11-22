@@ -1,9 +1,9 @@
 # Webhooks Toolkit — Design Spec
 
-> A Standard Webhooks–compliant **toolkit** for Spring Boot, shipped as a four-module reactor:
-> a shared **core**, a **consumer** that receives/verifies/dispatches inbound webhooks, an
-> annotation-driven **producer** that signs and sends outbound webhooks, and an independent
-> standalone **sample** app. The consumer deserializes the payload **by `type`** (via a `@WebhookType`
+> A Standard Webhooks–compliant **toolkit** for Spring Boot, shipped as a five-module library reactor
+> (`webhooks-core`, `webhooks-consumer-autoconfigure`, `webhooks-consumer-starter`,
+> `webhooks-producer-autoconfigure`, `webhooks-producer-starter`) plus seven standalone **sample** apps in
+> `webhooks-sample/`. The consumer deserializes the payload **by `type`** (via a `@WebhookType`
 > annotation) and dispatches to typed handler methods; the producer derives the same `@WebhookType` to build,
 > sign, and POST the envelope.
 >
@@ -36,6 +36,7 @@
    - [8a. Secret source & rotation (`SecretProvider`)](#8a-secret-source--rotation-secretprovider)
    - [8b. Replay window (timestamp freshness)](#8b-replay-window-timestamp-freshness)
    - [8e. Asymmetric verification — Ed25519 `v2a` (`whpk_`)](#8e-asymmetric-verification--ed25519-v2a-whpk_)
+   - [8f. Disabling message security](#8f-disabling-message-security)
 9. [Webhook metadata object](#9-webhook-metadata-object)
    - [9a. Field-level redaction — `@Redact`](#9a-field-level-redaction--redact)
    - [9b. Correlation & trace context (app-owned)](#9b-correlation--trace-context-app-owned)
@@ -57,6 +58,7 @@
     - [19e. Dependency vulnerability scanning](#19e-dependency-vulnerability-scanning)
     - [19f. Log-safe destination URLs](#19f-log-safe-destination-urls)
     - [19g. Transport authentication (bearer tokens / OAuth2)](#19g-transport-authentication-bearer-tokens--oauth2)
+    - [19h. Disabling message signing](#19h-disabling-message-signing)
     - [19i. Asymmetric signing — Ed25519 `v2a` (`whsk_`)](#19i-asymmetric-signing--ed25519-v2a-whsk_)
 20. [Reliability & delivery guarantees](#20-reliability--delivery-guarantees)
     - [20.1 What *is* guaranteed (in-process)](#201-what-is-guaranteed-in-process)
@@ -86,7 +88,7 @@ follows the house style of the `jinternals` projects.
   `webhook-id`, headers, …) alongside the typed event (see §9).
 
 > **Note.** §1–§18 describe the **consumer** (the original scope of this document). The **producer**
-> added in the four-module restructure is specified in [§19](#19-producer--annotation-driven-sending);
+> added in the multi-module reactor is specified in [§19](#19-producer--annotation-driven-sending);
 > both sides share [`webhooks-core`](#14-module--package-layout).
 
 **Out of scope (explicitly):**
@@ -133,7 +135,7 @@ follows the house style of the `jinternals` projects.
    WebhookReceiveController.handle(...)        ← single generic controller, registered per config path
             │
             ▼
-   WebhookVerifier.verify(secret, RAW body, headers)      ← Standard Webhooks (throws on failure)
+   WebhookVerifier.verify(secrets, endpointId, RAW body, headers) ← Standard Webhooks (throws on failure)
             │ ok
             ▼
    (optional) IdempotencyGuard.tryBegin(webhook-id)?      ← reserve; in-memory best-effort, off by default
@@ -267,7 +269,7 @@ are discovered — the kinds Jackson can instantiate. Base packages include thei
 Keeping the scanner out of core means a producer (which never scans) carries no scanning code, and the core
 artifact stays free of classpath-scanning weight.
 
-Consumer flow: read `envelope.type` → `classOf(type)` → Jackson `convertValue(envelope.data, clazz)`.
+Consumer flow: read `envelope.type` → `classOf(type)` → strict Jackson `strictEventReader.treeToValue(envelope.data, clazz)`.
 
 **One URL, one or many types.** The registry is global (`type → Class`), and the envelope's `type`
 field — not the URL — selects the class. So a **single listen path naturally accepts multiple event
@@ -335,7 +337,6 @@ public class WebhookProperties {
     private Consumer consumer = new Consumer();
 
     @Data public static class Consumer {
-        private String basePackage;
         private UnknownTypePolicy unknownTypePolicy = UnknownTypePolicy.ACK_AND_IGNORE;
         @NestedConfigurationProperty private List<Endpoint> endpoints = new ArrayList<>();
     }
@@ -406,18 +407,16 @@ Adapted from `DynamicEndpointRegistry`: at `@PostConstruct`, register one POST m
 configured path, all pointing at a single generic controller method.
 
 ```java
-@Component
-@RequiredArgsConstructor
-public class WebhookEndpointRegistry {
+public class WebhookEndpointRegistry implements InitializingBean {
 
     private final RequestMappingHandlerMapping handlerMapping;
     private final WebhookReceiveController controller;
     private final WebhookProperties properties;
 
-    @PostConstruct
-    public void registerEndpoints() {
+    @Override
+    public void afterPropertiesSet() {
         Method handle = ReflectionUtils.findMethod(WebhookReceiveController.class,
-            "handle", HttpServletRequest.class, String.class, Map.class);
+            "handle", HttpServletRequest.class, String.class);
 
         for (Endpoint ep : properties.getConsumer().getEndpoints()) {
             RequestMappingInfo info = RequestMappingInfo
@@ -430,9 +429,9 @@ public class WebhookEndpointRegistry {
 }
 ```
 
-An argument resolver (like `SchemaArgumentResolver`) matches the request path to its `Endpoint` and
-injects the right **secret** (and optional schema), so the controller stays generic across all
-configured paths.
+`EndpointResolvingInterceptor` matches the request path to its configured `Endpoint` and stores it on
+the request attribute `"webhook.endpoint"`, while `RawBodyArgumentResolver` reads the raw UTF-8 body
+(enforcing `max-body-size`), so the controller stays generic across all configured paths.
 
 ---
 
@@ -476,9 +475,9 @@ verified. We split it behind a one-method SPI so the default (static config) is 
 secrets manager, database, or rotating cache can be dropped in without touching the verifier.
 
 ```java
-public interface SecretProvider {
-    /** Candidate secret(s) for this endpoint, newest first. Never null; empty = fail closed. */
-    List<String> secretsFor(WebhookProperties.Endpoint endpoint);
+public interface SecretProvider<T> {
+    /** Candidate secret(s) for this target (Endpoint or Destination), newest first. Empty = fail closed. */
+    List<String> secretsFor(T target);
 }
 ```
 
@@ -679,7 +678,7 @@ public record WebhookMetadata(
     Object event,                    // the typed event object; redactedEvent() masks @Redact fields (§9a)
 
     // --- Escape hatch: everything else ---
-    Map<String, String> headers,     // all request headers (lower-cased), signature REDACTED
+    Map<String, String> headers,     // all request headers (lower-cased), signature & auth/cookie headers REDACTED
     Map<String, Object> attributes   // free-form extras (e.g. custom x-* headers), see below
 ) {
 
@@ -712,7 +711,7 @@ Built in the controller right after verification succeeds:
 | `endpointPath` | the matched `Endpoint.path` (from the argument resolver) |
 | `sourceIp` | `request.getRemoteAddr()` (or `X-Forwarded-For` if behind a proxy) |
 | `event` | the deserialized event object; for logging use `redactedEvent()`, which masks `@Redact` fields (§9a) |
-| `headers` | all request headers, lower-cased, **with `webhook-signature` redacted** (`STANDARD_WEBHOOKS.md` §11) |
+| `headers` | all request headers, lower-cased, **with `webhook-signature`, `authorization`, `proxy-authorization`, and `cookie` redacted** (`STANDARD_WEBHOOKS.md` §11) |
 | `attributes` | optional extras; e.g. selected custom `x-*` headers the sender adds, or values a `MetadataContributor` SPI chooses to attach |
 
 ### Extensibility — `attributes` and contributors
@@ -732,8 +731,9 @@ public interface MetadataContributor {
 All registered `MetadataContributor` beans run before dispatch. Keep contributions cheap and never
 pull in secrets.
 
-> ⚠️ **Security:** the signature value and the signing secret are **never** placed in
-> `WebhookMetadata` (headers map redacts `webhook-signature`). This keeps the object safe to log.
+> ⚠️ **Security:** signing secrets and transport credentials are **never** placed in
+> `WebhookMetadata` (`headers` redacts `webhook-signature`, `authorization`, `proxy-authorization`, and `cookie`).
+> This keeps the object safe to log.
 
 ---
 
@@ -943,49 +943,27 @@ cleanly distinct from "we model it but forgot to wire a handler" (a server-side 
 ### Generic controller tying it together
 
 ```java
-@Component
-@RequiredArgsConstructor
 public class WebhookReceiveController {
 
-    private final WebhookVerifier verifier;
-    private final WebhookTypeRegistry typeRegistry;
-    private final WebhookDispatcher dispatcher;
-    private final MetadataFactory metadataFactory;   // builds WebhookMetadata (§9)
-    private final IdempotencyGuard idempotency;      // optional, §11
-    private final ObjectMapper objectMapper;
+    private final WebhookReceivePipeline pipeline;
 
-    @SneakyThrows
-    public ResponseEntity<Void> handle(HttpServletRequest request,
-                                       @RequestBody(required = false) String rawBody,
-                                       Map<String, List<String>> headers) {   // secret injected via resolver
-
-        String secret = (String) request.getAttribute("webhook.secret");
-
-        verifier.verify(secret, rawBody, headers);          // 1) verify RAW body (throws on failure)
-
-        String webhookId = first(headers, "webhook-id");
-        if (!idempotency.tryBegin(webhookId)) {              // 2) optional best-effort reserve
-            return ResponseEntity.noContent().build();       //    duplicate: already reserved/committed
+    public ResponseEntity<Void> handle(HttpServletRequest request, String rawBody)
+            throws WebhookVerificationException {
+        Endpoint endpoint = (Endpoint) request.getAttribute("webhook.endpoint");
+        if (endpoint == null) {
+            throw new EndpointNotConfiguredException(request.getRequestURI()); // -> 500
         }
-        try {
-            Envelope env = objectMapper.readValue(rawBody, Envelope.class);
-            Class<?> clazz = typeRegistry.classOf(env.getType());
-            if (clazz == null) {
-                return unknownType(env.getType());           // 3) policy: ack-and-ignore | reject
-            }
-
-            Object event = objectMapper.convertValue(env.getData(), clazz);
-            WebhookMetadata metadata = metadataFactory.build(request, env, headers);  // 4) build metadata
-            dispatcher.dispatch(event, metadata);            // 5) @WebhookHandler; no handler => throws (500)
-            idempotency.markProcessed(webhookId);            // 6) commit the reservation on success
-            return ResponseEntity.noContent().build();       // 204 => success
-        } catch (RuntimeException ex) {
-            idempotency.release(webhookId);                  // drop the reservation so a retry can proceed
-            throw ex;
-        }
+        return pipeline.process(request, endpoint, rawBody, WebhookRequestHeaders.collect(request));
     }
 }
 ```
+
+Inside `WebhookReceivePipeline.process(...)`:
+1. `bodyVerifier.verify(endpoint, rawBody, headers)` — verifies `webhook-signature` + replay window over the **raw** bytes;
+2. `idempotency.tryBegin(webhookId)` — reserves `webhook-id` (`false` → `204` duplicate ignored; any `Throwable` below calls `release(webhookId)`);
+3. `eventResolver.resolve(endpoint, envelope)` — checks `endpoint.accepts(type)`, deserializes via `strictEventReader.treeToValue`, and runs `PayloadValidator`;
+4. `metadataFactory.build(...)` + `observability.record(...)` + `eventDispatcher.dispatch(...)` (checking `dispatcher.requireHandler` eagerly before `async` submission);
+5. `idempotency.markProcessed(webhookId)` → `204 No Content`.
 
 ---
 
@@ -997,8 +975,9 @@ building. Options given the no-storage constraint:
 1. **None (recommended default).** Make handlers **naturally idempotent** (e.g. upserts in the
    downstream system), paired with the enabled-by-default replay window (§8b, `5m` tolerance) for replay security.
    This is the cleanest fit for "no storage."
-2. **In-memory best-effort** `IdempotencyGuard` — a bounded, time-expiring record of recent
-   `webhook-id`s (e.g. Caffeine with 5-min TTL). Catches duplicate retries within one instance's
+2. **In-memory best-effort** `IdempotencyGuard` (`InMemoryIdempotencyGuard`) — an access-order
+   `LinkedHashMap` guarded by a virtual-thread-friendly `ReentrantLock` with a `10m` TTL and configurable
+   `in-memory-idempotency-max-size` (default `100,000`). Catches duplicate retries within one instance's
    lifetime; does **not** survive restarts or work across instances. Off by default; enabled with
    `webhooks.consumer.in-memory-idempotency: true`.
 
@@ -1137,14 +1116,16 @@ nothing) is entirely a function of what the host app wires — see the README su
 
 ## 14. Module / package layout
 
-Spring Boot 3.3 / Java 21. A **five-module Maven reactor** of libraries. A shared `webhooks-core` holds the
+Spring Boot 3.5.16 / Java 21. A **five-module Maven reactor** of libraries. A shared `webhooks-core` holds the
 config-free wire model and SPIs; each side ships a **starter + autoconfigure pair** —
 `webhooks-consumer-autoconfigure` / `webhooks-producer-autoconfigure` carry the auto-configured code (each
 depends on core), and the thin `webhooks-consumer-starter` / `webhooks-producer-starter` poms are what a
 downstream app depends on (they transitively bring the matching autoconfigure module plus its runtime
 deps — the canonical Spring Boot starter pattern). Each library is wired purely through
-`AutoConfiguration.imports` (no component-scan of the library). The runnable demos are two **standalone
-apps** under `webhooks-sample/` that depend only on the published starters and are **not** part of this reactor.
+`AutoConfiguration.imports` (no component-scan of the library). The runnable demos are seven **standalone
+apps** under `webhooks-sample/` (quickstart `producer-sample` + `consumer-sample`, zero-loss NATS JetStream
+`producer-nats-sample` + `consumer-nats-sample`, OAuth2 JWT `producer-auth-sample` + `consumer-auth-sample`,
+and custom SPI `spi-sample`) that depend only on the published starters and are **not** part of this reactor.
 
 ```
 webhooks/                              # parent POM (pom packaging), shared dependencyManagement
@@ -1220,6 +1201,7 @@ lean and a producer never carries the scanner.
 **Producer dependencies:** `webhooks-core`, `org.springframework:spring-web` (the `RestClient` HTTP
 client only — the producer is a webhook **client** and never serves HTTP, so it deliberately does **not**
 depend on `spring-boot-starter-web` / the servlet stack), `spring-boot-autoconfigure`,
+`spring-boot-starter-validation` (bind-time `@Validated` property constraints),
 `io.micrometer:micrometer-observation` + `spring-boot-starter-aop` (the `@Observed` Observation API,
 §13), `com.standardwebhooks:standardwebhooks`, Jackson (via Boot).
 
@@ -1257,9 +1239,9 @@ added to an already-running application without disturbing it:
   library classes carry **no stereotype annotations** (`@Component`/`@Configuration`/`@RestControllerAdvice`),
   so they are only ever wired through the auto-config.
 - **Core / web split.** `WebhookConsumerAutoConfiguration` registers the core beans (registry,
-  verifier, dispatcher, metadata, payload validator, idempotency, secret provider/validator, handler executor).
-  `WebhookConsumerWebAutoConfiguration` registers the servlet-web beans (controller, endpoint
-  registration, MVC customizations, metrics, error handler) and is gated with
+  verifier, dispatcher, metadata, payload validator, idempotency, secret provider/validator, handler
+  executor, observability, and `WebhookMetrics`). `WebhookConsumerWebAutoConfiguration` registers the
+  servlet-web beans (controller, endpoint registration, MVC customizations, error handler) and is gated with
   `@ConditionalOnWebApplication(SERVLET)` and ordered `after` `WebMvcAutoConfiguration`. Core beans
   load even in a non-web context; nothing drags MVC types in where they don't belong. The observability
   beans (`ObservationRegistry` fallback + `ObservedAspect`) live in the **core** auto-config, so
@@ -1590,8 +1572,8 @@ Three selectors are supported (they **combine**, deduplicated), mirroring `@Enab
 | `basePackages` | `@EnableWebhookClients(basePackages = "com.acme.webhooks")` | Scans the string package(s). |
 
 If none is set, the annotated class's own package is scanned. `WebhookClientRegistrar` resolves the
-union and registers a `WebhookClientFactoryBean` per interface; this bean-definition glue is verified
-end-to-end by context tests (one per selector) and is excluded from the mutation gate like other wiring.
+union and registers a `WebhookClientFactoryBean` per interface; both classes are covered by unit, context,
+and PITest mutation tests.
 
 ### Named destinations
 
@@ -1618,21 +1600,23 @@ The engine behind every proxy is stateless and thread-safe. For each call it:
    byte payload that will be sent (serialization failure → `IllegalStateException`);
 4. resolves the signing secret(s) via `SecretProvider<Destination>` — **fail-closed** on an empty list
    (`IllegalStateException`, never an unsigned send);
-5. signs via `WebhookSigner`, which selects the scheme **per secret, by prefix** (§19i) — HMAC-SHA256
-   over `id.timestamp.payload` for a `whsec_` secret (`v1`, wrapping the official `com.standardwebhooks`
-   library, `Webhook` instances cached per secret), or Ed25519 over `endpoint_id.id.timestamp.payload`
-   for a `whsk_` private key (`v2a`) — once per resolved secret, combining the results into one
-   space-separated `webhook-signature` value (**dual-signing**, §19a);
-6. sends via `WebhookTransport` with the `webhook-id` / `webhook-timestamp` / `webhook-signature`
-   headers.
+5. signs per delivery attempt via `WebhookSigner` (or omits the signature when `signing-enabled=false`, §19h),
+   which selects the scheme **per secret, by prefix** (§19i) — HMAC-SHA256 over `id.timestamp.payload` for a
+   `whsec_` secret (`v1`, wrapping the official `com.standardwebhooks` library, `Webhook` instances cached per
+   secret), or Ed25519 over `SHA-256(endpoint_id.id.timestamp.payload)` for a `whsk_` private key (`v2a`) —
+   once per resolved secret, combining the results into one space-separated `webhook-signature` value
+   (**dual-signing**, §19a);
+6. sends via `WebhookTransport` (`AttemptAwareWebhookTransport` refreshes `webhook-timestamp` and
+   `webhook-signature` on each retry attempt while preserving `webhook-id` and the serialized envelope).
 
 ### Extension points (all `@ConditionalOnMissingBean`)
 
-- **`WebhookTransport`** — the delivery SPI. The default is a chain: a `RestClientWebhookTransport`
+- **`WebhookTransport`** — the delivery SPI. The default is a 3-layer chain: `RetryingWebhookTransport`
+  (in-process exponential backoff + jitter on *retryable* failures; §19b) → `InterceptingWebhookTransport`
+  (applies `0..n` `WebhookRequestInterceptor` beans per attempt; §19g) → `RestClientWebhookTransport`
   (POSTs synchronously via Spring's `RestClient`, validates the destination URL, turns a non-2xx
   response or transport error into a `WebhookDeliveryException` carrying the HTTP status when there was
-  one) wrapped in a `RetryingWebhookTransport` (in-process exponential backoff + jitter on *retryable*
-  failures; §19b). Override the whole chain to send asynchronously, through a queue, or with a different
+  one). Override the whole chain to send asynchronously, through a queue, or with a different
   policy. **Only `2xx` is a successful delivery.** A `3xx` is a *failure*, not a redirect to follow —
   the default `RestClient` is built with `Redirect.NEVER`, so a redirect surfaces as a
   `WebhookDeliveryException` carrying the `3xx` status rather than being chased to another host (which
@@ -1839,13 +1823,13 @@ and the order-of-defences reasoning) now lives in its own guide:
 **[Transport authentication](../guides/transport-authentication.md)**.
 
 `WebhookRequestInterceptor` is the **single outbound-request-shaping strategy**: every concern that needs
-to add headers or otherwise mutate the outbound request before it is signed and sent — transport auth,
+to add headers onto the already-signed outbound request per attempt before it is sent — transport auth,
 multi-tenancy routing, and **trace/correlation headers (§9b)** — composes through the same interface. The
 toolkit ships no built-in bean for any of them; the application contributes the interceptor(s) it needs,
 because each depends on application-specific context (credentials, tenant, the trace id in its own `MDC`).
 
-> An asymmetric / JWS / JWT **message** model (public-key authenticity instead of a shared HMAC secret)
-> would replace the *signing scheme* itself, not the transport — that is tracked separately in §17.
+> Asymmetric public-key **message** signing (`v2a` Ed25519) is supported natively via `whsk_`/`whpk_` keys
+> (§8e, §19i), and composes orthogonally with HTTP transport authentication.
 
 ### 19h. Disabling message signing
 
@@ -1952,8 +1936,8 @@ follow, and the patterns that make a deployment reliable.
   the **sender** retries. The sender's own retry machinery is the primary durability mechanism.
 - **Consumer — `sync` means processed.** In the default `sync` mode the `2xx` is returned only after the
   handler completes (§15), so a `2xx` is an honest "processed" acknowledgement.
-- **Consumer — replay resistance (opt-in).** The timestamp replay window (§8b) lets a receiver reject
-  stale/replayed requests without storage.
+- **Consumer — replay resistance (enabled by default).** The timestamp replay window (§8b, default `5m`
+  tolerance) lets a receiver reject stale/replayed requests without storage.
 - **Consumer — bounded resource use.** Body-size limit before verification (§14a), bounded async pool
   with per-handler timeout and daemon threads (§15), and a bounded in-memory idempotency cache (§11) —
   none can grow memory without limit.
@@ -2018,7 +2002,7 @@ Within the no-storage rule — recommended, zero new dependencies:
    costs nothing.
 2. **Key off `webhook-id`.** The producer stamps a unique id per delivery; a handler that upserts by it
    is safe against the sender's at-least-once retries.
-3. **Enable the replay window** (§8b) for replay-attack resistance.
+3. **Keep the replay window enabled** (§8b, on by default) for replay-attack resistance.
 4. **Tune producer retry** (§19b) to the destination's SLA, and **alert on the existing
    `webhook.send` / `webhook.receive` metrics** (§13).
 

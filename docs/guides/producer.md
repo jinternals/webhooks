@@ -13,17 +13,19 @@ library build, sign, and deliver the Standard Webhooks envelope with in-process 
 ```mermaid
 flowchart LR
     Call["client.send(event)"] --> B["build envelope from @WebhookType"]
-    B --> S["sign (HMAC-SHA256)"]
-    S --> D["deliver (POST) with retry"]
+    B --> G["validate URL (SSRF guard)"]
+    G --> S["sign per attempt (v1 HMAC / v2a Ed25519)"]
+    S --> D["intercept + POST (with retry)"]
     D --> R{"result"}
     R -- "2xx" --> OK["done"]
     R -- "exhausted / fatal" --> T["throw WebhookDeliveryException<br/>(+ dead-letter hook)"]
 ```
 
 **Text summary.** Your `@WebhookClient` call becomes a typed event → the publisher wraps it in the envelope
-(the event's `@WebhookType` supplies the wire `type`) → the signer HMACs it → the transport POSTs it with
-in-process retry. Success returns normally; a fatal or exhausted failure throws (and fires the dead-letter
-hook). See [Reliability](./reliability.md) for the retry detail.
+(the event's `@WebhookType` supplies the wire `type`) → the URL guard checks the destination once → each
+delivery attempt stamps a fresh `webhook-timestamp` + `webhook-signature` (`v1` HMAC or `v2a` Ed25519), runs
+any `WebhookRequestInterceptor`s, and POSTs with in-process retry. Success returns normally; a fatal or
+exhausted failure throws (and fires the dead-letter hook). See [Reliability](./reliability.md) for the retry detail.
 
 ---
 
@@ -154,14 +156,15 @@ See [Verification & security → SSRF guard](./verification-and-security.md#dest
 
 ## Customizing delivery
 
-Replace any part of the chain with your own `@Bean` (each is `@ConditionalOnMissingBean`):
+Replace any part of the chain with your own `@Bean`:
 
-| Bean | Replace to… |
+| Bean | Replace / add to… |
 | --- | --- |
-| `WebhookTransport` | send asynchronously, through a queue, or with a different retry policy. |
-| `RestClient` (`webhookProducerRestClient`) | tune HTTP (proxies, TLS, connection pool). |
+| `WebhookRequestInterceptor` (`0..n`, additive) | attach outbound headers per attempt (e.g. `Authorization: Bearer <jwt>`, `x-trace-id`) while keeping built-in retry and SSRF guard. |
+| `WebhookTransport` | send asynchronously, through a durable queue (see [Zero-loss queueing](./zero-loss-queueing.md)), or with a different retry policy. |
+| `@Bean("webhookProducerRestClient") RestClient` | tune HTTP (proxies, TLS, connection pool); must use bean name `webhookProducerRestClient`. |
 | `WebhookSigner` | change the signing scheme. |
-| `SecretProvider<Destination>` | resolve secrets from a secrets manager. |
+| `@Bean("destinationSecretProvider") SecretProvider<Destination>` | resolve secrets from a secrets manager; **must** be named `destinationSecretProvider` so it backs off the default without colliding with the consumer's `SecretProvider<Endpoint>`. |
 | `DestinationUrlValidator` | implement a custom outbound-URL policy (CIDR, DNS-rebind blocking). |
 | `WebhookDeliveryListener` | capture abandoned deliveries in a dead-letter store. |
 

@@ -75,7 +75,8 @@ crash after the `204` but before the handler drops that delivery. See
 ### How do I keep PII out of my logs?
 
 Mark sensitive event fields with `@Redact` and log `metadata.redactedEvent()` (never the raw event). The
-`webhook-signature` header is already redacted from `metadata.headers()`. See
+`webhook-signature`, `authorization`, `proxy-authorization`, and `cookie` headers are already redacted from
+`metadata.headers()`. See
 [Verification & security → redaction](../guides/verification-and-security.md#redaction-safe-logging).
 
 ---

@@ -103,7 +103,7 @@ public void onCreated(ContactCreated event, WebhookMetadata metadata) {
 }
 ```
 
-`WebhookMetadata` carries the `webhook-id`, both timestamps, delivery/event lag, the (signature-redacted)
+`WebhookMetadata` carries the `webhook-id`, both timestamps, delivery/event lag, the redacted
 headers, the endpoint path, and a `redactedEvent()` that masks `@Redact` fields for safe logging. It does
 not carry a trace id — the toolkit writes nothing to the `MDC`; correlation is the app's concern
 ([SPEC §9b](../reference/SPEC.md#9b-correlation--trace-context-app-owned)). See
@@ -111,7 +111,8 @@ not carry a trace id — the toolkit writes nothing to the `MDC`; correlation is
 [Annotations reference](../reference/annotations.md#webhookhandler).
 
 > **Redaction-safe logging.** Mark sensitive event fields with `@Redact`; `metadata.redactedEvent()` masks
-> them. The `webhook-signature` header is redacted from `metadata.headers()` too. See
+> them. Sensitive headers (`webhook-signature`, `authorization`, `proxy-authorization`, `cookie`) are
+> redacted from `metadata.headers()` too. See
 > [Verification & security → redaction](./verification-and-security.md#redaction-safe-logging).
 
 ---
@@ -137,12 +138,12 @@ flowchart TD
     K -- yes --> Handle["dispatch to handler"]
     K -- no --> P{"unknown-type-policy"}
     P -- "ack-and-ignore" --> A["204 (sender stops retrying)"]
-    P -- "reject" --> R["400 (sender retries)"]
+    P -- "reject" --> R["400 (fatal client error — not retried)"]
 ```
 
 **Text summary.** A known, accepted type is dispatched. An unknown or disallowed type returns `204` under
-`ack-and-ignore` (so the sender gives up gracefully) or `400` under `reject` (so the sender keeps retrying
-and you notice).
+`ack-and-ignore` (silent ignore) or `400` under `reject` (surfaces as a visible `4xx` error in sender/receiver
+dashboards without triggering `5xx` retry storms).
 
 ---
 

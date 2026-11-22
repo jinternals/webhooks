@@ -60,7 +60,7 @@ three signing headers.
 | --- | --- |
 | `webhook-id` | Stable id for this message; the correlation / idempotency key (stable across the sender's retries). |
 | `webhook-timestamp` | Unix-seconds time of **this delivery attempt**; signed, and checked against the replay window when enabled. |
-| `webhook-signature` | `v1,<base64 HMAC-SHA256>` over `webhook-id.webhook-timestamp.body` (symmetric), or `v2a,<base64 Ed25519>` over `endpoint_id.webhook-id.webhook-timestamp.body` (asymmetric; see [verification & security](guides/verification-and-security.md#asymmetric-signatures-ed25519-v2a)). May carry multiple space-separated signatures during rotation or a scheme migration. |
+| `webhook-signature` | `v1,<base64 HMAC-SHA256>` over `webhook-id.webhook-timestamp.body` (symmetric), or `v2a,<base64 Ed25519>` over `SHA-256(endpoint_id.webhook-id.webhook-timestamp.body)` (asymmetric; see [verification & security](guides/verification-and-security.md#asymmetric-signatures-ed25519-v2a)). May carry multiple space-separated signatures during rotation or a scheme migration. |
 
 The envelope-level `timestamp` is the **event-occurrence** time (distinct from the delivery `webhook-timestamp`).
 See [STANDARD_WEBHOOKS.md](./reference/STANDARD_WEBHOOKS.md) for the full protocol.
@@ -107,31 +107,33 @@ A `@WebhookClient` method call becomes a signed POST, wrapped in in-process retr
 
 ```mermaid
 flowchart TD
-    Call["client.send(event)"] --> Pub["WebhookPublisher<br/>build envelope from @WebhookType"]
-    Pub --> Sign["WebhookSigner<br/>v1 HMAC / v2a Ed25519 (per attempt)"]
-    Sign --> Retry["RetryingWebhookTransport"]
+    Call["client.send(event)"] --> Pub["WebhookPublisher<br/>serialize envelope once from @WebhookType"]
+    Pub --> Retry["RetryingWebhookTransport"]
     Retry --> Guard{"destination URL<br/>allowed? (SSRF)"}
     Guard -- no --> Fatal["fatal: WebhookDeliveryException"]
-    Guard -- yes --> Intercept["InterceptingWebhookTransport<br/>WebhookRequestInterceptor(s)<br/>e.g. Authorization: Bearer"]
+    Guard -- yes --> Sign["WebhookSigner (per attempt)<br/>fresh webhook-timestamp + v1 HMAC / v2a Ed25519"]
+    Sign --> Intercept["InterceptingWebhookTransport<br/>WebhookRequestInterceptor(s)<br/>e.g. Authorization: Bearer"]
     Intercept --> Base["RestClientWebhookTransport<br/>POST"]
     Base --> Resp{"response"}
     Resp -- "2xx" --> Done["delivered"]
-    Resp -- "fatal 4xx" --> Abandon["abandon → dead-letter hook → throw"]
+    Resp -- "3xx / fatal 4xx" --> Abandon["abandon → dead-letter hook → throw"]
     Resp -- "retryable 5xx/429/transport" --> More{"attempts left?"}
     More -- yes --> Backoff["backoff (honors Retry-After) → retry"]
-    Backoff --> Intercept
+    Backoff --> Sign
     More -- no --> Abandon
 ```
 
-**Text summary.** The publisher builds the envelope from the event's `@WebhookType`, the signer HMACs it
-(dual-signing during secret rotation), and the retrying transport validates the destination URL. Any
+**Text summary.** The publisher builds and serializes the envelope once from the event's `@WebhookType`, and
+the retrying transport validates the destination URL once before attempting delivery. On **each attempt**, a
+fresh `webhook-timestamp` and `webhook-signature` (`v1` HMAC or `v2a` Ed25519, dual-signing during secret
+rotation, or omitted when `signing-enabled=false`) are computed over the unchanged `webhook-id` and body. Any
 `WebhookRequestInterceptor`s then run (the `InterceptingWebhookTransport` layer — e.g. adding an
 `Authorization: Bearer` token for transport auth) before the base transport POSTs. The result is classified:
-`2xx` is done; a fatal `4xx` is abandoned immediately; a retryable `5xx`/`429`/transport error is retried
-with exponential backoff (honoring `Retry-After`) until attempts are exhausted, then abandoned — and because
-each retry re-enters the chain at the interceptors, a short-lived bearer token that expired during backoff is
-freshly re-minted on the next attempt. Abandoning fires the dead-letter hook and rethrows. See the [Producer guide](./guides/producer.md)
-and [Reliability](./guides/reliability.md).
+`2xx` is done; a `3xx` redirect (`Redirect.NEVER`) or fatal `4xx` is abandoned immediately; a retryable
+`5xx`/`429`/transport error is retried with exponential backoff (honoring `Retry-After`) until attempts are
+exhausted, then abandoned — refreshing both the Standard Webhooks timestamp/signature and any short-lived
+bearer token on every retry. Abandoning fires the dead-letter hook and rethrows. See the
+[Producer guide](./guides/producer.md) and [Reliability](./guides/reliability.md).
 
 ---
 

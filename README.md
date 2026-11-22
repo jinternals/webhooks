@@ -472,6 +472,7 @@ line, and the meters against a real `MeterRegistry`.
 | Malformed payload — body not a valid envelope, or its `data` fails strict deserialization | `400 Bad Request` |
 | Unknown type under the `reject` policy | `400 Bad Request` |
 | Body exceeds `max-body-size` | `413 Payload Too Large` |
+| `@WebhookHandler` threw an exception (`sync` mode) | `500 Internal Server Error` |
 | A modelled, accepted type has no matching `@WebhookHandler` | `500 Internal Server Error` |
 | No endpoint configured for the matched path | `500 Internal Server Error` |
 
@@ -552,8 +553,9 @@ retries them **in process** — no queue, disk, or scheduler, so the no-storage 
 retry-free and either layer is independently replaceable.
 
 Only failures that might succeed on a repeat are retried: a `5xx`, a `429 Too Many Requests`, or a
-transport error (timeout, connection refused). Any other `4xx` (for example `400`, `401`, `404`) is
-treated as fatal and fails immediately, as is a URL rejected by the [SSRF guard](#configuration-reference).
+transport error (timeout, connection refused). Any `3xx` redirect (`Redirect.NEVER`) or non-`429` `4xx`
+(for example `400`, `401`, `404`) is treated as fatal and fails immediately, as is a URL rejected by the
+[SSRF guard](#configuration-reference).
 Backoff is exponential (`initial · 2^(attempt-1)`, capped at `max-backoff`) with jitter so retries do not
 synchronise into storms; the wait is a bounded `Thread.sleep` on the calling thread. After the attempts
 are exhausted, the last `WebhookDeliveryException` is rethrown to the caller.
