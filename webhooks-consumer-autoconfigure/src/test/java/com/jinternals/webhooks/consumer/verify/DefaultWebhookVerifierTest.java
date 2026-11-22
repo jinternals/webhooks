@@ -123,7 +123,7 @@ class DefaultWebhookVerifierTest {
     @Test
     void delegatesTheReplayWindowToTheTimestampValidatorOnce() {
         DefaultWebhookVerifier windowed = new DefaultWebhookVerifier(ts -> {
-            throw new com.standardwebhooks.exceptions.WebhookVerificationException("stale");
+            throw new WebhookVerificationException("stale");
         });
         String id = "msg_6";
         String ts = Signing.now();
@@ -131,7 +131,7 @@ class DefaultWebhookVerifierTest {
         String sig = Signing.sign(Signing.SECRET, id, ts, body);
 
         assertThatThrownBy(() -> windowed.verify(List.of(Signing.SECRET), null, body, headers(id, ts, sig)))
-                .isInstanceOf(com.standardwebhooks.exceptions.WebhookVerificationException.class)
+                .isInstanceOf(WebhookVerificationException.class)
                 .hasMessageContaining("stale");
     }
 

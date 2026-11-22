@@ -1,6 +1,5 @@
 package com.jinternals.webhooks.consumer.verify;
 
-import com.standardwebhooks.exceptions.WebhookVerificationException;
 import java.util.List;
 import java.util.Map;
 

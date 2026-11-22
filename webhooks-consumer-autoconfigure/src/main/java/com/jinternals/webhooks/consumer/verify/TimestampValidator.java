@@ -1,7 +1,5 @@
 package com.jinternals.webhooks.consumer.verify;
 
-import com.standardwebhooks.exceptions.WebhookVerificationException;
-
 /**
  * Replay-window (timestamp freshness) policy for an inbound webhook (see SPEC.md §8b). This is the
  * <strong>extension point (SPI)</strong> for timestamp verification, factored out of

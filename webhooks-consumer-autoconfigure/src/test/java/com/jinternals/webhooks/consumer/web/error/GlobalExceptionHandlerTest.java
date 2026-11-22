@@ -2,7 +2,7 @@ package com.jinternals.webhooks.consumer.web.error;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.standardwebhooks.exceptions.WebhookVerificationException;
+import com.jinternals.webhooks.consumer.verify.WebhookVerificationException;
 import java.net.URI;
 import java.util.List;
 import org.junit.jupiter.api.Test;

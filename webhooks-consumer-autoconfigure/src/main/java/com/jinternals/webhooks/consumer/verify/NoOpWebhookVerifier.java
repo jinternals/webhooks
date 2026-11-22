@@ -1,6 +1,5 @@
 package com.jinternals.webhooks.consumer.verify;
 
-import com.standardwebhooks.exceptions.WebhookVerificationException;
 import java.util.List;
 import java.util.Map;
 
@@ -22,8 +21,7 @@ public class NoOpWebhookVerifier implements WebhookVerifier {
      * only to satisfy the SPI contract; it performs no HMAC and reads none of its arguments.
      */
     @Override
-    public void verify(List<String> secrets, String endpointId, String rawBody, Map<String, List<String>> headers)
-            throws WebhookVerificationException {
+    public void verify(List<String> secrets, String endpointId, String rawBody, Map<String, List<String>> headers) {
         // Verification disabled: accept every request without checking the signature.
     }
 }

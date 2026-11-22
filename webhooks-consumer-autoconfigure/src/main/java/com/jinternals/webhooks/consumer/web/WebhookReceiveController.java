@@ -1,9 +1,9 @@
 package com.jinternals.webhooks.consumer.web;
 
 import com.jinternals.webhooks.consumer.config.WebhookProperties.Endpoint;
+import com.jinternals.webhooks.consumer.verify.WebhookVerificationException;
 import com.jinternals.webhooks.consumer.web.error.EndpointNotConfiguredException;
 import com.jinternals.webhooks.consumer.web.receive.WebhookRequestHeaders;
-import com.standardwebhooks.exceptions.WebhookVerificationException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
 import java.util.Map;

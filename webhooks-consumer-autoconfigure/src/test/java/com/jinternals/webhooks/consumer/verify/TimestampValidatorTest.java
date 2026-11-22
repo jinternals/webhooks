@@ -3,7 +3,6 @@ package com.jinternals.webhooks.consumer.verify;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.standardwebhooks.exceptions.WebhookVerificationException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;

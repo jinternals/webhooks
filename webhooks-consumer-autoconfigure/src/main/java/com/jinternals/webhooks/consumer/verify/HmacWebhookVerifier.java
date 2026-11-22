@@ -2,7 +2,6 @@ package com.jinternals.webhooks.consumer.verify;
 
 import com.standardwebhooks.Webhook;
 import com.standardwebhooks.exceptions.WebhookSigningException;
-import com.standardwebhooks.exceptions.WebhookVerificationException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.List;

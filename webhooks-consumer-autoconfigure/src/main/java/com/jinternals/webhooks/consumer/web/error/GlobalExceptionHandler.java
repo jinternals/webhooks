@@ -1,7 +1,7 @@
 package com.jinternals.webhooks.consumer.web.error;
 
+import com.jinternals.webhooks.consumer.verify.WebhookVerificationException;
 import com.jinternals.webhooks.consumer.web.WebhookReceiveController;
-import com.standardwebhooks.exceptions.WebhookVerificationException;
 import java.net.URI;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

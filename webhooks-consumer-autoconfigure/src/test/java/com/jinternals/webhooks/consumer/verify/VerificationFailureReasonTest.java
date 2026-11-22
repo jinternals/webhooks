@@ -2,7 +2,6 @@ package com.jinternals.webhooks.consumer.verify;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.standardwebhooks.exceptions.WebhookVerificationException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -21,6 +20,14 @@ class VerificationFailureReasonTest {
     void plainVerificationExceptionResolvesToOther() {
         // An exception we did NOT throw (e.g. a host-supplied TimestampValidator's) has no typed reason.
         WebhookVerificationException plain = new WebhookVerificationException("nope from a custom validator");
+        assertThat(VerificationFailureReason.from(plain)).isEqualTo(VerificationFailureReason.OTHER);
+    }
+
+    @Test
+    void plainExceptionWithCausePreservesMessageAndCauseAndResolvesToOther() {
+        IllegalStateException cause = new IllegalStateException("root");
+        WebhookVerificationException plain = new WebhookVerificationException("wrapped failure", cause);
+        assertThat(plain).hasMessage("wrapped failure").hasCause(cause);
         assertThat(VerificationFailureReason.from(plain)).isEqualTo(VerificationFailureReason.OTHER);
     }
 

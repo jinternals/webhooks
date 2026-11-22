@@ -225,7 +225,7 @@ class Ed25519WebhookVerifierTest {
         // A validator that rejects every timestamp must make verify() fail at the freshness step, proving the
         // injected window is honoured for v2a exactly as for v1.
         Ed25519WebhookVerifier windowed = new Ed25519WebhookVerifier(ts -> {
-            throw new com.standardwebhooks.exceptions.WebhookVerificationException("stale");
+            throw new WebhookVerificationException("stale");
         });
         String id = "msg_7";
         String ts = Signing.now();
@@ -234,7 +234,7 @@ class Ed25519WebhookVerifierTest {
 
         assertThatThrownBy(() ->
                         windowed.verify(List.of(Signing.PUBLIC_KEY), Signing.ENDPOINT_ID, body, headers(id, ts, sig)))
-                .isInstanceOf(com.standardwebhooks.exceptions.WebhookVerificationException.class)
+                .isInstanceOf(WebhookVerificationException.class)
                 .hasMessageContaining("stale");
     }
 }

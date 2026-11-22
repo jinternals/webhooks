@@ -3,9 +3,9 @@ package com.jinternals.webhooks.consumer.web.receive;
 import com.jinternals.webhooks.consumer.config.WebhookProperties.Endpoint;
 import com.jinternals.webhooks.consumer.metrics.WebhookMetrics;
 import com.jinternals.webhooks.consumer.verify.VerificationFailureReason;
+import com.jinternals.webhooks.consumer.verify.WebhookVerificationException;
 import com.jinternals.webhooks.consumer.verify.WebhookVerifier;
 import com.jinternals.webhooks.core.secret.SecretProvider;
-import com.standardwebhooks.exceptions.WebhookVerificationException;
 import java.util.List;
 import java.util.Map;
 

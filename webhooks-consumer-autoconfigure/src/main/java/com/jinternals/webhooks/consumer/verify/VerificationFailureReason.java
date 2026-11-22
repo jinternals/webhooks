@@ -1,7 +1,5 @@
 package com.jinternals.webhooks.consumer.verify;
 
-import com.standardwebhooks.exceptions.WebhookVerificationException;
-
 /**
  * Low-cardinality {@code reason} vocabulary for the {@code webhook.verification.failed} counter
  * (SPEC §20.6/A4). Each constant owns the metric {@link #tag()} text, so the vocabulary lives in one

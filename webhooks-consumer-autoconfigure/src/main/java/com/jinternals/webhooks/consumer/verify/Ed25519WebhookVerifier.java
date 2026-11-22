@@ -2,7 +2,6 @@ package com.jinternals.webhooks.consumer.verify;
 
 import com.jinternals.webhooks.core.sign.Ed25519Keys;
 import com.jinternals.webhooks.core.sign.Ed25519Signatures;
-import com.standardwebhooks.exceptions.WebhookVerificationException;
 import java.security.PublicKey;
 import java.util.List;
 import java.util.Map;

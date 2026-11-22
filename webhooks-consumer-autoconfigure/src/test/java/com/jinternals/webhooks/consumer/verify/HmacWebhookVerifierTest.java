@@ -8,7 +8,6 @@ import com.jinternals.webhooks.consumer.support.Signing;
 import com.jinternals.webhooks.core.model.WebhookHeaders;
 import com.standardwebhooks.Webhook;
 import com.standardwebhooks.exceptions.WebhookSigningException;
-import com.standardwebhooks.exceptions.WebhookVerificationException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
