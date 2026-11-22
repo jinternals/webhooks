@@ -8,7 +8,9 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.NestedConfigurationProperty;
@@ -135,6 +137,22 @@ public class WebhookProperties {
         @AssertTrue(message = "webhooks.consumer.replay-tolerance must not be negative")
         public boolean isReplayToleranceNonNegative() {
             return replayTolerance != null && !replayTolerance.isNegative();
+        }
+
+        /**
+         * Reject duplicate endpoint {@code path}s at bind time. Two endpoints sharing the same path would
+         * collide in Spring MVC's {@code RequestMappingHandlerMapping} (or silently overwrite each other's
+         * secret/type config in the resolver map); fail fast with a clear property validation message instead.
+         */
+        @AssertTrue(message = "webhooks.consumer.endpoints must not contain duplicate paths")
+        public boolean isEndpointPathsUnique() {
+            Set<String> paths = new HashSet<>();
+            for (Endpoint endpoint : endpoints) {
+                if (!paths.add(endpoint.getPath())) {
+                    return false;
+                }
+            }
+            return true;
         }
     }
 

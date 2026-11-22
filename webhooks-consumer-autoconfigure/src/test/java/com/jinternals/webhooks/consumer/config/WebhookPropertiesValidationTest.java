@@ -200,4 +200,31 @@ class WebhookPropertiesValidationTest {
         assertThat(validator.validate(properties))
                 .anySatisfy(v -> assertThat(v.getPropertyPath().toString()).contains("replayToleranceNonNegative"));
     }
+
+    @Test
+    void acceptsMultipleDistinctEndpointPaths() {
+        WebhookProperties properties = new WebhookProperties();
+        Endpoint crm = new Endpoint();
+        crm.setPath("/webhooks/crm");
+        Endpoint billing = new Endpoint();
+        billing.setPath("/webhooks/billing");
+        properties.getConsumer().getEndpoints().add(crm);
+        properties.getConsumer().getEndpoints().add(billing);
+
+        assertThat(validator.validate(properties)).isEmpty();
+    }
+
+    @Test
+    void rejectsDuplicateEndpointPaths() {
+        WebhookProperties properties = new WebhookProperties();
+        Endpoint first = new Endpoint();
+        first.setPath("/webhooks/crm");
+        Endpoint second = new Endpoint();
+        second.setPath("/webhooks/crm");
+        properties.getConsumer().getEndpoints().add(first);
+        properties.getConsumer().getEndpoints().add(second);
+
+        assertThat(validator.validate(properties))
+                .anySatisfy(v -> assertThat(v.getPropertyPath().toString()).contains("endpointPathsUnique"));
+    }
 }

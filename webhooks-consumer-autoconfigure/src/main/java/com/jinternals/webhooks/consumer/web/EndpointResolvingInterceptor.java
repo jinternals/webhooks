@@ -26,7 +26,9 @@ class EndpointResolvingInterceptor implements HandlerInterceptor {
 
     EndpointResolvingInterceptor(WebhookProperties properties) {
         for (Endpoint endpoint : properties.getConsumer().getEndpoints()) {
-            byPattern.put(endpoint.getPath(), endpoint);
+            if (byPattern.put(endpoint.getPath(), endpoint) != null) {
+                throw new IllegalStateException("Duplicate webhook endpoint path configured: " + endpoint.getPath());
+            }
         }
     }
 

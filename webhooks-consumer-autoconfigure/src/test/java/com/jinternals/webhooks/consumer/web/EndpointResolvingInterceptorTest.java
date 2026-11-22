@@ -1,6 +1,7 @@
 package com.jinternals.webhooks.consumer.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.jinternals.webhooks.consumer.config.WebhookProperties;
 import com.jinternals.webhooks.consumer.config.WebhookProperties.Endpoint;
@@ -58,5 +59,19 @@ class EndpointResolvingInterceptorTest {
         interceptor.preHandle(request, new MockHttpServletResponse(), new Object());
         assertThat(request.getAttribute(WebhookReceiveController.ENDPOINT_ATTRIBUTE))
                 .isNull();
+    }
+
+    @Test
+    void rejectsDuplicateEndpointPathsDefensively() {
+        Endpoint first = new Endpoint();
+        first.setPath("/webhooks/crm");
+        Endpoint second = new Endpoint();
+        second.setPath("/webhooks/crm");
+        WebhookProperties props = new WebhookProperties();
+        props.getConsumer().setEndpoints(List.of(first, second));
+
+        assertThatThrownBy(() -> new EndpointResolvingInterceptor(props))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Duplicate webhook endpoint path configured: /webhooks/crm");
     }
 }

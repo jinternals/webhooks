@@ -1,9 +1,8 @@
 package com.jinternals.webhooks.consumer.dispatch;
 
-import com.jinternals.webhooks.consumer.support.LogCapture;
-import org.junit.jupiter.api.Test;
-import org.slf4j.MDC;
+import static org.assertj.core.api.Assertions.assertThat;
 
+import com.jinternals.webhooks.consumer.support.LogCapture;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -14,8 +13,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.Test;
+import org.slf4j.MDC;
 
 class HandlerExecutorTest {
 
