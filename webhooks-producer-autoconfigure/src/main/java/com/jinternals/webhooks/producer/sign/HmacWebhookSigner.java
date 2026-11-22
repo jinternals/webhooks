@@ -4,6 +4,8 @@ import com.jinternals.webhooks.core.sign.SigningSchemeValidator;
 import com.jinternals.webhooks.core.sign.SymmetricKeys;
 import com.standardwebhooks.Webhook;
 import com.standardwebhooks.exceptions.WebhookSigningException;
+import java.util.concurrent.ConcurrentMap;
+import org.springframework.util.ConcurrentReferenceHashMap;
 
 /**
  * Symmetric {@code v1} {@link WebhookSigner}: a thin wrapper over the official {@code com.standardwebhooks}
@@ -13,8 +15,14 @@ import com.standardwebhooks.exceptions.WebhookSigningException;
  *
  * <p>The {@code endpointId} argument is ignored: the symmetric scheme does not sign an endpoint id (each
  * endpoint has its own unique secret, which already binds a message to its endpoint).
+ *
+ * <p>Validated {@link Webhook} key holders are cached in a soft-referenced {@link ConcurrentReferenceHashMap}
+ * so Base64 decoding and key validation happen once per distinct secret while remaining memory-safe under
+ * dynamic secret rotation.
  */
 public class HmacWebhookSigner implements WebhookSigner {
+
+    private final ConcurrentMap<String, Webhook> webhooks = new ConcurrentReferenceHashMap<>();
 
     @Override
     public String sign(String secret, String endpointId, String messageId, long timestamp, String payload) {
@@ -23,7 +31,8 @@ public class HmacWebhookSigner implements WebhookSigner {
         }
         SigningSchemeValidator.requireValidMessageId(messageId);
         try {
-            return doSign(newWebhook(secret), messageId, timestamp, payload);
+            Webhook webhook = webhooks.computeIfAbsent(secret, this::newWebhook);
+            return doSign(webhook, messageId, timestamp, payload);
         } catch (WebhookSigningException e) {
             throw new IllegalStateException("Failed to sign webhook payload: " + e.getMessage(), e);
         }

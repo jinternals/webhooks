@@ -4,6 +4,8 @@ import com.jinternals.webhooks.core.sign.Ed25519Keys;
 import com.jinternals.webhooks.core.sign.Ed25519Signatures;
 import com.jinternals.webhooks.core.sign.SigningSchemeValidator;
 import java.security.PrivateKey;
+import java.util.concurrent.ConcurrentMap;
+import org.springframework.util.ConcurrentReferenceHashMap;
 
 /**
  * Asymmetric {@code v2a} {@link WebhookSigner} (see SPEC.md §19i): signs outbound deliveries with Ed25519 over
@@ -20,6 +22,8 @@ import java.security.PrivateKey;
  */
 public class Ed25519WebhookSigner implements WebhookSigner {
 
+    private final ConcurrentMap<String, PrivateKey> privateKeys = new ConcurrentReferenceHashMap<>();
+
     @Override
     public String sign(String secret, String endpointId, String messageId, long timestamp, String payload) {
         if (secret == null || secret.isBlank()) {
@@ -33,7 +37,7 @@ public class Ed25519WebhookSigner implements WebhookSigner {
             throw new IllegalArgumentException("endpoint-id must not contain '.' — it is the signed-content delimiter");
         }
         SigningSchemeValidator.requireValidMessageId(messageId);
-        PrivateKey privateKey = Ed25519Keys.decodePrivateKey(secret);
+        PrivateKey privateKey = privateKeys.computeIfAbsent(secret, Ed25519Keys::decodePrivateKey);
         String signature = Ed25519Signatures.sign(privateKey, endpointId, messageId, timestamp, payload);
         return Ed25519Signatures.VERSION + "," + signature;
     }

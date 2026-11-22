@@ -123,4 +123,36 @@ class MicrometerWebhookMetricsTest {
         assertThat(registry.get("webhook.delivery.lag").summary().max()).isEqualTo((double) Long.MAX_VALUE);
         assertThat(registry.get("webhook.event.lag").summary().max()).isEqualTo(0.0);
     }
+
+    @Test
+    void memoizesCountersAndTimersAcrossRepeatedCallsForSameTag() {
+        SimpleMeterRegistry spyRegistry = org.mockito.Mockito.spy(new SimpleMeterRegistry());
+        MicrometerWebhookMetrics memoized = new MicrometerWebhookMetrics(spyRegistry);
+
+        memoized.received("contact.created");
+        memoized.received("contact.created");
+        memoized.verificationFailed("signature");
+        memoized.verificationFailed("signature");
+        memoized.handled("contact.created", Duration.ofMillis(10));
+        memoized.handled("contact.created", Duration.ofMillis(20));
+
+        assertThat(spyRegistry
+                        .get("webhook.received")
+                        .tag("type", "contact.created")
+                        .counter()
+                        .count())
+                .isEqualTo(2.0);
+        assertThat(spyRegistry
+                        .get("webhook.verification.failed")
+                        .tag("reason", "signature")
+                        .counter()
+                        .count())
+                .isEqualTo(2.0);
+        assertThat(spyRegistry
+                        .get("webhook.handle.duration")
+                        .tag("type", "contact.created")
+                        .timer()
+                        .count())
+                .isEqualTo(2L);
+    }
 }

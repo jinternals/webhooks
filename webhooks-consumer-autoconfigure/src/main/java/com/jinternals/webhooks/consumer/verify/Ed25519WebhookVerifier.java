@@ -5,6 +5,8 @@ import com.jinternals.webhooks.core.sign.Ed25519Signatures;
 import java.security.PublicKey;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentMap;
+import org.springframework.util.ConcurrentReferenceHashMap;
 
 /**
  * Asymmetric {@code v2a} {@link WebhookVerifier} (see SPEC.md §8e): verifies an inbound webhook against an
@@ -27,6 +29,7 @@ import java.util.Map;
 public class Ed25519WebhookVerifier implements WebhookVerifier {
 
     private final TimestampValidator timestampValidator;
+    private final ConcurrentMap<String, PublicKey> publicKeys = new ConcurrentReferenceHashMap<>();
 
     public Ed25519WebhookVerifier(TimestampValidator timestampValidator) {
         this.timestampValidator = timestampValidator;
@@ -59,7 +62,7 @@ public class Ed25519WebhookVerifier implements WebhookVerifier {
     boolean matches(String secret, String endpointId, String rawBody, WebhookSignatureHeaders parsed)
             throws WebhookVerificationFailure {
         requireValidEndpointId(endpointId);
-        PublicKey publicKey = Ed25519Keys.decodePublicKey(secret);
+        PublicKey publicKey = publicKeys.computeIfAbsent(secret, Ed25519Keys::decodePublicKey);
         for (String versioned : parsed.signature.split(" ")) {
             String[] parts = versioned.split(",", 2);
             if (parts.length < 2 || !Ed25519Signatures.VERSION.equals(parts[0])) {

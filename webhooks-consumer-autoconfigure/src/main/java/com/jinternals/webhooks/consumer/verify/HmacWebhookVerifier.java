@@ -7,6 +7,8 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentMap;
+import org.springframework.util.ConcurrentReferenceHashMap;
 
 /**
  * Default {@link WebhookVerifier}: verifies an inbound webhook against an endpoint's secret(s) using the
@@ -32,13 +34,14 @@ import java.util.Map;
  * <p>Signature comparison is constant-time ({@link MessageDigest#isEqual}). Throws
  * {@link WebhookVerificationException} on any failure.
  *
- * <p>A {@link Webhook} is constructed per verification. Construction only strips the {@code whsec_} prefix
- * and Base64-decodes the secret into a key array (no {@code Mac} is retained), so there is nothing worth
- * caching on a path that then computes an HMAC per candidate secret.
+ * <p>Validated {@link Webhook} key holders are cached in a soft-referenced {@link ConcurrentReferenceHashMap}
+ * so Base64 decoding and key validation happen once per distinct secret rather than on every inbound request,
+ * while remaining memory-safe under dynamic secret rotation.
  */
 public class HmacWebhookVerifier implements WebhookVerifier {
 
     private final TimestampValidator timestampValidator;
+    private final ConcurrentMap<String, Webhook> webhooks = new ConcurrentReferenceHashMap<>();
 
     public HmacWebhookVerifier(TimestampValidator timestampValidator) {
         this.timestampValidator = timestampValidator;
@@ -86,8 +89,9 @@ public class HmacWebhookVerifier implements WebhookVerifier {
     /** The bare (unversioned) expected signature for the inputs, via the official library's HMAC. */
     private String expectedSignature(String secret, String msgId, long timestamp, String rawBody) {
         try {
+            Webhook webhook = webhooks.computeIfAbsent(secret, this::newWebhook);
             // Webhook#sign returns "v1,<base64>"; we compare the base64 portion.
-            return doSign(newWebhook(secret), msgId, timestamp, rawBody).split(",")[1];
+            return doSign(webhook, msgId, timestamp, rawBody).split(",")[1];
         } catch (WebhookSigningException e) {
             // A valid (already-constructed) secret never fails to sign, so this is unreachable in
             // practice; surface a misconfiguration rather than a silent non-match if it ever does.

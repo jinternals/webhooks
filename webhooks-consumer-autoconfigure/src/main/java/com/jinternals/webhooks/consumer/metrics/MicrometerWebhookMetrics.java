@@ -5,6 +5,8 @@ import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import java.time.Duration;
+import java.util.concurrent.ConcurrentMap;
+import org.springframework.util.ConcurrentReferenceHashMap;
 
 /**
  * {@link WebhookMetrics} backed by a Micrometer {@link MeterRegistry} (see SPEC.md §20.6/A4,
@@ -28,6 +30,9 @@ public final class MicrometerWebhookMetrics implements WebhookMetrics {
     private final MeterRegistry registry;
     private final DistributionSummary deliveryLag;
     private final DistributionSummary eventLag;
+    private final ConcurrentMap<String, Counter> receivedCounters = new ConcurrentReferenceHashMap<>();
+    private final ConcurrentMap<String, Counter> verificationFailedCounters = new ConcurrentReferenceHashMap<>();
+    private final ConcurrentMap<String, Timer> handleTimers = new ConcurrentReferenceHashMap<>();
 
     public MicrometerWebhookMetrics(MeterRegistry registry) {
         this.registry = registry;
@@ -43,28 +48,31 @@ public final class MicrometerWebhookMetrics implements WebhookMetrics {
 
     @Override
     public void received(String type) {
-        Counter.builder("webhook.received")
-                .description("Verified webhooks accepted for dispatch")
-                .tag("type", type)
-                .register(registry)
+        receivedCounters
+                .computeIfAbsent(type, t -> Counter.builder("webhook.received")
+                        .description("Verified webhooks accepted for dispatch")
+                        .tag("type", t)
+                        .register(registry))
                 .increment();
     }
 
     @Override
     public void verificationFailed(String reason) {
-        Counter.builder("webhook.verification.failed")
-                .description("Inbound webhooks that failed verification")
-                .tag("reason", reason)
-                .register(registry)
+        verificationFailedCounters
+                .computeIfAbsent(reason, r -> Counter.builder("webhook.verification.failed")
+                        .description("Inbound webhooks that failed verification")
+                        .tag("reason", r)
+                        .register(registry))
                 .increment();
     }
 
     @Override
     public void handled(String type, Duration duration) {
-        Timer.builder("webhook.handle.duration")
-                .description("Handler execution time")
-                .tag("type", type)
-                .register(registry)
+        handleTimers
+                .computeIfAbsent(type, t -> Timer.builder("webhook.handle.duration")
+                        .description("Handler execution time")
+                        .tag("type", t)
+                        .register(registry))
                 .record(duration);
     }
 

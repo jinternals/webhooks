@@ -259,4 +259,27 @@ class HmacWebhookVerifierTest {
                 .hasMessageContaining("Failed to compute expected signature")
                 .hasMessageContaining("boom");
     }
+
+    @Test
+    void reusesCachedWebhookInstanceAcrossVerificationsForSameSecret() {
+        List<Webhook> seen = new ArrayList<>();
+        HmacWebhookVerifier observing = new HmacWebhookVerifier(new NoOpTimestampValidator()) {
+            @Override
+            String doSign(Webhook webhook, String msgId, long timestamp, String rawBody)
+                    throws WebhookSigningException {
+                seen.add(webhook);
+                return super.doSign(webhook, msgId, timestamp, rawBody);
+            }
+        };
+        String body = "{\"a\":1}";
+        String ts = Signing.now();
+        String sig1 = Signing.sign(Signing.SECRET, "msg_a", ts, body);
+        String sig2 = Signing.sign(Signing.SECRET, "msg_b", ts, body);
+
+        observing.verify(List.of(Signing.SECRET), null, body, headers("msg_a", ts, sig1));
+        observing.verify(List.of(Signing.SECRET), null, body, headers("msg_b", ts, sig2));
+
+        assertThat(seen).hasSize(2);
+        assertThat(seen.get(1)).isSameAs(seen.get(0));
+    }
 }

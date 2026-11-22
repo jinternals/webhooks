@@ -44,11 +44,21 @@ class HmacWebhookSignerTest {
     }
 
     @Test
-    void signingIsDeterministicAcrossCalls() {
-        // Same secret + inputs → identical signature on every call (a fresh Webhook per sign, no cache).
-        String first = signer.sign(SECRET, null, "msg_1", 1700000000L, "{\"a\":1}");
-        String second = signer.sign(SECRET, null, "msg_1", 1700000000L, "{\"a\":1}");
+    void signingIsDeterministicAndReusesCachedWebhookAcrossCalls() {
+        java.util.List<Webhook> seen = new java.util.ArrayList<>();
+        HmacWebhookSigner observing = new HmacWebhookSigner() {
+            @Override
+            String doSign(Webhook webhook, String messageId, long timestamp, String payload)
+                    throws WebhookSigningException {
+                seen.add(webhook);
+                return super.doSign(webhook, messageId, timestamp, payload);
+            }
+        };
+        String first = observing.sign(SECRET, null, "msg_1", 1700000000L, "{\"a\":1}");
+        String second = observing.sign(SECRET, null, "msg_1", 1700000000L, "{\"a\":1}");
         assertThat(second).isEqualTo(first);
+        assertThat(seen).hasSize(2);
+        assertThat(seen.get(1)).isSameAs(seen.get(0));
     }
 
     @Test
