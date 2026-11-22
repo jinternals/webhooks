@@ -17,7 +17,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.5.16</version>
+        <version>4.1.2</version>
         <relativePath/>
     </parent>
 
@@ -38,7 +38,7 @@
         <!-- Version of the published webhooks-* libraries the samples consume. -->
         <webhooks.version>0.1.0-SNAPSHOT</webhooks.version>
         <!-- Code formatting, matching the libraries' house style (Palantir Java Format: 4-space, 120-col). -->
-        <spotless.version>2.44.5</spotless.version>
+        <spotless.version>3.11.0</spotless.version>
     </properties>
 
     <dependencyManagement>
