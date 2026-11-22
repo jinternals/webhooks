@@ -1,9 +1,10 @@
 package com.jinternals.webhooks.sample.consumer.nats;
 
 import com.jinternals.webhooks.core.redact.WebhookRedactor;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -18,8 +19,15 @@ import org.springframework.stereotype.Service;
 public class ContactProjectionService {
 
     private static final Logger log = LoggerFactory.getLogger(ContactProjectionService.class);
+    private static final int MAX_RETAINED_PROJECTIONS = 10_000;
 
-    private final Map<String, InboundWebhookMessage> processedByWebhookId = new ConcurrentHashMap<>();
+    private final Map<String, InboundWebhookMessage> processedByWebhookId =
+            Collections.synchronizedMap(new LinkedHashMap<>(256, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<String, InboundWebhookMessage> eldest) {
+                    return size() > MAX_RETAINED_PROJECTIONS;
+                }
+            });
     private volatile boolean failNext = false;
 
     public void process(InboundWebhookMessage message) {
@@ -46,7 +54,9 @@ public class ContactProjectionService {
     }
 
     public List<InboundWebhookMessage> processed() {
-        return List.copyOf(processedByWebhookId.values());
+        synchronized (processedByWebhookId) {
+            return List.copyOf(processedByWebhookId.values());
+        }
     }
 
     public void clear() {

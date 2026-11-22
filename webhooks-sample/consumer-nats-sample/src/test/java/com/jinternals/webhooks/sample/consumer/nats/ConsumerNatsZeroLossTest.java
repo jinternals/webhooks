@@ -6,7 +6,9 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -105,7 +107,7 @@ class ConsumerNatsZeroLossTest {
                 long rev = revisionSeq.getAndIncrement();
                 if (kvStore.putIfAbsent(key, new StoredKvEntry(val, Instant.ofEpochSecond(epochSeconds.get()), rev))
                         != null) {
-                    throw mock(JetStreamApiException.class);
+                    throw wrongLastSequence();
                 }
                 return rev;
             });
@@ -135,7 +137,7 @@ class ConsumerNatsZeroLossTest {
                     return existing;
                 });
                 if (!updated[0]) {
-                    throw mock(JetStreamApiException.class);
+                    throw wrongLastSequence();
                 }
                 return nextRev;
             });
@@ -152,7 +154,31 @@ class ConsumerNatsZeroLossTest {
                     })
                     .when(kv)
                     .delete(anyString());
+            doAnswer(inv -> {
+                        String key = inv.getArgument(0);
+                        long expectedRev = inv.getArgument(1);
+                        boolean[] deleted = {false};
+                        kvStore.computeIfPresent(key, (k, existing) -> {
+                            if (existing.revision() == expectedRev) {
+                                deleted[0] = true;
+                                return null;
+                            }
+                            return existing;
+                        });
+                        if (!deleted[0] && kvStore.containsKey(key)) {
+                            throw wrongLastSequence();
+                        }
+                        return null;
+                    })
+                    .when(kv)
+                    .delete(anyString(), anyLong());
             return kv;
+        }
+
+        private static JetStreamApiException wrongLastSequence() {
+            JetStreamApiException ex = mock(JetStreamApiException.class);
+            when(ex.getApiErrorCode()).thenReturn(NatsKvIdempotencyGuard.JS_WRONG_LAST_SEQUENCE);
+            return ex;
         }
 
         @Bean
@@ -169,7 +195,7 @@ class ConsumerNatsZeroLossTest {
                         inboundPayloads.add(inv.getArgument(1));
                         return ack;
                     });
-            when(js.publish(eq("webhooks.inbound.dlq.events"), any(byte[].class)))
+            when(js.publish(eq("webhooks.inbound.dlq.events"), any(byte[].class), any(PublishOptions.class)))
                     .thenAnswer(inv -> {
                         dlqPayloads.add(inv.getArgument(1));
                         return ack;
@@ -189,6 +215,9 @@ class ConsumerNatsZeroLossTest {
 
     @Autowired
     private LoggingHandlerFailureListener failureListener;
+
+    @Autowired
+    private NatsKvIdempotencyGuard idempotencyGuard;
 
     @Autowired
     private InMemoryNatsConsumerTestConfig natsState;
@@ -357,5 +386,38 @@ class ConsumerNatsZeroLossTest {
         verify(finalAttempt).term();
         assertThat(natsState.dlqPayloads).hasSize(1);
         assertThat(failureListener.failedTypes()).containsExactly("contact.created");
+    }
+
+    @Test
+    void stalePodReleaseDoesNotWipeSiblingProcessedStateAndAckFailureDoesNotFalseDlq() throws Exception {
+        epochSeconds.set(Instant.now().getEpochSecond());
+        natsState.kvStore.clear();
+        natsState.dlqPayloads.clear();
+        failureListener.clear();
+        projectionService.clear();
+
+        // 1) Pod 1 reserves "msg_stale_pod_1" -> stalls -> Pod 2 reclaims & marks "processed" -> Pod 1 calls release()
+        String msgId = "msg_stale_pod_1";
+        String key = NatsKvIdempotencyGuard.encodeKey(msgId);
+        assertThat(idempotencyGuard.tryBegin(msgId)).isTrue();
+        // Simulate Pod 2 updating the KV entry to "processed" with a newer revision while Pod 1 was stalled
+        natsState.kvStore.put(key, new StoredKvEntry("processed", Instant.ofEpochSecond(epochSeconds.get()), 999L));
+        idempotencyGuard.release(msgId);
+        // Revision-checked delete MUST NOT wipe Pod 2's "processed" state!
+        assertThat(natsState.kvStore.get(key).value()).isEqualTo("processed");
+
+        // 2) If projectionService.process() succeeds on final attempt (2/2) and ackSync times out, DO NOT false-DLQ!
+        byte[] payload =
+                "{\"webhookId\":\"msg_ack_timeout\",\"type\":\"contact.created\",\"endpointPath\":\"/webhooks/crm\",\"traceId\":null,\"contact\":{\"id\":\"c-ack\",\"fullName\":\"Donald Knuth\",\"email\":\"knuth@example.com\"}}"
+                        .getBytes(StandardCharsets.UTF_8);
+        Message ackTimeoutMsg = mockJetStreamMessage(payload, 2L);
+        doThrow(new java.util.concurrent.TimeoutException("ack timed out"))
+                .when(ackTimeoutMsg)
+                .ackSync(any());
+        inboundWorker.processOne(ackTimeoutMsg);
+        verify(ackTimeoutMsg, never()).term();
+        assertThat(natsState.dlqPayloads).isEmpty();
+        assertThat(failureListener.failedTypes()).isEmpty();
+        assertThat(projectionService.processed()).hasSize(1);
     }
 }

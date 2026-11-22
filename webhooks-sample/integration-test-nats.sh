@@ -13,9 +13,11 @@ COMPOSE="docker compose -f docker-compose.nats.yml"
 PRODUCER="http://localhost:9092"
 CONSUMER="http://localhost:9093"
 PASS=0; FAIL=0
+TMP_OUT=$(mktemp)
 
 cleanup() {
   echo "== Tearing down NATS stack =="
+  rm -f "$TMP_OUT"
   $COMPOSE down -v --remove-orphans >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
@@ -40,11 +42,15 @@ done
 
 echo "== Publishing contact.created via producer-nats =="
 BODY='{"id":"c-nats-1","fullName":"Ada Lovelace","email":"ada@example.com"}'
-HTTP_CODE=$(curl -s -o /tmp/publish-nats-out.txt -w '%{http_code}' \
+HTTP_CODE=$(curl -s -o "$TMP_OUT" -w '%{http_code}' \
   -X POST "$PRODUCER/publish/contact-created" \
   -H 'content-type: application/json' --data "$BODY")
-echo "  producer-nats responded $HTTP_CODE: $(cat /tmp/publish-nats-out.txt)"
-[ "$HTTP_CODE" = "202" ]; check "producer-nats persisted webhook to NATS JetStream (202)" $?
+echo "  producer-nats responded $HTTP_CODE: $(cat "$TMP_OUT")"
+if [ "$HTTP_CODE" = "202" ]; then
+  check "producer-nats persisted webhook to NATS JetStream (202)" 0
+else
+  check "producer-nats persisted webhook to NATS JetStream (202)" 1
+fi
 
 echo "== Waiting for relay -> consumer-nats -> inbound worker =="
 for i in $(seq 1 20); do

@@ -11,8 +11,9 @@ import org.springframework.stereotype.Component;
 
 /**
  * Handlers for the <strong>multi-type</strong> CRM endpoint ({@code /webhooks/crm}). One URL feeds
- * three event types, each routed to its own handler. Also demonstrates all three supported handler
- * signatures (event only; event + metadata; metadata + event).
+ * three event types, each routed to its own handler. Demonstrates both parameter orders for
+ * {@code (Event, WebhookMetadata)} and {@code (WebhookMetadata, Event)} (see {@link BillingHandlers} for the
+ * single-argument {@code (Event)} signature).
  */
 @Component
 public class ContactHandlers {

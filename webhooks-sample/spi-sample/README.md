@@ -11,9 +11,9 @@ Standalone Spring Boot application (`:9096`) demonstrating:
 
 ```mermaid
 flowchart LR
-    Client["@WebhookClient (CrmWebhooks)"] --> DestSec["@Bean('destinationSecretProvider')<br/>SecretProvider<Destination>"]
+    Client["@WebhookClient (CrmWebhooks)"] --> DestSec["@Bean('destinationSecretProvider')<br/>SecretProvider&lt;Destination&gt;"]
     Client --> Guard["PrivateIpBlockingUrlValidator<br/>(DestinationUrlValidator)"]
-    Client -->|"POST /webhooks/crm"| EpSec["@Bean SecretProvider<Endpoint>"]
+    Client -->|"POST /webhooks/crm"| EpSec["@Bean SecretProvider&lt;Endpoint&gt;"]
     EpSec --> Idemp["SharedStoreIdempotencyGuard<br/>(tryBegin / markProcessed / release)"]
     Idemp --> Meta["tenantMetadataContributor<br/>(x-tenant-id -> attributes)"]
     Meta --> Handler["@WebhookHandler (ContactHandlers)"]
@@ -36,4 +36,9 @@ flowchart LR
 # From webhooks-sample/
 mvn -pl spi-sample test
 mvn -pl spi-sample spring-boot:run
+
+# Trigger loopback publish -> verify -> handle via custom SPIs:
+curl -i -X POST http://localhost:9096/publish/contact-created \
+  -H 'content-type: application/json' \
+  -d '{"id":"c-spi-1","fullName":"Ada Lovelace","email":"ada@example.com"}'
 ```

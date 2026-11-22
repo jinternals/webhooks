@@ -55,6 +55,8 @@ public class SharedStoreIdempotencyGuard implements IdempotencyGuard {
     }
 
     public static final class InMemoryKeyValueStore implements KeyValueStore {
+        private static final int MAX_ENTRIES = 10_000;
+
         private record Entry(String value, Instant expiresAt) {}
 
         private final Map<String, Entry> entries = new ConcurrentHashMap<>();
@@ -62,6 +64,7 @@ public class SharedStoreIdempotencyGuard implements IdempotencyGuard {
         @Override
         public boolean setIfAbsent(String key, String value, Duration ttl) {
             Instant now = Instant.now();
+            evictExpiredIfOverCapacity(now);
             boolean[] inserted = {false};
             entries.compute(key, (k, existing) -> {
                 if (existing == null || !existing.expiresAt().isAfter(now)) {
@@ -75,12 +78,20 @@ public class SharedStoreIdempotencyGuard implements IdempotencyGuard {
 
         @Override
         public void set(String key, String value, Duration ttl) {
-            entries.put(key, new Entry(value, Instant.now().plus(ttl)));
+            Instant now = Instant.now();
+            evictExpiredIfOverCapacity(now);
+            entries.put(key, new Entry(value, now.plus(ttl)));
         }
 
         @Override
         public void delete(String key) {
             entries.remove(key);
+        }
+
+        private void evictExpiredIfOverCapacity(Instant now) {
+            if (entries.size() >= MAX_ENTRIES) {
+                entries.entrySet().removeIf(e -> !e.getValue().expiresAt().isAfter(now));
+            }
         }
     }
 }

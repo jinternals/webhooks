@@ -5,6 +5,7 @@ import io.nats.client.JetStream;
 import io.nats.client.JetStreamApiException;
 import io.nats.client.JetStreamManagement;
 import io.nats.client.Nats;
+import io.nats.client.Options;
 import io.nats.client.api.AckPolicy;
 import io.nats.client.api.ConsumerConfiguration;
 import io.nats.client.api.RetentionPolicy;
@@ -12,6 +13,8 @@ import io.nats.client.api.StorageType;
 import io.nats.client.api.StreamConfiguration;
 import java.io.IOException;
 import java.time.Duration;
+import org.springframework.boot.actuate.health.Health;
+import org.springframework.boot.actuate.health.HealthIndicator;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -22,7 +25,22 @@ public class NatsJetStreamConfiguration {
 
     @Bean(destroyMethod = "close")
     Connection natsConnection(NatsProducerProperties properties) throws IOException, InterruptedException {
-        return Nats.connect(properties.getUrl());
+        Options options = Options.builder()
+                .server(properties.getUrl())
+                .maxReconnects(-1)
+                .reconnectWait(Duration.ofSeconds(2))
+                .build();
+        return Nats.connect(options);
+    }
+
+    @Bean
+    HealthIndicator natsHealthIndicator(Connection connection) {
+        return () -> {
+            Connection.Status status = connection.getStatus();
+            return status == Connection.Status.CONNECTED
+                    ? Health.up().withDetail("status", status.name()).build()
+                    : Health.down().withDetail("status", status.name()).build();
+        };
     }
 
     @Bean

@@ -23,12 +23,10 @@ flowchart LR
 ## Run & test
 
 ```bash
+# From webhooks-sample/
 # Run @SpringBootTest (verifies JWT bearer header + webhook-* headers across retry attempts)
 mvn -pl producer-auth-sample test
 
-# Run live with consumer-auth-sample via Docker Compose
-docker compose -f docker-compose.auth.yml up --build -d
-curl -i -X POST http://localhost:9094/publish/contact-created \
-  -H 'content-type: application/json' \
-  -d '{"id":"c-auth-1","fullName":"Ada Lovelace","email":"ada@example.com"}'
+# Run end-to-end Docker integration test with consumer-auth-sample
+./integration-test-auth.sh
 ```

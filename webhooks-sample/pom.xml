@@ -5,14 +5,15 @@
     <modelVersion>4.0.0</modelVersion>
 
     <!--
-      Parent + aggregator for the two STANDALONE sample apps (producer + consumer). This reactor is
-      deliberately separate from the libraries' webhooks-parent: the samples depend on the PUBLISHED
-      webhooks-* artifacts, not on sibling modules. Build/install the libraries first, then build here:
+      Parent + aggregator for the seven STANDALONE sample apps (quickstart, NATS JetStream zero-loss,
+      OAuth2 JWT auth, and custom SPI overrides). This reactor is deliberately separate from the
+      libraries' webhooks-parent: the samples depend on the PUBLISHED webhooks-* artifacts, not on
+      sibling modules. Build/install the libraries first, then build here:
 
           (repo root) mvn -pl webhooks-consumer-starter,webhooks-producer-starter -am install
-          (webhooks-sample/)   mvn install
+          (webhooks-sample/)   mvn verify
 
-      Or use Docker (see docker-compose.yml + integration-test.sh in this directory).
+      Or use Docker (see docker-compose*.yml + integration-test*.sh in this directory).
     -->
     <parent>
         <groupId>org.springframework.boot</groupId>
@@ -26,7 +27,7 @@
     <version>0.1.0-SNAPSHOT</version>
     <packaging>pom</packaging>
     <name>webhooks-sample</name>
-    <description>Standalone sample apps for the webhooks toolkit: one producer, one consumer</description>
+    <description>Standalone sample apps for the webhooks toolkit (quickstart, NATS JetStream, OAuth2 auth, custom SPIs)</description>
 
     <modules>
         <module>producer-sample</module>
@@ -109,4 +110,27 @@
             </plugins>
         </pluginManagement>
     </build>
+
+    <profiles>
+        <profile>
+            <id>format</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>com.diffplug.spotless</groupId>
+                        <artifactId>spotless-maven-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>spotless-check</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>check</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

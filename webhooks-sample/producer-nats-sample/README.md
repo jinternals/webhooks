@@ -42,10 +42,13 @@ every delivery attempt, `NatsOutboundRelayWorker` computes a **fresh `webhook-ti
 ## Run & test
 
 ```bash
-# Run offline @SpringBootTest suite (uses in-memory JetStream test harness + local HttpServer)
+# From webhooks-sample/
+# 1) Offline @SpringBootTest suite (uses in-memory JetStream test harness + local HttpServer)
 mvn -pl producer-nats-sample test
 
-# Run full Docker stack with real NATS JetStream + consumer-nats-sample
-docker compose -f docker-compose.nats.yml up --build -d
+# 2) End-to-end Docker integration test (starts NATS + producer-nats + consumer-nats, asserts delivery, tears down)
 ./integration-test-nats.sh
+
+# 3) Or keep the stack running interactively:
+docker compose -f docker-compose.nats.yml up --build -d
 ```

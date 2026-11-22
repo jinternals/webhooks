@@ -2,7 +2,7 @@ package com.jinternals.webhooks.sample.consumer.nats;
 
 import com.jinternals.webhooks.consumer.dispatch.HandlerFailureListener;
 import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ConcurrentLinkedDeque;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -11,19 +11,27 @@ import org.springframework.stereotype.Component;
 public class LoggingHandlerFailureListener implements HandlerFailureListener {
 
     private static final Logger log = LoggerFactory.getLogger(LoggingHandlerFailureListener.class);
+    private static final int MAX_RETAINED_FAILURES = 1_000;
 
-    private final List<String> failedTypes = new CopyOnWriteArrayList<>();
+    private final ConcurrentLinkedDeque<String> failedTypes = new ConcurrentLinkedDeque<>();
 
     @Override
     public void onHandlerFailed(String type, Throwable cause) {
         log.error("Inbound webhook moved to DLQ for type={}: {}", type, cause.getMessage(), cause);
-        failedTypes.add(type);
+        record(type);
     }
 
     @Override
     public void onHandlerTimeout(String type) {
         log.error("Inbound webhook timed out for type={}", type);
-        failedTypes.add(type);
+        record(type);
+    }
+
+    private void record(String type) {
+        failedTypes.addLast(type);
+        while (failedTypes.size() > MAX_RETAINED_FAILURES) {
+            failedTypes.pollFirst();
+        }
     }
 
     public List<String> failedTypes() {

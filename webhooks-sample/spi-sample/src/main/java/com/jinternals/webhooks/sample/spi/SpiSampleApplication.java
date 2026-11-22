@@ -17,7 +17,7 @@ import com.jinternals.webhooks.producer.transport.DeliveryFailure;
 import com.jinternals.webhooks.producer.transport.WebhookDeliveryListener;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ConcurrentLinkedDeque;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -26,7 +26,11 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RestController;
 
 /**
  * Standalone sample demonstrating custom SPI bean overrides from {@code docs/reference/beans-and-spis.md},
@@ -107,23 +111,34 @@ public class SpiSampleApplication {
 
     @Component
     public static class RecordedHooks implements HandlerFailureListener, WebhookDeliveryListener {
-        private final List<DeliveryFailure> deliveryFailures = new CopyOnWriteArrayList<>();
-        private final List<String> asyncHandlerFailures = new CopyOnWriteArrayList<>();
+        private static final int MAX_RETAINED = 1_000;
+        private final ConcurrentLinkedDeque<DeliveryFailure> deliveryFailures = new ConcurrentLinkedDeque<>();
+        private final ConcurrentLinkedDeque<String> asyncHandlerFailures = new ConcurrentLinkedDeque<>();
 
         @Override
         public void onDeliveryFailed(DeliveryFailure failure) {
             log.warn("Captured abandoned delivery url={} reason={}", failure.url(), failure.reason());
-            deliveryFailures.add(failure);
+            deliveryFailures.addLast(failure);
+            while (deliveryFailures.size() > MAX_RETAINED) {
+                deliveryFailures.pollFirst();
+            }
         }
 
         @Override
         public void onHandlerFailed(String type, Throwable cause) {
-            asyncHandlerFailures.add("failed:" + type);
+            recordAsync("failed:" + type);
         }
 
         @Override
         public void onHandlerTimeout(String type) {
-            asyncHandlerFailures.add("timeout:" + type);
+            recordAsync("timeout:" + type);
+        }
+
+        private void recordAsync(String entry) {
+            asyncHandlerFailures.addLast(entry);
+            while (asyncHandlerFailures.size() > MAX_RETAINED) {
+                asyncHandlerFailures.pollFirst();
+            }
         }
 
         public List<DeliveryFailure> deliveryFailures() {
@@ -137,11 +152,15 @@ public class SpiSampleApplication {
 
     @Component
     public static class ContactHandlers {
-        private final List<WebhookMetadata> received = new CopyOnWriteArrayList<>();
+        private static final int MAX_RETAINED = 1_000;
+        private final ConcurrentLinkedDeque<WebhookMetadata> received = new ConcurrentLinkedDeque<>();
 
         @WebhookHandler
         public void onCreated(ContactCreated event, WebhookMetadata metadata) {
-            received.add(metadata);
+            received.addLast(metadata);
+            while (received.size() > MAX_RETAINED) {
+                received.pollFirst();
+            }
             log.info("Handled {} via custom SPIs: {}", metadata.webhookId(), metadata.redactedEvent());
         }
 
@@ -151,6 +170,21 @@ public class SpiSampleApplication {
 
         public void clear() {
             received.clear();
+        }
+    }
+
+    @RestController
+    static class SpiPublishController {
+        private final CrmWebhooks crmWebhooks;
+
+        SpiPublishController(CrmWebhooks crmWebhooks) {
+            this.crmWebhooks = crmWebhooks;
+        }
+
+        @PostMapping("/publish/contact-created")
+        ResponseEntity<String> publish(@RequestBody ContactCreated event) {
+            crmWebhooks.contactCreated(event);
+            return ResponseEntity.accepted().body("published");
         }
     }
 }

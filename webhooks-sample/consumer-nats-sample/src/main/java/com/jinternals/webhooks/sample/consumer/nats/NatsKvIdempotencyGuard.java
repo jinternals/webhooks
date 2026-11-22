@@ -9,6 +9,10 @@ import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.Base64;
+import java.util.HashMap;
+import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
@@ -39,6 +43,11 @@ import org.springframework.stereotype.Component;
 @Component
 public class NatsKvIdempotencyGuard implements IdempotencyGuard {
 
+    private static final Logger log = LoggerFactory.getLogger(NatsKvIdempotencyGuard.class);
+
+    /** NATS JetStream error code 10071: {@code wrong last sequence} (optimistic CAS revision mismatch). */
+    static final int JS_WRONG_LAST_SEQUENCE = 10071;
+
     private static final String STATE_PROCESSED = "processed";
     private static final byte[] IN_FLIGHT = "in-flight".getBytes(StandardCharsets.UTF_8);
     private static final byte[] PROCESSED = STATE_PROCESSED.getBytes(StandardCharsets.UTF_8);
@@ -46,6 +55,7 @@ public class NatsKvIdempotencyGuard implements IdempotencyGuard {
     private final KeyValue keyValue;
     private final NatsConsumerProperties properties;
     private final Clock clock;
+    private final ThreadLocal<Map<String, Long>> ownedRevisions = ThreadLocal.withInitial(HashMap::new);
 
     public NatsKvIdempotencyGuard(
             KeyValue keyValue, NatsConsumerProperties properties, ObjectProvider<Clock> clockProvider) {
@@ -61,10 +71,14 @@ public class NatsKvIdempotencyGuard implements IdempotencyGuard {
         }
         String key = encodeKey(webhookId);
         try {
-            keyValue.create(key, IN_FLIGHT);
+            long rev = keyValue.create(key, IN_FLIGHT);
+            recordOwnedRevision(key, rev);
             return true;
-        } catch (JetStreamApiException alreadyExists) {
-            return resolveExistingEntry(key, webhookId);
+        } catch (JetStreamApiException e) {
+            if (e.getApiErrorCode() == JS_WRONG_LAST_SEQUENCE) {
+                return resolveExistingEntry(key, webhookId);
+            }
+            throw new IllegalStateException("Failed to reserve webhook-id in NATS KV: " + webhookId, e);
         } catch (IOException e) {
             throw new IllegalStateException("Failed to reserve webhook-id in NATS KV: " + webhookId, e);
         }
@@ -74,7 +88,8 @@ public class NatsKvIdempotencyGuard implements IdempotencyGuard {
         try {
             KeyValueEntry entry = keyValue.get(key);
             if (entry == null) {
-                keyValue.create(key, IN_FLIGHT);
+                long rev = keyValue.create(key, IN_FLIGHT);
+                recordOwnedRevision(key, rev);
                 return true;
             }
             if (STATE_PROCESSED.equals(entry.getValueAsString())) {
@@ -82,14 +97,18 @@ public class NatsKvIdempotencyGuard implements IdempotencyGuard {
             }
             Duration age = Duration.between(entry.getCreated().toInstant(), clock.instant());
             if (age.compareTo(properties.getInFlightLease()) > 0) {
-                keyValue.update(key, IN_FLIGHT, entry.getRevision());
+                long rev = keyValue.update(key, IN_FLIGHT, entry.getRevision());
+                recordOwnedRevision(key, rev);
                 return true;
             }
             throw new IllegalStateException(
                     "Webhook " + webhookId + " is currently in-flight on another consumer instance");
-        } catch (JetStreamApiException casLost) {
-            throw new IllegalStateException(
-                    "Concurrent in-flight contention for webhook " + webhookId + "; retry", casLost);
+        } catch (JetStreamApiException e) {
+            if (e.getApiErrorCode() == JS_WRONG_LAST_SEQUENCE) {
+                throw new IllegalStateException(
+                        "Concurrent in-flight contention for webhook " + webhookId + "; retry", e);
+            }
+            throw new IllegalStateException("Failed to inspect/reclaim webhook-id in NATS KV: " + webhookId, e);
         } catch (IOException e) {
             throw new IllegalStateException("Failed to inspect webhook-id in NATS KV: " + webhookId, e);
         }
@@ -100,8 +119,10 @@ public class NatsKvIdempotencyGuard implements IdempotencyGuard {
         if (webhookId == null || webhookId.isBlank()) {
             return;
         }
+        String key = encodeKey(webhookId);
+        popOwnedRevision(key);
         try {
-            keyValue.put(encodeKey(webhookId), PROCESSED);
+            keyValue.put(key, PROCESSED);
         } catch (IOException | JetStreamApiException e) {
             throw new IllegalStateException("Failed to mark webhook-id processed in NATS KV: " + webhookId, e);
         }
@@ -112,11 +133,38 @@ public class NatsKvIdempotencyGuard implements IdempotencyGuard {
         if (webhookId == null || webhookId.isBlank()) {
             return;
         }
+        String key = encodeKey(webhookId);
+        Long ownedRevision = popOwnedRevision(key);
         try {
-            keyValue.delete(encodeKey(webhookId));
-        } catch (IOException | JetStreamApiException e) {
+            if (ownedRevision != null) {
+                // Revision-checked CAS delete: never wipe out a sibling pod's reclaimed lease or "processed" state!
+                keyValue.delete(key, ownedRevision);
+            } else {
+                keyValue.delete(key);
+            }
+        } catch (JetStreamApiException e) {
+            if (ownedRevision != null && e.getApiErrorCode() == JS_WRONG_LAST_SEQUENCE) {
+                log.info("Skipping stale idempotency release for webhook-id={} (lease already reclaimed)", webhookId);
+                return;
+            }
+            throw new IllegalStateException("Failed to release webhook-id in NATS KV: " + webhookId, e);
+        } catch (IOException e) {
             throw new IllegalStateException("Failed to release webhook-id in NATS KV: " + webhookId, e);
         }
+    }
+
+    private void recordOwnedRevision(String key, long revision) {
+        ownedRevisions.get().put(key, revision);
+    }
+
+    @Nullable
+    private Long popOwnedRevision(String key) {
+        Map<String, Long> map = ownedRevisions.get();
+        Long rev = map.remove(key);
+        if (map.isEmpty()) {
+            ownedRevisions.remove();
+        }
+        return rev;
     }
 
     /** Base64url-encode arbitrary webhook-id characters so every ID is a valid NATS KV key token. */

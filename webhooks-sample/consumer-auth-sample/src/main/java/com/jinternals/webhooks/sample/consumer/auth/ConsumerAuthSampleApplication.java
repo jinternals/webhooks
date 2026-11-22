@@ -7,7 +7,7 @@ import com.jinternals.webhooks.core.annotations.WebhookType;
 import jakarta.validation.constraints.NotBlank;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ConcurrentLinkedDeque;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import lombok.AllArgsConstructor;
@@ -24,8 +24,14 @@ import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2TokenValidator;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtClaimNames;
+import org.springframework.security.oauth2.jwt.JwtClaimValidator;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.stereotype.Component;
@@ -63,11 +69,19 @@ public class ConsumerAuthSampleApplication {
     }
 
     @Bean
-    JwtDecoder jwtDecoder(@Value("${sample.auth.jwt-secret}") String jwtSecret) {
+    JwtDecoder jwtDecoder(
+            @Value("${sample.auth.jwt-secret}") String jwtSecret,
+            @Value("${sample.auth.issuer}") String issuer,
+            @Value("${sample.auth.audience}") String audience) {
         SecretKey key = new SecretKeySpec(jwtSecret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
-        return NimbusJwtDecoder.withSecretKey(key)
+        NimbusJwtDecoder decoder = NimbusJwtDecoder.withSecretKey(key)
                 .macAlgorithm(MacAlgorithm.HS256)
                 .build();
+        OAuth2TokenValidator<Jwt> withIssuer = JwtValidators.createDefaultWithIssuer(issuer);
+        OAuth2TokenValidator<Jwt> withAudience =
+                new JwtClaimValidator<List<String>>(JwtClaimNames.AUD, aud -> aud != null && aud.contains(audience));
+        decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(withIssuer, withAudience));
+        return decoder;
     }
 
     @Bean
@@ -84,7 +98,7 @@ public class ConsumerAuthSampleApplication {
     @Bean
     @Order(2)
     SecurityFilterChain actuatorChain(HttpSecurity http) throws Exception {
-        http.authorizeHttpRequests(auth -> auth.requestMatchers("/actuator/**")
+        http.authorizeHttpRequests(auth -> auth.requestMatchers("/actuator/**", "/error")
                         .permitAll()
                         .anyRequest()
                         .denyAll())
@@ -95,11 +109,15 @@ public class ConsumerAuthSampleApplication {
     @Component
     public static class AuthenticatedContactHandlers {
         private static final Logger log = LoggerFactory.getLogger(AuthenticatedContactHandlers.class);
-        private final List<String> handledIds = new CopyOnWriteArrayList<>();
+        private static final int MAX_RETAINED_IDS = 1_000;
+        private final ConcurrentLinkedDeque<String> handledIds = new ConcurrentLinkedDeque<>();
 
         @WebhookHandler
         public void onCreated(ContactCreated event, WebhookMetadata metadata) {
-            handledIds.add(event.getId());
+            handledIds.addLast(event.getId());
+            while (handledIds.size() > MAX_RETAINED_IDS) {
+                handledIds.pollFirst();
+            }
             log.info(
                     "Authenticated + verified contact.created id={} event={}", event.getId(), metadata.redactedEvent());
         }

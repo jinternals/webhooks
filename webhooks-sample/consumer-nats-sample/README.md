@@ -50,10 +50,13 @@ sequenceDiagram
 ## Run & test
 
 ```bash
-# Run offline @SpringBootTest suite (verifies happy path, NATS outage 500+release, pod crash lease recovery, DLQ)
+# From webhooks-sample/
+# 1) Offline @SpringBootTest suite (verifies happy path, NATS outage 500+release, pod crash lease recovery, DLQ)
 mvn -pl consumer-nats-sample test
 
-# Run full Docker stack with real NATS JetStream + producer-nats-sample
-docker compose -f docker-compose.nats.yml up --build -d
+# 2) End-to-end Docker integration test (starts NATS + producer-nats + consumer-nats, asserts delivery, tears down)
 ./integration-test-nats.sh
+
+# 3) Or keep the stack running interactively:
+docker compose -f docker-compose.nats.yml up --build -d
 ```

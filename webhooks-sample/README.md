@@ -12,7 +12,7 @@ JWT bearer transport auth, and custom SPI beans).
 | --- | --- | --- | --- |
 | [`producer-sample`](producer-sample) + [`consumer-sample`](consumer-sample) | `9090` / `9091` | **Quickstart:** `@WebhookClient`, `@WebhookType`, `@WebhookHandler`, symmetric `v1` (`whsec_`) + asymmetric `v2a` (`whsk_`/`whpk_`), `@Redact`, Bean Validation, `MetadataContributor`, and `x-trace-id` MDC correlation. | [`docker-compose.yml`](docker-compose.yml) · [`integration-test.sh`](integration-test.sh) |
 | [`producer-nats-sample`](producer-nats-sample) + [`consumer-nats-sample`](consumer-nats-sample) | `9092` / `9093` | **Zero-webhook-loss queueing (NATS JetStream):** durable outbound stream (`NatsJetStreamWebhookTransport`) + relay worker with **fresh per-attempt signing** (replay-window safe) + durable consumer inbox (`DurableInboxHandlers` awaiting `PublishAck` before `204`) + distributed `NatsKvIdempotencyGuard` + inbound/outbound DLQs. | [`docker-compose.nats.yml`](docker-compose.nats.yml) · [`integration-test-nats.sh`](integration-test-nats.sh) |
-| [`producer-auth-sample`](producer-auth-sample) + [`consumer-auth-sample`](consumer-auth-sample) | `9094` / `9095` | **Dual-layer transport + message auth:** producer `WebhookRequestInterceptor` minting short-lived OAuth2/HS256 JWT `Authorization: Bearer` tokens per attempt; consumer Spring Security OAuth2 Resource Server (`401`) in front of Standard Webhooks signature verification (`400`). | [`docker-compose.auth.yml`](docker-compose.auth.yml) |
+| [`producer-auth-sample`](producer-auth-sample) + [`consumer-auth-sample`](consumer-auth-sample) | `9094` / `9095` | **Dual-layer transport + message auth:** producer `WebhookRequestInterceptor` minting short-lived OAuth2/HS256 JWT `Authorization: Bearer` tokens per attempt; consumer Spring Security OAuth2 Resource Server (`401`, validating `iss` + `aud` + `SCOPE_webhooks:deliver`) in front of Standard Webhooks signature verification (`400`). | [`docker-compose.auth.yml`](docker-compose.auth.yml) · [`integration-test-auth.sh`](integration-test-auth.sh) |
 | [`spi-sample`](spi-sample) | `9096` | **Custom SPIs & single-app coexistence:** both starters in one app, overriding `@Bean SecretProvider<Endpoint>`, `@Bean("destinationSecretProvider") SecretProvider<Destination>`, reserve-then-commit `SharedStoreIdempotencyGuard`, `PrivateIpBlockingUrlValidator` (`DestinationUrlValidator`), `HandlerFailureListener`, and `WebhookDeliveryListener`. | `mvn -pl spi-sample spring-boot:run` |
 
 > [!CAUTION]
@@ -71,8 +71,11 @@ Brings up `nats:2.10-alpine -js` + `producer-nats-sample` (`:9092`) + `consumer-
 the full architectural walkthrough in [Zero-webhook-loss queueing](../docs/guides/zero-loss-queueing.md).
 
 ```bash
-docker compose -f docker-compose.nats.yml up --build -d
+# End-to-end test (builds images, starts stack, verifies delivery + metrics, tears down)
 ./integration-test-nats.sh
+
+# Or run interactively:
+docker compose -f docker-compose.nats.yml up --build -d
 ```
 
 ---
@@ -82,6 +85,10 @@ docker compose -f docker-compose.nats.yml up --build -d
 See [Transport authentication](../docs/guides/transport-authentication.md).
 
 ```bash
+# End-to-end test (asserts 401 without JWT, then 202 + handler log with JWT + HMAC)
+./integration-test-auth.sh
+
+# Or run interactively:
 docker compose -f docker-compose.auth.yml up --build -d
 
 curl -i -X POST http://localhost:9094/publish/contact-created \

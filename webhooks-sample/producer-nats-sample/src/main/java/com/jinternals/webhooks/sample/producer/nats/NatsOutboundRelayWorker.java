@@ -18,6 +18,7 @@ import com.jinternals.webhooks.producer.transport.WebhookTransport;
 import io.nats.client.JetStream;
 import io.nats.client.JetStreamSubscription;
 import io.nats.client.Message;
+import io.nats.client.PublishOptions;
 import io.nats.client.PullSubscribeOptions;
 import java.time.Clock;
 import java.time.Duration;
@@ -26,6 +27,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -110,6 +112,11 @@ public class NatsOutboundRelayWorker implements SmartLifecycle {
     public void stop() {
         if (running.compareAndSet(true, false) && workers != null) {
             workers.shutdownNow();
+            try {
+                workers.awaitTermination(5, TimeUnit.SECONDS);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+            }
         }
     }
 
@@ -122,20 +129,60 @@ public class NatsOutboundRelayWorker implements SmartLifecycle {
         // Each worker thread owns its own JetStreamSubscription handle bound to the shared durable consumer
         // (io.nats.client.Subscription is not thread-safe across concurrent fetchers) and fetches 1 message
         // at a time so ackWait starts only when this thread is ready to send immediately.
+        JetStreamSubscription sub = null;
         try {
-            JetStreamSubscription sub = jetStream.subscribe(
-                    natsProperties.getSubject(),
-                    PullSubscribeOptions.bind(natsProperties.getStream(), natsProperties.getDurableConsumer()));
             while (running.get() && !Thread.currentThread().isInterrupted()) {
-                List<Message> batch = sub.fetch(1, Duration.ofSeconds(1));
-                for (Message msg : batch) {
-                    deliverOne(msg);
+                try {
+                    if (sub == null) {
+                        sub = jetStream.subscribe(
+                                natsProperties.getSubject(),
+                                PullSubscribeOptions.bind(
+                                        natsProperties.getStream(), natsProperties.getDurableConsumer()));
+                    }
+                    List<Message> batch = sub.fetch(1, Duration.ofSeconds(1));
+                    for (Message msg : batch) {
+                        deliverOne(msg);
+                    }
+                } catch (Exception e) {
+                    if (e instanceof InterruptedException) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                    if (!running.get() || Thread.currentThread().isInterrupted()) {
+                        break;
+                    }
+                    log.warn(
+                            "Transient error in outbound NATS relay loop; re-subscribing after backoff: {}",
+                            e.getMessage());
+                    safeUnsubscribe(sub);
+                    sub = null;
+                    if (!sleepInterruptibly(Duration.ofSeconds(1))) {
+                        break;
+                    }
                 }
             }
-        } catch (Exception e) {
-            if (running.get()) {
-                log.warn("Outbound NATS relay worker exited: {}", e.getMessage());
+        } finally {
+            safeUnsubscribe(sub);
+        }
+    }
+
+    private static void safeUnsubscribe(JetStreamSubscription sub) {
+        if (sub != null) {
+            try {
+                sub.unsubscribe();
+            } catch (Exception ignored) {
+                // Best-effort cleanup during reconnect or shutdown
             }
+        }
+    }
+
+    private static boolean sleepInterruptibly(Duration delay) {
+        try {
+            Thread.sleep(delay.toMillis());
+            return true;
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            return false;
         }
     }
 
@@ -146,29 +193,51 @@ public class NatsOutboundRelayWorker implements SmartLifecycle {
         try {
             queued = objectMapper.readValue(msg.getData(), OutboundWebhookMessage.class);
         } catch (Exception malformed) {
-            log.error("Poison outbound message could not be parsed; terminating", malformed);
-            msg.term();
+            log.error("Poison outbound message could not be parsed; routing to DLQ", malformed);
+            if (publishToDlq(msg.getData(), "poison_" + attempt)) {
+                msg.term();
+            } else {
+                msg.nakWithDelay(natsProperties.getBaseRetryDelay());
+            }
             return;
         }
 
-        Map<String, List<String>> signedHeaders = buildAttemptHeaders(queued);
         if (queued.traceId() != null && !queued.traceId().isBlank()) {
             MDC.put(NatsJetStreamWebhookTransport.TRACE_MDC_KEY, queued.traceId());
         }
+        Map<String, List<String>> signedHeaders = Map.of();
         try {
+            signedHeaders = buildAttemptHeaders(queued);
             httpSender.send(queued.url(), signedHeaders, queued.body());
+        } catch (WebhookDeliveryException e) {
+            handleDeliveryFailure(msg, queued, signedHeaders, attempt, e);
+            return;
+        } catch (RuntimeException signingOrConfigEx) {
+            handleDeliveryFailure(
+                    msg,
+                    queued,
+                    signedHeaders,
+                    attempt,
+                    new WebhookDeliveryException(
+                            "Failed to prepare outbound webhook delivery: " + signingOrConfigEx.getMessage(),
+                            signingOrConfigEx));
+            return;
+        } finally {
+            MDC.remove(NatsJetStreamWebhookTransport.TRACE_MDC_KEY);
+        }
+
+        try {
             msg.ackSync(Duration.ofSeconds(2));
             log.info(
                     "Delivered outbound webhook id={} attempt={} target={}",
                     queued.webhookId(),
                     attempt,
                     SafeUrl.sanitize(queued.url()));
-        } catch (WebhookDeliveryException e) {
-            handleDeliveryFailure(msg, queued, signedHeaders, attempt, e);
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            log.warn("Interrupted while acking outbound webhook id={}", queued.webhookId());
         } catch (Exception ackFailure) {
             log.warn("JetStream ack failed for id={}: {}", queued.webhookId(), ackFailure.getMessage());
-        } finally {
-            MDC.remove(NatsJetStreamWebhookTransport.TRACE_MDC_KEY);
         }
     }
 
@@ -222,7 +291,11 @@ public class NatsOutboundRelayWorker implements SmartLifecycle {
         }
 
         DeliveryFailure.Reason reason = retryable ? DeliveryFailure.Reason.EXHAUSTED : DeliveryFailure.Reason.FATAL;
-        publishToDlq(msg.getData(), queued.webhookId());
+        if (!publishToDlq(msg.getData(), queued.webhookId())) {
+            // Never delete a message from WorkQueue if DLQ persistence itself failed — retry once NATS recovers.
+            msg.nakWithDelay(natsProperties.getBaseRetryDelay());
+            return;
+        }
         try {
             deliveryListener.onDeliveryFailed(
                     new DeliveryFailure(queued.url(), signedHeaders, queued.body(), (int) attempt, reason, e));
@@ -232,11 +305,16 @@ public class NatsOutboundRelayWorker implements SmartLifecycle {
         msg.term();
     }
 
-    private void publishToDlq(byte[] rawPayload, String webhookId) {
+    private boolean publishToDlq(byte[] rawPayload, String webhookId) {
         try {
-            jetStream.publish(natsProperties.getDlqSubject(), rawPayload);
+            PublishOptions options = PublishOptions.builder().stream(natsProperties.getDlqStream())
+                    .messageId("dlq_" + webhookId)
+                    .build();
+            jetStream.publish(natsProperties.getDlqSubject(), rawPayload, options);
+            return true;
         } catch (Exception dlqEx) {
-            log.error("Failed to publish abandoned webhook id={} to DLQ", webhookId, dlqEx);
+            log.error("Failed to publish abandoned webhook id={} to DLQ; retaining in WorkQueue", webhookId, dlqEx);
+            return false;
         }
     }
 

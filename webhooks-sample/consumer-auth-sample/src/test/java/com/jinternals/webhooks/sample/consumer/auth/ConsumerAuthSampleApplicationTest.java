@@ -40,14 +40,14 @@ class ConsumerAuthSampleApplicationTest {
     @Value("${sample.auth.jwt-secret}")
     private String jwtSecret;
 
-    private String mintJwt(String scope) {
+    private String mintJwt(String issuer, String audience, String scope) {
         SecretKey key = new SecretKeySpec(jwtSecret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
         NimbusJwtEncoder encoder = new NimbusJwtEncoder(new ImmutableSecret<>(key));
         Instant now = Instant.now();
         JwtClaimsSet claims = JwtClaimsSet.builder()
-                .issuer("https://producer.webhooks.local")
+                .issuer(issuer)
                 .subject("webhooks-producer")
-                .audience(List.of("webhooks-consumer"))
+                .audience(List.of(audience))
                 .issuedAt(now)
                 .expiresAt(now.plusSeconds(300))
                 .claim("scope", scope)
@@ -55,6 +55,10 @@ class ConsumerAuthSampleApplicationTest {
         return encoder.encode(JwtEncoderParameters.from(
                         JwsHeader.with(MacAlgorithm.HS256).build(), claims))
                 .getTokenValue();
+    }
+
+    private String mintJwt(String scope) {
+        return mintJwt("https://producer.webhooks.local", "webhooks-consumer", scope);
     }
 
     @Test
@@ -112,5 +116,30 @@ class ConsumerAuthSampleApplicationTest {
                 .andExpect(status().isNoContent());
 
         assertThat(handlers.handledIds()).containsExactly("c-77");
+    }
+
+    @Test
+    void rejectsTokensWithWrongAudienceOrIssuerAndPreserves404ForUnknownWebhookPath() throws Exception {
+        String wrongAudienceToken =
+                mintJwt("https://producer.webhooks.local", "some-other-service", "webhooks:deliver");
+        mockMvc.perform(post("/webhooks/crm")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer " + wrongAudienceToken)
+                        .content("{}"))
+                .andExpect(status().isUnauthorized());
+
+        String wrongIssuerToken = mintJwt("https://untrusted.issuer.local", "webhooks-consumer", "webhooks:deliver");
+        mockMvc.perform(post("/webhooks/crm")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer " + wrongIssuerToken)
+                        .content("{}"))
+                .andExpect(status().isUnauthorized());
+
+        String validToken = mintJwt("webhooks:deliver");
+        mockMvc.perform(post("/webhooks/unregistered")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer " + validToken)
+                        .content("{}"))
+                .andExpect(status().isNotFound());
     }
 }

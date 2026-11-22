@@ -16,6 +16,7 @@ import base64
 import hashlib
 import hmac
 import json
+import shlex
 import time
 import uuid
 
@@ -71,13 +72,17 @@ def main() -> None:
         signature = sign_v1(args.secret, msg_id, timestamp, body)
 
     print(
-        "curl -i -X POST '{url}' \\\n"
+        "curl -i -X POST {url} \\\n"
         "  -H 'content-type: application/json' \\\n"
-        "  -H 'webhook-id: {id}' \\\n"
-        "  -H 'webhook-timestamp: {ts}' \\\n"
-        "  -H 'webhook-signature: {sig}' \\\n"
-        "  -d '{body}'".format(
-            url=args.url, id=msg_id, ts=timestamp, sig=signature, body=body
+        "  -H {id_hdr} \\\n"
+        "  -H {ts_hdr} \\\n"
+        "  -H {sig_hdr} \\\n"
+        "  -d {body}".format(
+            url=shlex.quote(args.url),
+            id_hdr=shlex.quote(f"webhook-id: {msg_id}"),
+            ts_hdr=shlex.quote(f"webhook-timestamp: {timestamp}"),
+            sig_hdr=shlex.quote(f"webhook-signature: {signature}"),
+            body=shlex.quote(body),
         )
     )
 

@@ -19,7 +19,7 @@ SECRET_B64="MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw"   # base64 body of whsec_MfKQ9r8GK
 # consumer verifies with the matching whpk_ PUBLIC key; see application.yaml's /webhooks/crm-v2a endpoint.
 V2A_PRIVATE_KEY="whsk_4uKPjji/dhB8w6GW3YYDnIMYvXcdHrvH6lidTr4Z+EY="
 V2A_ENDPOINT_ID="ep_2fVZdC8Kx9TR4ZoCqHWt3NnLgRb"
-PASS=0; FAIL=0
+PASS=0; FAIL=0; SEQ=0
 
 # sign <id> <timestamp> <body> -> prints "v1,<base64 hmac-sha256>"
 sign() {
@@ -51,7 +51,8 @@ PY
 # post <name> <path> <body> <sign?yes/no> <expected-status> [extra curl args...]
 post() {
   local name="$1" path="$2" body="$3" dosign="$4" expect="$5"; shift 5
-  local id="msg_$(date +%s%N | cut -c1-13)"
+  SEQ=$((SEQ + 1))
+  local id="msg_$(date +%s)_$$_${SEQ}"
   local ts; ts=$(( $(date +%s) ))
   local -a hdrs=(-H "content-type: application/json" -H "webhook-id: $id" -H "webhook-timestamp: $ts")
   if [ "$dosign" = "yes" ]; then
@@ -66,7 +67,8 @@ post() {
     hdrs+=(-H "webhook-signature: v1,AAAAinvalidsignatureAAAA==")
   fi
   local code
-  code=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE$path" "${hdrs[@]}" "$@" --data "$body")
+  # Stream payload over stdin (--data-binary @-) so >128KB payloads never hit Linux MAX_ARG_STRLEN (E2BIG).
+  code=$(printf '%s' "$body" | curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE$path" "${hdrs[@]}" "$@" --data-binary @-)
   if [ "$code" = "$expect" ]; then
     printf '  \033[32mPASS\033[0m  %-45s -> %s\n' "$name" "$code"; PASS=$((PASS+1))
   else

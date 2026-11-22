@@ -57,7 +57,7 @@ class SpiSampleApplicationTest {
     }
 
     @Test
-    void customUrlValidatorBlocksCloudMetadataAndPrivateAddresses() {
+    void customUrlValidatorBlocksCloudMetadataPrivateIpv6UlaWildcardAndNonHttpSchemes() {
         assertThatThrownBy(() -> urlValidator.validate("http://169.254.169.254/latest/meta-data"))
                 .isInstanceOf(WebhookDeliveryException.class)
                 .hasMessageContaining("Blocked private/link-local destination IP");
@@ -65,6 +65,27 @@ class SpiSampleApplicationTest {
         assertThatThrownBy(() -> urlValidator.validate("http://10.0.0.5/internal"))
                 .isInstanceOf(WebhookDeliveryException.class)
                 .hasMessageContaining("Blocked private/link-local destination IP");
+
+        assertThatThrownBy(() -> urlValidator.validate("http://[fd00::1]:8080/internal"))
+                .isInstanceOf(WebhookDeliveryException.class)
+                .hasMessageContaining("Blocked private/link-local destination IP");
+
+        assertThatThrownBy(() -> urlValidator.validate("http://0.0.0.0:8080/internal"))
+                .isInstanceOf(WebhookDeliveryException.class)
+                .hasMessageContaining("Blocked private/link-local destination IP");
+
+        assertThatThrownBy(() -> urlValidator.validate("file:///etc/passwd"))
+                .isInstanceOf(WebhookDeliveryException.class)
+                .hasMessageContaining("http/https host required");
+
+        assertThatThrownBy(() -> urlValidator.validate("not-a-url"))
+                .isInstanceOf(WebhookDeliveryException.class)
+                .hasMessageContaining("http/https host required");
+
+        PrivateIpBlockingUrlValidator strictValidator = new PrivateIpBlockingUrlValidator(false);
+        assertThatThrownBy(() -> strictValidator.validate("http://127.0.0.1:8080/hook"))
+                .isInstanceOf(WebhookDeliveryException.class)
+                .hasMessageContaining("Blocked loopback destination IP");
     }
 
     @Test

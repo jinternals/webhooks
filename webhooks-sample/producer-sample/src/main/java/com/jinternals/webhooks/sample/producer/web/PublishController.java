@@ -28,8 +28,10 @@ import org.springframework.web.bind.annotation.RestController;
  *       SPEC.md §19i) and POSTs to the consumer's {@code /webhooks/crm-v2a} endpoint.</li>
  * </ul>
  *
- * <p>Delivery has no retry/persistence: a failed send surfaces as {@link WebhookDeliveryException}, which
- * this controller maps to {@code 502 Bad Gateway} so the caller can decide whether to retry.
+ * <p>Delivery uses the starter's bounded in-process retry ({@code max-attempts=3} by default) with no
+ * durable queue: an abandoned send surfaces as {@link WebhookDeliveryException}, which this controller maps
+ * to {@code 502 Bad Gateway} so the caller can decide how to recover (see {@code producer-nats-sample} for
+ * durable JetStream queueing).
  *
  * <p><strong>Trace propagation (SPEC.md §9b).</strong> This is also the producer half of the end-to-end
  * trace example: it seeds a trace id into the SLF4J {@code MDC} for this unit of work, so both this app's log
@@ -72,7 +74,7 @@ public class PublishController {
             log.info("published contact.created ({}) for id={}", scheme, event.getId());
             return ResponseEntity.accepted().body("published");
         } catch (WebhookDeliveryException e) {
-            // No retry here on purpose — the toolkit ships none. Report upstream and let the caller decide.
+            // In-process retries (if retryable) were exhausted or fatal — report upstream to the caller.
             log.warn("delivery of contact.created ({}) failed for id={}: {}", scheme, event.getId(), e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body("delivery failed: " + e.getMessage());
         } finally {

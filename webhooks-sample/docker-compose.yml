@@ -40,6 +40,7 @@ services:
       # Target the consumer service by its compose hostname, not localhost.
       DEMO_WEBHOOK_URL: http://consumer:9091/webhooks/crm
       DEMO_WEBHOOK_SECRET: whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw
+      DEMO_V2A_WEBHOOK_URL: http://consumer:9091/webhooks/crm-v2a
     depends_on:
       consumer:
         condition: service_healthy

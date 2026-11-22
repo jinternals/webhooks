@@ -38,10 +38,14 @@ one() {
 export -f one sign
 export BASE PATH_ HEXKEY
 
+now_epoch() {
+  python3 -c 'import time; print(f"{time.time():.6f}")' 2>/dev/null || date +%s
+}
+
 echo "== Load baseline: $REQUESTS requests, concurrency $CONC -> $BASE$PATH_ =="
-START=$(date +%s.%N)
+START=$(now_epoch)
 seq 1 "$REQUESTS" | xargs -P "$CONC" -I{} bash -c 'one "$@"' _ {} > "$TMP/out.txt"
-END=$(date +%s.%N)
+END=$(now_epoch)
 
 # Status-code tally (unsorted).
 awk '{ code[$1]++ } END { printf "  status codes :"; for (c in code) printf " %s=%d", c, code[c]; printf "\n" }' "$TMP/out.txt"
@@ -51,7 +55,7 @@ awk '{ print $2*1000 }' "$TMP/out.txt" | sort -n > "$TMP/lat.txt"
 awk -v start="$START" -v end="$END" -v reqs="$REQUESTS" '
   { t[NR]=$1; sum+=$1 }
   END {
-    n=NR; wall=end-start
+    n=NR; wall=end-start; if(wall<=0) wall=0.001
     i50=int(n*0.50); if(i50<1)i50=1
     i90=int(n*0.90); if(i90<1)i90=1
     i99=int(n*0.99); if(i99<1)i99=1

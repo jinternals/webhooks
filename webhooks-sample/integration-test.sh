@@ -23,9 +23,11 @@ COMPOSE="docker compose"
 PRODUCER="http://localhost:9090"
 CONSUMER="http://localhost:9091"
 PASS=0; FAIL=0
+TMP_OUT=$(mktemp)
 
 cleanup() {
   echo "== Tearing down =="
+  rm -f "$TMP_OUT"
   $COMPOSE down -v --remove-orphans >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
@@ -49,23 +51,44 @@ for i in $(seq 1 40); do
   if [ "$i" -eq 40 ]; then echo "producer did not come up"; exit 1; fi
 done
 
-echo "== Publishing a contact.created via the producer =="
+echo "== Publishing a contact.created (v1 HMAC) via the producer =="
 BODY='{"id":"c-int-1","fullName":"Ada Lovelace","email":"ada@example.com"}'
-HTTP_CODE=$(curl -s -o /tmp/publish-out.txt -w '%{http_code}' \
+HTTP_CODE=$(curl -s -o "$TMP_OUT" -w '%{http_code}' \
   -X POST "$PRODUCER/publish/contact-created" \
   -H 'content-type: application/json' --data "$BODY")
-echo "  producer responded $HTTP_CODE: $(cat /tmp/publish-out.txt)"
-[ "$HTTP_CODE" = "202" ]; check "producer accepted and sent the webhook (202)" $?
+echo "  producer (v1) responded $HTTP_CODE: $(cat "$TMP_OUT")"
+if [ "$HTTP_CODE" = "202" ]; then
+  check "producer accepted and sent the v1 webhook (202)" 0
+else
+  check "producer accepted and sent the v1 webhook (202)" 1
+fi
+
+echo "== Publishing a contact.created (v2a Ed25519) via the producer =="
+BODY_V2A='{"id":"c-int-v2a","fullName":"Grace Hopper","email":"grace@example.com"}'
+HTTP_CODE_V2A=$(curl -s -o "$TMP_OUT" -w '%{http_code}' \
+  -X POST "$PRODUCER/publish/contact-created-v2a" \
+  -H 'content-type: application/json' --data "$BODY_V2A")
+echo "  producer (v2a) responded $HTTP_CODE_V2A: $(cat "$TMP_OUT")"
+if [ "$HTTP_CODE_V2A" = "202" ]; then
+  check "producer accepted and sent the v2a webhook (202)" 0
+else
+  check "producer accepted and sent the v2a webhook (202)" 1
+fi
 
 # Give the consumer a moment to process and update its metrics.
 sleep 2
 
-echo "== Asserting the consumer handled it =="
-# 1) The handler log line proves dispatch reached the @WebhookHandler.
+echo "== Asserting the consumer handled both =="
+# 1) The handler log line proves dispatch reached the @WebhookHandler for both v1 and v2a.
 if $COMPOSE logs consumer 2>&1 | grep -q "contact.created id=c-int-1"; then
-  check "consumer dispatched contact.created to its handler (log line)" 0
+  check "consumer dispatched v1 contact.created to its handler (log line)" 0
 else
-  check "consumer dispatched contact.created to its handler (log line)" 1
+  check "consumer dispatched v1 contact.created to its handler (log line)" 1
+fi
+if $COMPOSE logs consumer 2>&1 | grep -q "contact.created id=c-int-v2a"; then
+  check "consumer dispatched v2a contact.created to its handler (log line)" 0
+else
+  check "consumer dispatched v2a contact.created to its handler (log line)" 1
 fi
 
 # 2) The received counter confirms the full verify->validate->dispatch path ran for this type.

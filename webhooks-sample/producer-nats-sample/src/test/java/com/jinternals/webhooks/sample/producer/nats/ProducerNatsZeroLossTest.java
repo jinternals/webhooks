@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -16,6 +17,7 @@ import io.nats.client.Message;
 import io.nats.client.PublishOptions;
 import io.nats.client.api.PublishAck;
 import io.nats.client.impl.NatsJetStreamMetaData;
+import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
@@ -27,6 +29,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.AfterAll;
@@ -91,6 +94,7 @@ class ProducerNatsZeroLossTest {
     static class InMemoryNatsTestConfig {
         final List<byte[]> outboundPayloads = new ArrayList<>();
         final List<byte[]> dlqPayloads = new ArrayList<>();
+        final AtomicBoolean failNextDlqPublish = new AtomicBoolean(false);
 
         @Bean
         InMemoryNatsTestConfig natsState() {
@@ -129,8 +133,11 @@ class ProducerNatsZeroLossTest {
                         outboundPayloads.add(inv.getArgument(1));
                         return ack;
                     });
-            when(js.publish(eq("webhooks.outbound.dlq.send"), any(byte[].class)))
+            when(js.publish(eq("webhooks.outbound.dlq.send"), any(byte[].class), any(PublishOptions.class)))
                     .thenAnswer(inv -> {
+                        if (failNextDlqPublish.compareAndSet(true, false)) {
+                            throw new IOException("DLQ stream temporarily unreachable");
+                        }
                         dlqPayloads.add(inv.getArgument(1));
                         return ack;
                     });
@@ -215,5 +222,35 @@ class ProducerNatsZeroLossTest {
         assertThat(natsState.dlqPayloads).hasSize(1);
         assertThat(deadLetterListener.failures()).hasSize(1);
         assertThat(deadLetterListener.failures().get(0).reason()).isEqualTo(DeliveryFailure.Reason.FATAL);
+    }
+
+    @Test
+    void retainsMessageInWorkQueueWhenDlqPublishFailsAndHandlesUnconfiguredDestinationSafely() {
+        natsState.outboundPayloads.clear();
+        natsState.dlqPayloads.clear();
+        deadLetterListener.clear();
+
+        // 1) If DLQ publish throws on fatal 404, message MUST NOT be termed (nakWithDelay preserves zero-loss!)
+        crmWebhooks.contactCreated(new ContactCreated("c-dlq-fail", "Barbara Liskov", "barbara@example.com"));
+        byte[] storedPayload = natsState.outboundPayloads.get(0);
+        nextStatus.set(404);
+        natsState.failNextDlqPublish.set(true);
+        Message dlqFailMsg = mockJetStreamMessage(storedPayload, 1L);
+        relayWorker.deliverOne(dlqFailMsg);
+        verify(dlqFailMsg, never()).term();
+        verify(dlqFailMsg).nakWithDelay(Duration.ofMillis(500));
+
+        // 2) Message with unconfigured URL inside buildAttemptHeaders does NOT crash worker thread; retries then DLQs
+        byte[] unknownUrlPayload =
+                "{\"url\":\"http://unknown.example/hook\",\"webhookId\":\"msg_unknown\",\"body\":\"{}\",\"traceId\":null}"
+                        .getBytes(StandardCharsets.UTF_8);
+        Message unknownAttempt1 = mockJetStreamMessage(unknownUrlPayload, 1L);
+        relayWorker.deliverOne(unknownAttempt1);
+        verify(unknownAttempt1).nakWithDelay(Duration.ofMillis(500));
+
+        Message unknownAttempt2 = mockJetStreamMessage(unknownUrlPayload, 2L);
+        relayWorker.deliverOne(unknownAttempt2);
+        verify(unknownAttempt2).term();
+        assertThat(natsState.dlqPayloads).hasSize(1);
     }
 }

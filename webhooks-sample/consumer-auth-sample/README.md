@@ -26,9 +26,10 @@ flowchart LR
 ## Run & test
 
 ```bash
-# Run @SpringBootTest (proves 401 on missing JWT, 400 on valid JWT + bad sig, 204 when both pass)
+# From webhooks-sample/
+# Run @SpringBootTest (proves 401 on missing/wrong-aud/wrong-iss JWT, 400 on bad sig, 204 when both pass)
 mvn -pl consumer-auth-sample test
 
-# Run live with producer-auth-sample via Docker Compose
-docker compose -f docker-compose.auth.yml up --build -d
+# Run end-to-end Docker integration test with producer-auth-sample
+./integration-test-auth.sh
 ```
