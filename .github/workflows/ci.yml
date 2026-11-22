@@ -64,6 +64,11 @@ jobs:
       - name: Build & test samples
         run: mvn -B -ntp -f webhooks-sample/pom.xml verify
 
+      # End-to-end: builds both sample images, runs them with docker compose, and asserts that a webhook
+      # published by the producer is verified and handled by the consumer.
+      - name: Docker integration test
+        run: bash webhooks-sample/integration-test.sh
+
   javadoc:
     name: Release artifacts (sources + javadoc)
     runs-on: ubuntu-latest

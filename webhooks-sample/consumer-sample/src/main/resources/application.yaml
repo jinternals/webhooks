@@ -6,9 +6,9 @@ server:
 
 webhooks:
   consumer:
-    # @Type event classes are discovered automatically by scanning this app's auto-configuration
+    # @WebhookType event classes are discovered automatically by scanning this app's auto-configuration
     # packages (the @SpringBootApplication package, via Spring Boot's AutoConfigurationPackages) — no
-    # base-package to configure. Put @Type classes anywhere under com.jinternals.webhooks.sample.consumer.
+    # base-package to configure. Put @WebhookType classes anywhere under com.jinternals.webhooks.sample.consumer.
 
     # What to do when a type is not accepted by the matched endpoint: ack-and-ignore (204) or reject (400).
     unknown-type-policy: ack-and-ignore
@@ -25,7 +25,7 @@ webhooks:
     # Best-effort in-memory dedupe on webhook-id (off by default).
     in-memory-idempotency: false
 
-    # Per-type payload validation is declared with Bean Validation annotations on the @Type classes
+    # Per-type payload validation is declared with Bean Validation annotations on the @WebhookType classes
     # themselves (e.g. events/InvoicePaid: @NotBlank, @Positive, @Size); see SPEC.md §6a. No per-type
     # schema config is needed — the type is the schema.
 

@@ -9,7 +9,7 @@
       webhooks.version, Lombok wiring). Depends on the PUBLISHED webhooks-producer-starter artifact, so
       install the libraries first (from repo root):
           mvn -pl webhooks-producer-starter -am install
-      Run:  mvn -pl producer-sample spring-boot:run   (from sample/)
+      Run:  mvn -pl producer-sample spring-boot:run   (from webhooks-sample/)
     -->
     <parent>
         <groupId>io.github.jinternals.webhooks.sample</groupId>
@@ -30,6 +30,14 @@
             <artifactId>webhooks-producer-starter</artifactId>
         </dependency>
 
+        <!-- The producer library only needs spring-web (RestClient) and deliberately does NOT pull in an
+             embedded server. This sample exposes HTTP endpoints (POST /publish/..., actuator), so it adds
+             the web starter itself — without it the app starts and immediately exits. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
         <!-- Observability: actuator + a Prometheus registry to expose the library's metrics. -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -41,7 +49,7 @@
             <scope>runtime</scope>
         </dependency>
 
-        <!-- Lombok generates the event POJOs' accessors (@Data) — the @Type data classes. -->
+        <!-- Lombok generates the event POJOs' accessors (@Data) — the @WebhookType data classes. -->
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>

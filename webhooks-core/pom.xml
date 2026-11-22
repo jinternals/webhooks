@@ -13,7 +13,7 @@
 
     <artifactId>webhooks-core</artifactId>
     <name>webhooks-core</name>
-    <description>Standard Webhooks shared core — wire model, @Type/@Redact, redactor, type registry, secret SPI</description>
+    <description>Standard Webhooks shared core — wire model, @WebhookType/@Redact, redactor, type registry, secret SPI</description>
 
     <dependencies>
         <!-- Jackson for the Envelope's JsonNode data field (the wire model is Jackson-shaped). -->

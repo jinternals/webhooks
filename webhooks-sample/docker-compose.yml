@@ -1,6 +1,6 @@
 # Runs both standalone sample apps and wires the producer to send to the consumer.
 #
-#   (from sample/)  docker compose up --build
+#   (from webhooks-sample/)  docker compose up --build
 #
 # The producer exposes POST /publish/contact-created on :9090; triggering it signs and sends a
 # contact.created webhook to the consumer's /webhooks/crm on :9091. Both apps share the demo secret.
@@ -14,7 +14,7 @@ services:
   consumer:
     build:
       context: ..
-      dockerfile: /consumer-sample/Dockerfile
+      dockerfile: webhooks-sample/consumer-sample/Dockerfile
     image: webhooks-consumer-sample
     ports:
       - "9091:9091"
@@ -32,7 +32,7 @@ services:
   producer:
     build:
       context: ..
-      dockerfile: /producer-sample/Dockerfile
+      dockerfile: webhooks-sample/producer-sample/Dockerfile
     image: webhooks-producer-sample
     ports:
       - "9090:9090"

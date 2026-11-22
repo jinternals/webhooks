@@ -16,7 +16,7 @@
     <description>Standard Webhooks consumer auto-configuration (no storage). Add webhooks-consumer-starter instead of depending on this directly.</description>
 
     <dependencies>
-        <!-- Shared wire model, @Type/@Redact, redactor, type registry, secret SPI. Explicit version
+        <!-- Shared wire model, @WebhookType/@Redact, redactor, type registry, secret SPI. Explicit version
              (not inherited from the reactor's dependencyManagement) so the INSTALLED pom is self-contained:
              external consumers resolving this artifact still pull webhooks-core transitively. -->
         <dependency>
@@ -79,7 +79,7 @@
             <artifactId>reflections</artifactId>
         </dependency>
 
-        <!-- Per-type payload validation via Bean Validation on the @Type class (§6a). -->
+        <!-- Per-type payload validation via Bean Validation on the @WebhookType class (§6a). -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-validation</artifactId>

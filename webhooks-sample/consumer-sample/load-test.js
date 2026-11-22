@@ -8,7 +8,7 @@
 //   Run:      k6 run load-test.js
 //             k6 run -e VUS=100 -e DURATION=60s load-test.js
 //
-// The app must already be running:  (from sample/) mvn -pl consumer-sample spring-boot:run
+// The app must already be running:  (from webhooks-sample/) mvn -pl consumer-sample spring-boot:run
 //                                   or via Docker:  docker compose up consumer
 import http from "k6/http";
 import crypto from "k6/crypto";

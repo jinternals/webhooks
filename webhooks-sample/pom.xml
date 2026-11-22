@@ -10,7 +10,7 @@
       webhooks-* artifacts, not on sibling modules. Build/install the libraries first, then build here:
 
           (repo root) mvn -pl webhooks-consumer-starter,webhooks-producer-starter -am install
-          (sample/)   mvn install
+          (webhooks-sample/)   mvn install
 
       Or use Docker (see docker-compose.yml + integration-test.sh in this directory).
     -->

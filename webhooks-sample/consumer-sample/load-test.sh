@@ -5,7 +5,7 @@
 # computed from curl's per-request timing. Uses only bash + curl + openssl + awk.
 #
 #   Usage:  ./load-test.sh [requests] [concurrency]     (default 2000 50)
-#   App must be running:  (from sample/) mvn -pl consumer-sample spring-boot:run
+#   App must be running:  (from webhooks-sample/) mvn -pl consumer-sample spring-boot:run
 #                         or via Docker:  docker compose up consumer
 #
 # For richer percentiles / sustained-rate scenarios prefer the k6 script (load-test.js).

@@ -4,7 +4,7 @@
 # docker-compose.yml), so this can first install the webhooks-* libraries into the build stage's local
 # Maven repo, then build the sample against them.
 #
-#   docker build -f sample/producer-sample/Dockerfile -t webhooks-producer-sample .
+#   docker build -f webhooks-sample/producer-sample/Dockerfile -t webhooks-producer-sample .
 #
 FROM maven:3.9-eclipse-temurin-21 AS build
 WORKDIR /workspace
@@ -22,11 +22,10 @@ RUN --mount=type=cache,target=/root/.m2 \
     mvn -q -pl webhooks-core,webhooks-producer-autoconfigure,webhooks-producer-starter -am install -DskipTests
 
 # 2) Build the sample app itself.
-COPY sample/pom.xml sample/pom.xml
-COPY sample/producer-sample/ sample/producer-sample/
+COPY webhooks-sample/ webhooks-sample/
 RUN --mount=type=cache,target=/root/.m2 \
-    mvn -q -f sample/pom.xml -pl producer-sample -am package -DskipTests \
-    && cp sample/producer-sample/target/producer-sample-*.jar /workspace/app.jar
+    mvn -q -f webhooks-sample/pom.xml -pl producer-sample -am package -DskipTests \
+    && cp webhooks-sample/producer-sample/target/producer-sample-*.jar /workspace/app.jar
 
 FROM eclipse-temurin:21-jre
 WORKDIR /app

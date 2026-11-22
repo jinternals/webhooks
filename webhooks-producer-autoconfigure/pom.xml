@@ -16,7 +16,7 @@
     <description>Standard Webhooks producer auto-configuration — annotation-driven @WebhookClient publishing (no storage/retry). Add webhooks-producer-starter instead of depending on this directly.</description>
 
     <dependencies>
-        <!-- Shared wire model, @Type, redactor, secret SPI. Explicit version (not inherited from the
+        <!-- Shared wire model, @WebhookType, redactor, secret SPI. Explicit version (not inherited from the
              reactor's dependencyManagement) so the INSTALLED pom is self-contained: external consumers
              resolving this artifact still pull webhooks-core transitively. -->
         <dependency>

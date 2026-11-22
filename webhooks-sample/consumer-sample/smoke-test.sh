@@ -9,7 +9,7 @@
 # ⚠️ DEMO ONLY — every secret/key in this script is public; never use them outside the samples.
 #
 # Usage:  ./smoke-test.sh        (consumer must already be running on :9091)
-#   Start it:  (from sample/) mvn -pl consumer-sample spring-boot:run
+#   Start it:  (from webhooks-sample/) mvn -pl consumer-sample spring-boot:run
 #              or via Docker:  docker compose up consumer
 set -u
 
@@ -121,7 +121,7 @@ post "Type not allow-listed on billing -> 204 (ack-and-ignore)" /webhooks/billin
   '{"type":"contact.created","timestamp":"2022-11-03T20:26:10.344Z","data":{"id":"c-1","email":"ada@example.com"}}' \
   yes 204
 
-post "Unknown type (no @Type class) -> 204 (ack-and-ignore)" /webhooks/crm \
+post "Unknown type (no @WebhookType class) -> 204 (ack-and-ignore)" /webhooks/crm \
   '{"type":"contact.archived","timestamp":"2022-11-03T20:26:10.344Z","data":{"id":"c-9"}}' \
   yes 204
 

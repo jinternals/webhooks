@@ -9,7 +9,7 @@
       webhooks.version, Lombok wiring). Depends on the PUBLISHED webhooks-consumer-starter artifact, so
       install the libraries first (from repo root):
           mvn -pl webhooks-consumer-starter -am install
-      Run:  mvn -pl consumer-sample spring-boot:run   (from sample/)
+      Run:  mvn -pl consumer-sample spring-boot:run   (from webhooks-sample/)
     -->
     <parent>
         <groupId>io.github.jinternals.webhooks.sample</groupId>
@@ -41,7 +41,7 @@
             <scope>runtime</scope>
         </dependency>
 
-        <!-- Lombok generates the event POJOs' accessors (@Data) — the @Type data classes. -->
+        <!-- Lombok generates the event POJOs' accessors (@Data) — the @WebhookType data classes. -->
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
