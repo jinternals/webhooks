@@ -60,8 +60,9 @@ the chain:
   `RetryingWebhookTransport` and the `DestinationUrlValidator` are untouched.
 - **The HMAC signature is untouched.** The interceptor receives the already-signed `headers` and raw `body`;
   returning the signed `webhook-*` headers alongside your `Authorization` keeps both protections together.
-- **A `401`-triggered retry re-mints the token.** Interceptors run per attempt, so a retry after an expired
-  token picks up a fresh one automatically.
+- **Every retry re-evaluates the token.** Interceptors run per attempt, so if a short-lived token expires
+  during backoff on a retryable failure (`5xx` / `429` / timeout), the next attempt picks up a fresh one
+  automatically.
 
 Multiple interceptors compose in Spring `@Order` order (auth, tenancy, tracing headers, …), each receiving
 the previous one's output. `WebhookRequestInterceptor` is the **single** outbound-request-shaping strategy:

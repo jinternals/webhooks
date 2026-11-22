@@ -106,8 +106,9 @@ public class WebhookProducerAutoConfiguration {
      * routed to the {@link WebhookDeliveryListener} before it is rethrown (SPEC §20).
      *
      * <p>Interceptors sit <strong>inside</strong> the retry layer, so an interceptor-added header derived
-     * from a short-lived credential is re-derived on every attempt (a {@code 401}-triggered retry picks up
-     * a fresh token). With no interceptor beans the intercepting layer is a transparent pass-through.
+     * from a short-lived credential is re-derived on every retryable attempt (if a token expires during
+     * backoff, the next attempt picks up a fresh one). With no interceptor beans the intercepting layer is a
+     * transparent pass-through.
      *
      * <p>Override with your own {@code @Bean WebhookTransport} only to change the <em>delivery
      * mechanism</em> (e.g. send asynchronously or through a queue) — to add transport auth, publish a

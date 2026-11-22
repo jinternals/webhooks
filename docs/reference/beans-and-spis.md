@@ -99,7 +99,7 @@ WebhookRequestInterceptor bearerTokenInterceptor(OAuth2AuthorizedClientManager c
         out.put("Authorization", List.of("Bearer " + token));
         return out;                               // return a NEW map; never mutate the input
     };
-    // Applied inside the chain, so retry + the SSRF guard still apply and a 401-retry re-mints the token.
+    // Applied inside the chain, so retry + the SSRF guard still apply and each retry re-evaluates the token.
 }
 ```
 

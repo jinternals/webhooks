@@ -286,6 +286,9 @@ Flags that default to *enabled* can be turned off; features that default to *dis
 | Send observations (`webhook.send` metric and span) | Enabled (with actuator present) | `management.observations.enable.webhook.send=false` to disable |
 | All observations | Enabled (with actuator present) | `management.observations.enable=false` to disable |
 | Startup secret validation | Enabled | `webhooks.consumer.validate-secrets-on-startup=false` to disable |
+| Startup destination validation | Enabled | `webhooks.producer.validate-destinations-on-startup=false` to disable |
+| Inbound signature verification | **Enabled** (`v1` HMAC / `v2a` Ed25519) | `webhooks.consumer.signature-verification-enabled=false` to disable (only behind transport auth). See [SPEC §8f](./docs/reference/SPEC.md#8f-disabling-message-security). |
+| Outbound message signing | **Enabled** (`v1` HMAC / `v2a` Ed25519) | `webhooks.producer.signing-enabled=false` to disable (only behind transport auth). See [SPEC §19h](./docs/reference/SPEC.md#19h-disabling-message-signing). |
 | In-memory idempotency | Disabled | `webhooks.consumer.in-memory-idempotency=true` to enable |
 | Asynchronous handler execution | Disabled (`sync`) | `webhooks.consumer.handler.mode=async` to enable |
 | Per-type payload validation | Always on | Declare Bean Validation constraints on the `@WebhookType` class (`@NotBlank`, `@Positive`, …); no config |
@@ -301,7 +304,7 @@ Flags that default to *enabled* can be turned off; features that default to *dis
 | Property | Default | Description |
 | --- | --- | --- |
 | `@WebhookType` discovery | *(auto)* | Discovered automatically by scanning the host app's `@SpringBootApplication` package(s); override with a custom `@Bean WebhookTypeRegistry`. |
-| `webhooks.consumer.endpoints[]` | *(required)* | Endpoints, each `{ path, secret, types?, additional-secrets? }`. `types` is an optional per-endpoint allow-list; omit it to accept any known `@WebhookType`. See [SPEC §8a](./docs/reference/SPEC.md#8a-secret-source--rotation-secretprovider). |
+| `webhooks.consumer.endpoints[]` | *(required)* | Endpoints, each `{ path, secret?, endpoint-id?, types?, additional-secrets? }`. Prefix selects the scheme (`whsec_` → `v1` HMAC, `whpk_` → `v2a` Ed25519; `endpoint-id` required for `v2a`). `types` is an optional per-endpoint allow-list; omit it to accept any known `@WebhookType`. See [SPEC §8a](./docs/reference/SPEC.md#8a-secret-source--rotation-secretprovider) and [§8e](./docs/reference/SPEC.md#8e-asymmetric-verification--ed25519-v2a-whpk_). |
 | `webhooks.consumer.max-body-size` | `256KB` | Bodies larger than this are rejected with `413` before verification. See [SPEC §14a](./docs/reference/SPEC.md#14a-production-hardening). |
 | `webhooks.consumer.in-memory-idempotency-max-size` | `100000` | Maximum entries in the in-memory deduplication cache (applies only when idempotency is enabled). See [SPEC §11](./docs/reference/SPEC.md#11-idempotency-without-storage). |
 | `webhooks.consumer.handler.timeout` | `30s` | Per-handler timeout in `async` mode. See [SPEC §15](./docs/reference/SPEC.md#15-sync-vs-async-handling). |
@@ -309,7 +312,7 @@ Flags that default to *enabled* can be turned off; features that default to *dis
 | `webhooks.consumer.handler.max-pool-size` | `16` | Maximum pool size in `async` mode. |
 | `webhooks.consumer.handler.queue-capacity` | `1000` | Bounded work-queue capacity in `async` mode. |
 | `webhooks.consumer.replay-tolerance` | `5m` | Allowed clock skew for the replay window when it is enabled; a request is accepted only if `\|now − timestamp\| ≤ tolerance`. Ignored when the window is disabled. See [SPEC §8b](./docs/reference/SPEC.md#8b-replay-window-timestamp-freshness). |
-| `webhooks.producer.destinations.<name>` | — | A named destination `{ url, secret, additional-secrets? }` referenced by `@WebhookClient(destination = "<name>")`. See [Secret rotation](#secret-rotation). |
+| `webhooks.producer.destinations.<name>` | — | A named destination `{ url, secret?, endpoint-id?, additional-secrets? }` referenced by `@WebhookClient(destination = "<name>")` (`whsec_` → `v1` HMAC, `whsk_` → `v2a` Ed25519; `endpoint-id` required for `v2a`). See [Secret rotation](#secret-rotation) and [SPEC §19i](./docs/reference/SPEC.md#19i-asymmetric-signing--ed25519-v2a-whsk_). |
 | `webhooks.producer.retry.max-attempts` | `3` | Total delivery attempts including the first; `1` disables retry. Values `< 1` are clamped to `1`. See [SPEC §19b](./docs/reference/SPEC.md#19b-in-process-retry-no-persistence). |
 | `webhooks.producer.retry.initial-backoff` | `500ms` | Wait before the second attempt; doubles each further attempt up to `max-backoff`. |
 | `webhooks.producer.retry.max-backoff` | `5s` | Ceiling on any single backoff. |
@@ -330,13 +333,14 @@ override the default; no component scan is involved and nothing needs to be disa
 | `HandlerExecutor` (consumer) | `Sync` or `Async` per `handler.mode` | Provide a custom dispatch strategy. See [Async handler execution](#async-handler-execution) and [SPEC §15](./docs/reference/SPEC.md#15-sync-vs-async-handling). |
 | `IdempotencyGuard` (consumer) | No-op or in-memory | Use Redis or another shared store. See [SPEC §11](./docs/reference/SPEC.md#11-idempotency-without-storage). |
 | `TimestampValidator` (consumer) | No-op or clock-skew per `replay-window-enabled` | Implement a custom timestamp-freshness policy. See [SPEC §8b](./docs/reference/SPEC.md#8b-replay-window-timestamp-freshness). |
-| `WebhookVerifier` (consumer) | `HmacWebhookVerifier`, or no-op per `signature-verification-enabled` | Change the verification scheme (asymmetric, JWS). See [SPEC §8f](./docs/reference/SPEC.md#8f-disabling-message-security). |
+| `WebhookVerifier` (consumer) | `DefaultWebhookVerifier` (`v1` + `v2a`), or no-op per `signature-verification-enabled` | Change the verification scheme (e.g. JWS). See [SPEC §8e](./docs/reference/SPEC.md#8e-asymmetric-verification--ed25519-v2a-whpk_) and [§8f](./docs/reference/SPEC.md#8f-disabling-message-security). |
 | `WebhookTransport` (producer) | `RetryingWebhookTransport` → `InterceptingWebhookTransport` → `RestClientWebhookTransport` | Send asynchronously, through a queue, or with a different delivery/retry policy. To add **transport auth**, publish a `WebhookRequestInterceptor` instead so retry + the SSRF guard remain. See [SPEC §19](./docs/reference/SPEC.md#19-producer--annotation-driven-sending). |
 | `WebhookRequestInterceptor` (producer, 0..n) | None | Add outbound request headers — an OAuth2 `Authorization: Bearer` token (transport auth), tenancy, tracing — inside the transport chain. See [Transport authentication](./docs/guides/transport-authentication.md). |
-| `WebhookSigner` (producer) | `HmacWebhookSigner`, or no-op per `signing-enabled` | Change the signing scheme. See [SPEC §19h](./docs/reference/SPEC.md#19h-disabling-message-signing). |
+| `WebhookSigner` (producer) | `DefaultWebhookSigner` (`v1` + `v2a`), or no-op per `signing-enabled` | Change the signing scheme. See [SPEC §19h](./docs/reference/SPEC.md#19h-disabling-message-signing) and [§19i](./docs/reference/SPEC.md#19i-asymmetric-signing--ed25519-v2a-whsk_). |
 | `DestinationUrlValidator` (producer) | Allow-all, or host allow-list per `security.allowed-hosts` | Implement a custom outbound-URL policy (CIDR ranges, private-IP / DNS-rebind blocking). See [SPEC §19d](./docs/reference/SPEC.md#19d-destination-url-guard-ssrf). |
 | `WebhookDeliveryListener` (producer) | No-op | Capture an abandoned outbound delivery (fatal `4xx` or retries exhausted) in a dead-letter store or alert. See [SPEC §20.5](./docs/reference/SPEC.md#205-failure-hooks-dead-letter-capture). |
 | `HandlerFailureListener` (consumer) | No-op | Capture an `async` handler that threw or timed out (the `204` was already sent). See [SPEC §20.5](./docs/reference/SPEC.md#205-failure-hooks-dead-letter-capture). |
+| `WebhookMetrics` (consumer) | `MicrometerWebhookMetrics` (if `MeterRegistry` present) or no-op | Emit receive/lag/failure metrics to a custom telemetry backend. |
 | `MetadataContributor` (consumer, additive) | None | Copy vendor headers into `meta.attribute(...)`; any number may be registered. |
 
 ### Observability

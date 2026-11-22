@@ -129,8 +129,8 @@ flowchart TD
 `Authorization: Bearer` token for transport auth) before the base transport POSTs. The result is classified:
 `2xx` is done; a fatal `4xx` is abandoned immediately; a retryable `5xx`/`429`/transport error is retried
 with exponential backoff (honoring `Retry-After`) until attempts are exhausted, then abandoned — and because
-each retry re-enters the chain at the interceptors, a token-expiry `401` re-mints the token on the next
-attempt. Abandoning fires the dead-letter hook and rethrows. See the [Producer guide](./guides/producer.md)
+each retry re-enters the chain at the interceptors, a short-lived bearer token that expired during backoff is
+freshly re-minted on the next attempt. Abandoning fires the dead-letter hook and rethrows. See the [Producer guide](./guides/producer.md)
 and [Reliability](./guides/reliability.md).
 
 ---

@@ -68,8 +68,9 @@ public class WebhookProperties {
 
         /**
          * Whether inbound requests have their <strong>signature verified</strong> (see SPEC.md §8f). Enabled
-         * by default: the {@link com.jinternals.webhooks.consumer.verify.HmacWebhookVerifier} checks the
-         * Standard Webhooks {@code webhook-signature} header against the endpoint's secret(s).
+         * by default: {@link com.jinternals.webhooks.consumer.verify.DefaultWebhookVerifier} checks the
+         * Standard Webhooks {@code webhook-signature} header against the endpoint's secret(s) ({@code whsec_}
+         * symmetric {@code v1} or {@code whpk_} asymmetric {@code v2a}).
          *
          * <p>Set to {@code false} to wire the
          * {@link com.jinternals.webhooks.consumer.verify.NoOpWebhookVerifier}: every request is then accepted

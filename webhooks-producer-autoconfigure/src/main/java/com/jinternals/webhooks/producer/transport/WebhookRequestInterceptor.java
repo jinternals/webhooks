@@ -20,8 +20,8 @@ import java.util.Map;
  *   <li>the SSRF/destination guard ({@code DestinationUrlValidator}) and URL redaction still apply
  *       ({@link RestClientWebhookTransport});</li>
  *   <li>because interception happens per attempt, a header derived from a short-lived credential (e.g. a
- *       bearer token) is <strong>re-derived on every retry</strong> — a {@code 401}-triggered retry picks
- *       up a freshly minted token automatically.</li>
+ *       bearer token) is <strong>re-derived on every retry</strong> — if a token expires during backoff on a
+ *       retryable failure ({@code 5xx}/{@code 429}/timeout), the next attempt picks up a freshly minted one.</li>
  * </ul>
  *
  * <p>Contrast with publishing your own {@code @Bean WebhookTransport}: that <em>replaces</em> the entire

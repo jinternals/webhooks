@@ -32,5 +32,22 @@ contain breaking changes; they will always be called out under **Changed** or **
   `static` nested) classes directly annotated with `@WebhookType` are discovered.
 - Test tooling: PITest 1.30.2 / pitest-junit5-plugin 1.2.3 (JUnit Platform 1.12 support); `@MockBean` replaced
   by `@MockitoBean`.
+- `WebhookMetadata.deliveryLag()` now returns `Optional<Duration>` (matching `eventLag()`) so unsigned
+  deliveries without a `webhook-timestamp` header never NPE, and `WebhookMetadata.toString()` renders
+  `redactedEvent()` with `authorization` / `proxy-authorization` / `cookie` headers masked.
+
+### Fixed
+
+- Ordered consumer and producer auto-configurations after Spring Boot Actuator's `ObservationAutoConfiguration`
+  so the fallback `ObservationRegistry.NOOP` bean never pre-empts Actuator's real `ObservationRegistry`.
+- `DestinationValidator` now honours `webhooks.producer.signing-enabled=false`, validates symmetric `whsec_`
+  secrets at startup, and redacts embedded credentials/query tokens in `URISyntaxException` messages.
+- Enforced `endpoint-id` presence and dot-freeness on `DefaultWebhookVerifier` `v2a` verification, rejected
+  wrong-half Ed25519 keys cleanly at runtime, hardened comma splitting (`split(",", 2)`), and eliminated
+  timestamp / lag / `Retry-After` arithmetic overflows.
+- `AsyncHandlerExecutor.close()` now drains in-flight and queued `204`-acknowledged handlers up to `timeout`
+  before `shutdownNow()`, routing any remaining unexecuted tasks to `HandlerFailureListener`.
+- `WebhookClientRegistrar` now uses `ClassUtils.getPackageName` and the thread context `ClassLoader` for
+  Spring Boot DevTools compatibility.
 
 [Unreleased]: https://github.com/jinternals/webhooks/commits/main

@@ -17,6 +17,7 @@ import org.springframework.context.annotation.ClassPathScanningCandidateComponen
 import org.springframework.context.annotation.ImportBeanDefinitionRegistrar;
 import org.springframework.core.type.AnnotationMetadata;
 import org.springframework.core.type.filter.AnnotationTypeFilter;
+import org.springframework.util.ClassUtils;
 
 /**
  * Discovers {@code @WebhookClient} interfaces and registers a {@link WebhookClientFactoryBean} for each
@@ -63,7 +64,7 @@ public class WebhookClientRegistrar implements ImportBeanDefinitionRegistrar {
     }
 
     /** The scan targets: anchors' packages + string packages; or the annotated class's package if none set. */
-    private Set<String> resolveBasePackages(AnnotationMetadata metadata, Map<String, Object> attributes) {
+    static Set<String> resolveBasePackages(AnnotationMetadata metadata, Map<String, Object> attributes) {
         Set<String> packages = new LinkedHashSet<>();
         for (Class<?> anchor : attribute(attributes, "basePackageClasses")) {
             packages.add(anchor.getPackageName());
@@ -73,8 +74,7 @@ public class WebhookClientRegistrar implements ImportBeanDefinitionRegistrar {
         }
         boolean nothingSelected = packages.isEmpty() && attribute(attributes, "clients").length == 0;
         if (nothingSelected) {
-            String className = metadata.getClassName();
-            packages.add(className.substring(0, className.lastIndexOf('.')));
+            packages.add(ClassUtils.getPackageName(metadata.getClassName()));
         }
         return packages;
     }
@@ -246,7 +246,7 @@ public class WebhookClientRegistrar implements ImportBeanDefinitionRegistrar {
      */
     static Class<?> loadClient(String className) {
         try {
-            return Class.forName(className);
+            return ClassUtils.forName(className, ClassUtils.getDefaultClassLoader());
         } catch (ClassNotFoundException e) {
             throw new IllegalStateException("Could not load @WebhookClient interface " + className, e);
         }

@@ -48,9 +48,10 @@ public class WebhookProducerProperties {
     private boolean validateDestinationsOnStartup = true;
 
     /**
-     * Whether outbound deliveries are <strong>signed</strong> (see SPEC.md §19f). Enabled by default: the
-     * {@link com.jinternals.webhooks.producer.sign.HmacWebhookSigner} adds a Standard Webhooks
-     * {@code webhook-signature} header over each payload.
+     * Whether outbound deliveries are <strong>signed</strong> (see SPEC.md §19h). Enabled by default:
+     * {@link com.jinternals.webhooks.producer.sign.DefaultWebhookSigner} adds a Standard Webhooks
+     * {@code webhook-signature} header over each payload ({@code whsec_} symmetric {@code v1} or {@code whsk_}
+     * asymmetric {@code v2a}).
      *
      * <p>Set to {@code false} to wire the
      * {@link com.jinternals.webhooks.producer.sign.NoOpWebhookSigner}: deliveries then carry

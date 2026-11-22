@@ -124,6 +124,52 @@ class WebhookClientRegistrarTest {
     }
 
     @Test
+    void resolveBasePackagesReturnsEmptyStringForADefaultPackageClassWithoutCrashing() {
+        // Regression guard: ClassUtils.getPackageName("DefaultPkgConfig") returns "" instead of crashing on
+        // substring(0, lastIndexOf('.')) == substring(0, -1).
+        AnnotationMetadata metadata = org.mockito.Mockito.mock(AnnotationMetadata.class);
+        org.mockito.Mockito.when(metadata.getClassName()).thenReturn("DefaultPkgConfig");
+        java.util.Map<String, Object> attrs = java.util.Map.of(
+                "clients", new Class<?>[0],
+                "basePackageClasses", new Class<?>[0],
+                "basePackages", new String[0]);
+
+        assertThat(WebhookClientRegistrar.resolveBasePackages(metadata, attrs)).containsExactly("");
+    }
+
+    @Test
+    void loadClientUsesTheThreadContextClassLoader() throws Exception {
+        // Spring Boot DevTools loads user classes in a RestartClassLoader set as the thread context ClassLoader,
+        // which is a child of the library's own ClassLoader. Class.forName(name) would only search the library's
+        // ClassLoader and miss classes visible solely to the context ClassLoader.
+        String dynamicName = "com.jinternals.webhooks.producer.DynamicContextOnlyClient";
+        byte[] bytecode = new net.bytebuddy.ByteBuddy()
+                .makeInterface()
+                .name(dynamicName)
+                .make()
+                .getBytes();
+        ClassLoader contextOnlyLoader = new ClassLoader(ScanCrmWebhooks.class.getClassLoader()) {
+            @Override
+            protected Class<?> findClass(String name) throws ClassNotFoundException {
+                if (dynamicName.equals(name)) {
+                    return defineClass(name, bytecode, 0, bytecode.length);
+                }
+                throw new ClassNotFoundException(name);
+            }
+        };
+        Thread current = Thread.currentThread();
+        ClassLoader previous = current.getContextClassLoader();
+        current.setContextClassLoader(contextOnlyLoader);
+        try {
+            Class<?> loaded = WebhookClientRegistrar.loadClient(dynamicName);
+            assertThat(loaded.getName()).isEqualTo(dynamicName);
+            assertThat(loaded.getClassLoader()).isSameAs(contextOnlyLoader);
+        } finally {
+            current.setContextClassLoader(previous);
+        }
+    }
+
+    @Test
     void scanIgnoresNonInterfaceCandidates() {
         DefaultListableBeanFactory registry = register(MixedScanConfig.class);
 
