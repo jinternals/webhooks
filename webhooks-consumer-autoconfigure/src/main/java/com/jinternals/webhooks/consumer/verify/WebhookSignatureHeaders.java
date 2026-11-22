@@ -1,8 +1,10 @@
 package com.jinternals.webhooks.consumer.verify;
 
 import com.jinternals.webhooks.core.model.WebhookHeaders;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import org.springframework.lang.Nullable;
 
 /**
  * Parses the three Standard Webhooks headers ({@code webhook-id}, {@code webhook-timestamp},
@@ -38,8 +40,8 @@ final class WebhookSignatureHeaders {
     static WebhookSignatureHeaders from(Map<String, List<String>> headers) throws WebhookVerificationFailure {
         String msgId = firstHeader(headers, WebhookHeaders.ID);
         String msgTimestamp = firstHeader(headers, WebhookHeaders.TIMESTAMP);
-        String msgSignature = firstHeader(headers, WebhookHeaders.SIGNATURE);
-        if (msgId == null || msgId.isBlank() || msgTimestamp == null || msgSignature == null) {
+        String msgSignature = joinedHeaders(headers, WebhookHeaders.SIGNATURE);
+        if (msgId == null || msgId.isBlank() || msgTimestamp == null || msgSignature.isBlank()) {
             throw new WebhookVerificationFailure(VerificationFailureReason.MISSING_HEADERS, "Missing required headers");
         }
         if (msgId.contains(".")) {
@@ -55,6 +57,7 @@ final class WebhookSignatureHeaders {
         return new WebhookSignatureHeaders(msgId, timestamp, msgSignature);
     }
 
+    @Nullable
     private static String firstHeader(Map<String, List<String>> headers, String name) {
         for (Map.Entry<String, List<String>> entry : headers.entrySet()) {
             if (entry.getKey().equalsIgnoreCase(name)) {
@@ -65,5 +68,23 @@ final class WebhookSignatureHeaders {
             }
         }
         return null;
+    }
+
+    /**
+     * Collect all header values for {@code name} (case-insensitively) joined by {@code ' '}, so senders or
+     * proxies that emit repeated {@code webhook-signature} header lines (RFC 9110 §5.3) verify identically
+     * to a single space-delimited {@code webhook-signature} value.
+     */
+    private static String joinedHeaders(Map<String, List<String>> headers, String name) {
+        List<String> collected = new ArrayList<>();
+        for (Map.Entry<String, List<String>> entry : headers.entrySet()) {
+            if (entry.getKey().equalsIgnoreCase(name)) {
+                List<String> values = entry.getValue();
+                if (values != null) {
+                    collected.addAll(values);
+                }
+            }
+        }
+        return String.join(" ", collected);
     }
 }

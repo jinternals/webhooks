@@ -80,6 +80,21 @@ class DefaultWebhookVerifierTest {
     }
 
     @Test
+    void verifiesWhenMultipleSignatureHeaderLinesAreSentSeparately() {
+        String id = "msg_4b";
+        String ts = Signing.now();
+        String body = "{\"a\":1}";
+        String validSig = Signing.sign(Signing.SECRET, id, ts, body);
+        Map<String, List<String>> multiLineHeaders = Map.of(
+                WebhookHeaders.ID, List.of(id),
+                WebhookHeaders.TIMESTAMP, List.of(ts),
+                WebhookHeaders.SIGNATURE, List.of("v1,rotatedOldSig", validSig));
+
+        assertThatCode(() -> verifier.verify(List.of(Signing.SECRET), null, body, multiLineHeaders))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
     void rejectsWhenNoSecretVerifiesAnySignature() {
         String id = "msg_5";
         String ts = Signing.now();

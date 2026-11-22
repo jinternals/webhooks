@@ -115,4 +115,38 @@ class WebhookSignatureHeadersTest {
                 .satisfies(e -> assertThat(((WebhookVerificationFailure) e).reason())
                         .isEqualTo(VerificationFailureReason.SIGNATURE));
     }
+
+    @Test
+    void joinsMultipleSignatureHeaderLinesWithSpace() throws Exception {
+        java.util.Map<String, List<String>> headers = new java.util.LinkedHashMap<>();
+        headers.put(WebhookHeaders.ID, List.of("msg_1"));
+        headers.put(WebhookHeaders.TIMESTAMP, List.of("1700000000"));
+        headers.put("Webhook-Signature", List.of("v1,sigA", "v1,sigB"));
+        headers.put("webhook-signature", List.of("v2a,sigC"));
+
+        WebhookSignatureHeaders parsed = WebhookSignatureHeaders.from(headers);
+
+        assertThat(parsed.signature).isEqualTo("v1,sigA v1,sigB v2a,sigC");
+    }
+
+    @Test
+    void failsWithMissingHeadersWhenSignatureIsBlankOrMappedToNull() {
+        assertThatThrownBy(() -> WebhookSignatureHeaders.from(Map.of(
+                        WebhookHeaders.ID, List.of("msg_1"),
+                        WebhookHeaders.TIMESTAMP, List.of("1700000000"),
+                        WebhookHeaders.SIGNATURE, List.of("   "))))
+                .isInstanceOf(WebhookVerificationFailure.class)
+                .satisfies(e -> assertThat(((WebhookVerificationFailure) e).reason())
+                        .isEqualTo(VerificationFailureReason.MISSING_HEADERS));
+
+        java.util.Map<String, List<String>> nullSignatureList = new java.util.HashMap<>();
+        nullSignatureList.put(WebhookHeaders.ID, List.of("msg_1"));
+        nullSignatureList.put(WebhookHeaders.TIMESTAMP, List.of("1700000000"));
+        nullSignatureList.put(WebhookHeaders.SIGNATURE, null);
+
+        assertThatThrownBy(() -> WebhookSignatureHeaders.from(nullSignatureList))
+                .isInstanceOf(WebhookVerificationFailure.class)
+                .satisfies(e -> assertThat(((WebhookVerificationFailure) e).reason())
+                        .isEqualTo(VerificationFailureReason.MISSING_HEADERS));
+    }
 }
