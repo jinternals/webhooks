@@ -29,7 +29,7 @@ jobs:
 
       # Full gate: Spotless formatting + unit tests + 100% JaCoCo line/branch coverage + 100% PIT mutation coverage.
       - name: mvn verify (format + coverage + mutation testing)
-        run: mvn -B -ntp -Pmutation,format verify
+        run: mvn -B -ntp -T 1C -Pmutation,format verify
 
       - name: Upload coverage & mutation reports
         if: always()

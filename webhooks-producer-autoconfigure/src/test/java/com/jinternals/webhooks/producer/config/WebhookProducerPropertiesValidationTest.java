@@ -59,7 +59,27 @@ class WebhookProducerPropertiesValidationTest {
         WebhookProducerProperties properties = new WebhookProducerProperties();
         properties.getHttp().setConnectTimeout(Duration.ofSeconds(2));
         properties.getHttp().setReadTimeout(Duration.ofSeconds(3));
+        properties.getRetry().setInitialBackoff(Duration.ofMillis(250));
+        properties.getRetry().setMaxBackoff(Duration.ofSeconds(2));
 
         assertThat(validator.validate(properties)).isEmpty();
+    }
+
+    @Test
+    void rejectsNullInitialBackoff() {
+        WebhookProducerProperties properties = new WebhookProducerProperties();
+        properties.getRetry().setInitialBackoff(null);
+
+        assertThat(validator.validate(properties))
+                .anySatisfy(v -> assertThat(v.getPropertyPath().toString()).contains("initialBackoff"));
+    }
+
+    @Test
+    void rejectsNullMaxBackoff() {
+        WebhookProducerProperties properties = new WebhookProducerProperties();
+        properties.getRetry().setMaxBackoff(null);
+
+        assertThat(validator.validate(properties))
+                .anySatisfy(v -> assertThat(v.getPropertyPath().toString()).contains("maxBackoff"));
     }
 }

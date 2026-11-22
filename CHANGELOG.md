@@ -63,8 +63,14 @@ contain breaking changes; they will always be called out under **Changed** or **
   wrong-half Ed25519 keys cleanly at runtime, hardened comma splitting (`split(",", 2)`), and eliminated
   timestamp / lag / `Retry-After` arithmetic overflows.
 - `AsyncHandlerExecutor.close()` now drains in-flight and queued `204`-acknowledged handlers up to `timeout`
-  before `shutdownNow()`, routing any remaining unexecuted tasks to `HandlerFailureListener`.
-- `WebhookClientRegistrar` now uses `ClassUtils.getPackageName` and the thread context `ClassLoader` for
-  Spring Boot DevTools compatibility.
+  before `shutdownNow()`, routing any remaining unexecuted tasks to `HandlerFailureListener`, and guards
+  against both pre-close task drops (`shutdownLock`) and duplicate timeout/completion failure callbacks.
+- `WebhookClientRegistrar` now uses `ClassUtils.getPackageName`, resolves classes via the thread context
+  `ClassLoader` for Spring Boot DevTools compatibility, and deduplicates client bean definitions across
+  multiple `@EnableWebhookClients` configurations.
+- Enforced `http`/`https` schemes in `DestinationValidator` and `AllowListDestinationUrlValidator`, rejected
+  duplicate consumer endpoint `path`s and blank `@WebhookType` values at startup, joined multi-line
+  `webhook-signature` headers per RFC 9110 §5.3, and added `@NotNull` bind-time validation on producer retry
+  backoff durations.
 
 [Unreleased]: https://github.com/jinternals/webhooks/commits/main

@@ -150,9 +150,11 @@ public class WebhookProducerProperties {
         private int maxAttempts = 3;
 
         /** Backoff before the second attempt; doubles each further attempt up to {@link #maxBackoff}. Default 500ms. */
+        @NotNull
         private Duration initialBackoff = Duration.ofMillis(500);
 
         /** Upper bound on any single backoff after exponential growth. Default 5 seconds. */
+        @NotNull
         private Duration maxBackoff = Duration.ofSeconds(5);
 
         /**

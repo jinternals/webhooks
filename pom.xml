@@ -73,6 +73,7 @@
         <jacoco.version>0.8.12</jacoco.version>
         <pitest.version>1.30.2</pitest.version>
         <pitest-junit5.version>1.2.3</pitest-junit5.version>
+        <pitest.threads>4</pitest.threads>
         <!-- Mutation testing is slow (~4 min), so the local `mvn verify` skips it by default and keeps only the
              100% JaCoCo gate. Enable with the `mutation` profile (`mvn -Pmutation verify`); CI always does. -->
         <skipPitest>true</skipPitest>
@@ -201,6 +202,7 @@
                         </dependency>
                     </dependencies>
                     <configuration>
+                        <threads>${pitest.threads}</threads>
                         <mutationThreshold>100</mutationThreshold>
                         <coverageThreshold>100</coverageThreshold>
                         <mutators>
