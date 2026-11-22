@@ -43,6 +43,7 @@ timestamp-based replay window. The replay window is **disabled by default** and 
 - [Running the samples](#running-the-samples)
 - [Quality gate](#quality-gate)
 - [Further reading](#further-reading)
+- [Contributing](#contributing)
 - [License](#license)
 
 ## Design scope
@@ -715,7 +716,7 @@ Beyond coverage and mutation, the build can scan dependencies for known CVEs wit
 `security-scan` profile so the fast gate stays offline:
 
 ```bash
-mvn -Psecurity-scan verify -Dnvd.api.key=<key>   # an NVD API key avoids download throttling
+NVD_API_KEY=<key> mvn -Psecurity-scan verify   # an NVD API key avoids download throttling
 ```
 
 It fails the build on a high/critical finding (CVSS ≥ 7). See [SPEC §19e](./docs/reference/SPEC.md#19e-dependency-vulnerability-scanning).
@@ -732,6 +733,12 @@ It fails the build on a high/critical finding (CVSS ≥ 7). See [SPEC §19e](./d
   [Reliability](./docs/guides/reliability.md) and [Observability](./docs/guides/observability.md) guides.
 - [`STANDARD_WEBHOOKS.md`](./docs/reference/STANDARD_WEBHOOKS.md) — the protocol reference (headers, signature scheme,
   payloads).
+
+## Contributing
+
+Contributions are welcome — see [CONTRIBUTING.md](./CONTRIBUTING.md) and the [Code of Conduct](./CODE_OF_CONDUCT.md).
+Please report security issues privately as described in [SECURITY.md](./SECURITY.md). Release notes are in
+[CHANGELOG.md](./CHANGELOG.md).
 
 ## License
 

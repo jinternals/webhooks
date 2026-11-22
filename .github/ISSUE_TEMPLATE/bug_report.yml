@@ -1,0 +1,56 @@
+name: Bug report
+description: Something isn't working as documented
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! **Security issues must not be reported here** — see [SECURITY.md](https://github.com/jinternals/webhook/blob/main/SECURITY.md).
+  - type: dropdown
+    id: module
+    attributes:
+      label: Module
+      options:
+        - consumer (webhooks-consumer-*)
+        - producer (webhooks-producer-*)
+        - core (webhooks-core)
+        - samples
+        - docs
+        - not sure
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Toolkit version
+      placeholder: e.g. 0.1.0 or commit sha
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: Spring Boot / Java version
+      placeholder: e.g. Spring Boot 3.3.5, Java 21
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Include the expected vs actual behaviour.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Minimal reproduction
+      description: Configuration (redact secrets!), handler/client code, and the request that triggers the problem.
+      render: java
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs / stack trace
+      description: Please redact any secrets, keys, or signatures.
+      render: text

@@ -1787,7 +1787,7 @@ the default `verify`, because a full NVD scan is slow and network-bound (the 100
 must stay fast and offline):
 
 ```bash
-mvn -Psecurity-scan verify -Dnvd.api.key=<key>   # an NVD API key avoids download throttling
+NVD_API_KEY=<key> mvn -Psecurity-scan verify   # an NVD API key avoids download throttling
 ```
 
 The scan fails the build on a high/critical finding (CVSS ≥ 7) and skips test/provided-scope
