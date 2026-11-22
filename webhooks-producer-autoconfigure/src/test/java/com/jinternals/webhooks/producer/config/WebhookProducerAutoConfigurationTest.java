@@ -304,6 +304,34 @@ class WebhookProducerAutoConfigurationTest {
     }
 
     @Test
+    void observationRegistryBacksOffWhenActuatorObservationAutoConfigurationIsPresent() {
+        // Regression guard: com.jinternals... sorts alphabetically BEFORE org.springframework.boot.actuate...
+        // Without afterName = "...ObservationAutoConfiguration", our NOOP fallback registered first and caused
+        // Actuator's ObservationAutoConfiguration to back off, silently disabling ALL observations in the host app.
+        new org.springframework.boot.test.context.runner.ApplicationContextRunner()
+                .withConfiguration(org.springframework.boot.autoconfigure.AutoConfigurations.of(
+                        WebhookProducerAutoConfiguration.class,
+                        org.springframework.boot.autoconfigure.jackson.JacksonAutoConfiguration.class,
+                        org.springframework.boot.autoconfigure.web.client.RestClientAutoConfiguration.class,
+                        org.springframework.boot.actuate.autoconfigure.metrics.MetricsAutoConfiguration.class,
+                        org.springframework.boot.actuate.autoconfigure.metrics.export.simple
+                                .SimpleMetricsExportAutoConfiguration.class,
+                        org.springframework.boot.actuate.autoconfigure.metrics.CompositeMeterRegistryAutoConfiguration
+                                .class,
+                        org.springframework.boot.actuate.autoconfigure.observation.ObservationAutoConfiguration.class))
+                .run(ctx -> {
+                    ObservationRegistry observationRegistry = ctx.getBean(ObservationRegistry.class);
+                    assertThat(observationRegistry).isNotSameAs(ObservationRegistry.NOOP);
+                    io.micrometer.observation.Observation.createNotStarted("test.obs", observationRegistry)
+                            .observe(() -> {});
+                    assertThat(ctx.getBean(io.micrometer.core.instrument.MeterRegistry.class)
+                                    .find("test.obs")
+                                    .timer())
+                            .isNotNull();
+                });
+    }
+
+    @Test
     void observedAspectIsProvidedForTheObservationRegistry() {
         // The factory constructs the standard Micrometer ObservedAspect (a third-party wrapper whose sole
         // job is to advise @Observed) from the given registry. Its internals are Micrometer's, not ours, so

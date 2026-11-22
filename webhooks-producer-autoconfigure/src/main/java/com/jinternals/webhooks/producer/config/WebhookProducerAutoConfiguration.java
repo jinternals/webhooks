@@ -27,6 +27,7 @@ import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.jackson.JacksonAutoConfiguration;
+import org.springframework.boot.autoconfigure.web.client.RestClientAutoConfiguration;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
@@ -42,7 +43,9 @@ import org.springframework.web.client.RestClient;
  * override any piece — {@link WebhookSigner}, {@link WebhookTransport},
  * {@code SecretProvider<Destination>}, even the {@link RestClient} the default transport uses.
  */
-@AutoConfiguration(after = JacksonAutoConfiguration.class)
+@AutoConfiguration(
+        after = {JacksonAutoConfiguration.class, RestClientAutoConfiguration.class},
+        afterName = "org.springframework.boot.actuate.autoconfigure.observation.ObservationAutoConfiguration")
 @EnableConfigurationProperties(WebhookProducerProperties.class)
 public class WebhookProducerAutoConfiguration {
 
