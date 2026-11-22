@@ -1,7 +1,7 @@
 # Verification & security
 
 How the toolkit keeps webhooks trustworthy: signature verification (symmetric HMAC `v1` and asymmetric
-Ed25519 `v2a`), the optional replay window, zero-downtime secret rotation, the outbound SSRF guard, and
+Ed25519 `v2a`), the replay window (enabled by default), zero-downtime secret rotation, the outbound SSRF guard, and
 redaction-safe logging. These concerns apply to both sides — the producer signs, the consumer verifies.
 
 > For the protocol-level detail (exact signing string, header formats) see
@@ -402,8 +402,8 @@ headers. See [SPEC §9a](../reference/SPEC.md#9a-field-level-redaction--redact) 
 
 | Control | Default | Recommendation |
 | --- | --- | --- |
-| Signature verification | on (`v1` HMAC) | on by default; use `v2a` (Ed25519) across trust boundaries so the receiver can't forge deliveries |
-| Replay window | **off** | **on** for internet-facing endpoints, with NTP-synced clocks |
+| Signature verification | on (`v1` HMAC / `v2a` Ed25519) | on by default; use `v2a` (Ed25519) across trust boundaries so the receiver can't forge deliveries |
+| Replay window | **on** (`5m` tolerance) | keep enabled for internet-facing endpoints, with NTP-synced clocks |
 | Secret storage | from config / `${ENV}` | inject via env or a secrets manager; never commit secrets |
 | Secret rotation | manual | use `additional-secrets` for zero-downtime rolls |
 | Body-size limit | 256 KB | lower if your events are small; blocks memory-exhaustion |

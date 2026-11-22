@@ -158,7 +158,7 @@ sequenceDiagram
     S->>P: send(ContactCreated)
     P->>P: build envelope + sign (HMAC-SHA256)
     P->>R: POST /webhooks/crm<br/>webhook-id / -timestamp / -signature
-    R->>R: verify signature (+ optional replay window)
+    R->>R: verify signature + replay window (5m default)
     alt verified
         R->>H: onContactCreated(event, metadata)
         R-->>P: 204 No Content
@@ -168,15 +168,15 @@ sequenceDiagram
 ```
 
 **Text summary.** The producer turns your typed event into a signed Standard Webhooks envelope and POSTs it.
-The consumer verifies the signature (and, if enabled, the timestamp freshness), then — only on success —
-deserializes and dispatches to your handler, returning `204`. Anything unverified returns `400` and never
-reaches your code.
+The consumer verifies the signature and timestamp freshness (`5m` replay window by default), then — only on
+success — deserializes and dispatches to your handler, returning `204`. Anything unverified returns `400` and
+never reaches your code.
 
 ---
 
 ## Next steps
 
-- Harden it: **[enable the replay window](./guides/verification-and-security.md#replay-window)** for internet-facing endpoints.
+- Security & rotation: **[Verification & security](./guides/verification-and-security.md)** (`v1`/`v2a`, replay window, rotation, SSRF, redaction).
 - Understand delivery guarantees: **[Reliability](./guides/reliability.md)** (retry, `Retry-After`, sync vs async, dead-letter hooks).
 - See it observable: **[Observability](./guides/observability.md)** (correlation, lag logging, metrics).
 - Look up any setting: **[Configuration reference](./reference/configuration.md)**.

@@ -463,7 +463,7 @@ library (`Webhook.sign` → `v1,<base64>`; exact API and error messages in `STAN
 so HMAC-SHA256, the `msg_id.timestamp.payload` scheme, and `whsec_` secret decoding all come from the
 audited code. The wrapper adds, on top of it: **multi-secret acceptance** for rotation (§8a),
 **multi-signature acceptance** (space-delimited values, for dual-signing senders), constant-time
-comparison (`MessageDigest.isEqual`), and a **configurable, off-by-default replay window** (§8b). The
+comparison (`MessageDigest.isEqual`), and a **configurable, enabled-by-default replay window** (§8b). The
 library's own `verify` is not used because it bundles a fixed, non-tunable ±5-minute timestamp check,
 and because it has no asymmetric (`v2a`) support at all.
 
@@ -524,7 +524,7 @@ consumer resist replay without a seen-ids store.
 
 **The window is a separate, injectable concern.** The upstream `com.standardwebhooks` library bundles a
 fixed ±5-minute timestamp check inside its `verify(payload, headers)` and exposes no way to tune or
-disable it. To make the window configurable — and off by default — `HmacWebhookVerifier` does not call the
+disable it. To make the window configurable — and enabled by default (`5m`) with an opt-out switch — `HmacWebhookVerifier` does not call the
 library's `verify`; it recomputes the HMAC via `Webhook.sign` and performs the freshness check through a
 one-method SPI:
 
@@ -791,7 +791,7 @@ log.info("event={}", WebhookRedactor.toRedactedString(event));
 ### Performance — reflection is cached, no per-call penalty
 
 `WebhookRedactor` reflects over a class **exactly once** and caches a precompiled `FieldPlan[]`
-(the accessible `Field` handles plus each field's mask policy) in a lock-free `ConcurrentHashMap`.
+(the accessible `Field` handles plus each field's mask policy) in a JVM-managed `ClassValue`.
 Every subsequent render of that type does **zero** annotation lookups and **zero** field discovery —
 it just iterates the cached array and reads already-`setAccessible` handles. There is no reflection
 cost on the hot path beyond the first event of each type.
@@ -995,7 +995,7 @@ Real idempotency ("process each `webhook-id` exactly once, ever") requires a sto
 building. Options given the no-storage constraint:
 
 1. **None (recommended default).** Make handlers **naturally idempotent** (e.g. upserts in the
-   downstream system), optionally enabling the replay window (§8b, off by default) for replay security.
+   downstream system), paired with the enabled-by-default replay window (§8b, `5m` tolerance) for replay security.
    This is the cleanest fit for "no storage."
 2. **In-memory best-effort** `IdempotencyGuard` — a bounded, time-expiring record of recent
    `webhook-id`s (e.g. Caffeine with 5-min TTL). Catches duplicate retries within one instance's

@@ -59,11 +59,11 @@ Yes, under the default `ack-and-ignore` unknown-type policy: an unmodelled `type
 **stops retrying** something you'll never handle. Set `unknown-type-policy: reject` to return `400` instead.
 See [Consumer guide → unknown-type policy](../guides/consumer.md#unknown-type-policy).
 
-### My schema keys don't bind — `"[contact.created]"`?
+### How do I validate event payloads?
 
-Schema (and some map) keys contain dots. Bracket-quote them so Spring's relaxed binding doesn't treat the dot
-as a nested property: `"[contact.created]": classpath:/schema/x.json`. See
-[Configuration reference](../reference/configuration.md#consumer-webhooksconsumer).
+Annotate your `@WebhookType` event class directly with Jakarta Bean Validation constraints (`@NotBlank`,
+`@Positive`, `@Size`, …) — the event class *is* the schema, and unknown JSON fields in `data` are rejected
+automatically (`400`). See [Consumer guide → payload validation](../guides/consumer.md#per-type-payload-validation).
 
 ### Should I use `sync` or `async` handlers?
 
@@ -110,11 +110,12 @@ Yes — replace the `WebhookTransport` bean. See
 
 ## Security
 
-### Should I enable the replay window?
+### Is the replay window enabled by default?
 
-**Yes for internet-facing endpoints.** It's off by default (the signature alone is trusted). With it on, a
-captured delivery can't be replayed indefinitely. Requires NTP-synced clocks and pairs well with idempotent
-handlers. See [Verification & security → replay window](../guides/verification-and-security.md#replay-window).
+**Yes (`5m` tolerance).** Out of the box, `ClockSkewTimestampValidator` rejects captured deliveries outside
+`replay-tolerance` so they cannot be replayed indefinitely. Keep clocks NTP-synced and pair with idempotent
+handlers; only set `replay-window-enabled: false` for offline fixture replay. See
+[Verification & security → replay window](../guides/verification-and-security.md#replay-window).
 
 ### How do I rotate a secret with no downtime?
 
@@ -124,7 +125,8 @@ fails. See [Verification & security → secret rotation](../guides/verification-
 
 ### How do I resolve secrets from a secrets manager?
 
-Replace the `SecretProvider<T>` bean. See
+Replace the `SecretProvider<T>` bean (`@Bean SecretProvider<Endpoint>` on the consumer, or
+`@Bean("destinationSecretProvider") SecretProvider<Destination>` on the producer). See
 [Beans & extension points](../reference/beans-and-spis.md).
 
 ### How do I restrict outbound destinations (SSRF)?

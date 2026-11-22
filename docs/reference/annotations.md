@@ -28,7 +28,7 @@ public record ContactCreated(String id, String email) { }
 - The class is what the envelope's `data` node deserializes to / from.
 - **Exactly one class per `type`** — a duplicate fails fast at startup.
 - Consumer-side discovery is automatic: it scans the host app's `@SpringBootApplication` package(s); override with a custom `@Bean WebhookTypeRegistry`.
-- Unknown fields bind leniently, so a sender can add fields without breaking you.
+- Unknown JSON fields inside the `data` object are **rejected** (`400`) by the strict event reader, so adding fields means updating the receiver's `@WebhookType` model first.
 
 ---
 
@@ -85,15 +85,15 @@ public class ContactHandlers {
 | Accessor | Type | Meaning |
 | --- | --- | --- |
 | `type()` | String | the event type |
-| `webhookId()` | String | `webhook-id` (correlation / idempotency key) |
-| `attemptTimestamp()` | Instant | `webhook-timestamp` (this delivery attempt) |
+| `webhookId()` | String | `webhook-id` (correlation / idempotency key); nullable when unsigned |
+| `attemptTimestamp()` | Instant | `webhook-timestamp` (this delivery attempt); nullable when unsigned |
 | `eventTimestamp()` | Instant | envelope `timestamp` (event occurrence); nullable |
-| `deliveryLag()` | Duration | `now − attemptTimestamp` |
+| `deliveryLag()` | Optional&lt;Duration&gt; | `now − attemptTimestamp`; empty if no valid `webhook-timestamp` |
 | `eventLag()` | Optional&lt;Duration&gt; | `now − eventTimestamp`; empty if no body timestamp |
 | `endpointPath()` | String | the matched listen path |
 | `sourceIp()` | String | caller IP |
-| `header(name)` | Optional&lt;String&gt; | case-insensitive header lookup (**signature redacted**) |
-| `headers()` | Map | all headers, lower-cased, `webhook-signature` redacted |
+| `header(name)` | Optional&lt;String&gt; | case-insensitive header lookup (**signature & auth headers redacted**) |
+| `headers()` | Map | all headers, lower-cased, `webhook-signature` and auth headers redacted |
 | `redactedEvent()` | String | the event with `@Redact` fields masked — log this |
 | `attributes()` | Map | provider-specific fields from a `MetadataContributor` |
 

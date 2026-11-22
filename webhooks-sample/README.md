@@ -106,10 +106,14 @@ It tears the stack down on exit. Requires Docker (with the Compose plugin) and `
 ## What each app shows
 
 - **`producer-sample`** — `@EnableWebhookClients(clients = {CrmWebhooks.class, CrmWebhooksV2a.class})` (the
-  zero-scan, explicit registration path), two `@WebhookClient` interfaces (one per destination), and a
-  controller that triggers a signed send. See [producer-sample/](producer-sample).
+  zero-scan, explicit registration path), two `@WebhookClient` interfaces (one per destination), a
+  `DeadLetterDeliveryListener` (`WebhookDeliveryListener`), a controller that triggers a signed send, and
+  profile-activated SPI overrides under `spi/` (`BearerTokenWebhookInterceptor`,
+  `@Bean("destinationSecretProvider")`, `QueueingWebhookTransport`). See [producer-sample/](producer-sample).
 - **`consumer-sample`** — `@WebhookType` event POJOs (the type *is* the schema, via Bean Validation),
-  `@WebhookHandler` beans for both a multi-type and a single-type endpoint, and a `MetadataContributor`.
+  `@WebhookHandler` beans for both a multi-type and a single-type endpoint, `SampleMetadataContributor`
+  (`MetadataContributor`), `LoggingHandlerFailureListener` (`HandlerFailureListener`), and profile-activated
+  SPI overrides under `spi/` (`SharedStoreIdempotencyGuard`, custom `SecretProvider<Endpoint>`).
   Includes `smoke-test.sh`, `sign.py`, `requests.http`, and load tests. See
   [consumer-sample/](consumer-sample).
 - **Both signing schemes** ([SPEC §19i](../docs/reference/SPEC.md#19i-asymmetric-signing--ed25519-v2a-whsk_))

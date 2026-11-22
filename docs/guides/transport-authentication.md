@@ -127,8 +127,10 @@ spring:
 
 ## What about an asymmetric *message* model?
 
-Transport auth does not change how the *message* is authenticated. An asymmetric / JWS / JWT **message**
-security model (verifying authenticity with public keys instead of a shared HMAC secret) would replace the
-signing scheme itself, not the transport. Making that pluggable (an SPI with the HMAC implementation as the
-default bean, mirroring `WebhookTransport` / `SecretProvider` / `DestinationUrlValidator`) is a tracked,
-additive enhancement — see [`SPEC.md` §17](../reference/SPEC.md#17-open-questions).
+Transport auth authenticates the *caller* over HTTP; for **asymmetric message signing** (so a receiver holds
+only a public key and can never forge deliveries), the toolkit ships Standard Webhooks **Ed25519 `v2a`** out of
+the box — configure a `whsk_` private key on the producer and the matching `whpk_` public key (plus shared
+`endpoint-id`) on the consumer; see
+[Verification & security → asymmetric signatures](./verification-and-security.md#asymmetric-signatures-ed25519-v2a).
+For custom message schemes (such as JWS), replace the `WebhookSigner` / `WebhookVerifier` SPI beans — see
+[Beans & extension points](../reference/beans-and-spis.md).
