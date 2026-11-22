@@ -50,6 +50,9 @@ public final class WebhookTypeScanner {
             for (BeanDefinition candidate : scanner.findCandidateComponents(basePackage)) {
                 Class<?> eventClass = ClassUtils.resolveClassName(candidate.getBeanClassName(), classLoader);
                 String type = eventClass.getAnnotation(WebhookType.class).value();
+                if (type.isBlank()) {
+                    throw new IllegalStateException("@WebhookType value must not be blank on " + eventClass.getName());
+                }
                 Class<?> previous = byType.putIfAbsent(type, eventClass);
                 if (previous != null && previous != eventClass) {
                     throw new IllegalStateException("Duplicate @WebhookType(\"" + type + "\") on " + previous.getName()

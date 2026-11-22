@@ -251,6 +251,22 @@ class WebhookClientRegistrarTest {
                 .hasMessageContaining("is not annotated with @WebhookType");
     }
 
+    @com.jinternals.webhooks.core.annotations.WebhookType("   ")
+    static class BlankTypeEvent {}
+
+    @WebhookClient(destination = "crm")
+    interface BlankWebhookTypeClient {
+        void publish(BlankTypeEvent event);
+    }
+
+    @Test
+    void validateRejectsParameterWithBlankWebhookTypeValue() {
+        assertThatThrownBy(() -> WebhookClientRegistrar.validateClientMethods(BlankWebhookTypeClient.class))
+                .isInstanceOf(InvalidWebhookClientException.class)
+                .hasMessageContaining("has a blank @WebhookType value")
+                .hasMessageContaining(BlankTypeEvent.class.getName());
+    }
+
     @Test
     void abstractInterfaceMethodIsAWebhookMethod() throws Exception {
         java.lang.reflect.Method contactCreated = ScanCrmWebhooks.class.getMethod(

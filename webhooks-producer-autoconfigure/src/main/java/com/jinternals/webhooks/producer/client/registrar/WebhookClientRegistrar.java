@@ -189,9 +189,14 @@ public class WebhookClientRegistrar implements ImportBeanDefinitionRegistrar {
                     method,
                     "must take exactly one @WebhookType-annotated event argument (found " + params.length + ").");
         }
-        if (!params[0].isAnnotationPresent(WebhookType.class)) {
+        WebhookType webhookType = params[0].getAnnotation(WebhookType.class);
+        if (webhookType == null) {
             throw new InvalidWebhookClientException(
                     method, "parameter " + params[0].getName() + " is not annotated with @WebhookType.");
+        }
+        if (webhookType.value().isBlank()) {
+            throw new InvalidWebhookClientException(
+                    method, "parameter " + params[0].getName() + " has a blank @WebhookType value.");
         }
         if (method.getReturnType() != void.class) {
             throw new InvalidWebhookClientException(

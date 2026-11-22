@@ -171,6 +171,10 @@ public class WebhookPublisher {
             throw new IllegalArgumentException(
                     "Event " + event.getClass().getName() + " is not annotated with @WebhookType");
         }
+        if (type.value().isBlank()) {
+            throw new IllegalArgumentException(
+                    "Event " + event.getClass().getName() + " has a blank @WebhookType value");
+        }
         return type.value();
     }
 

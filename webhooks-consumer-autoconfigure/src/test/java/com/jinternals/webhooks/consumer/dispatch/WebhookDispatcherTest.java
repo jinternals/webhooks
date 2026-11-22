@@ -270,6 +270,14 @@ class WebhookDispatcherTest {
                 .hasMessageContaining("Duplicate @WebhookHandler");
     }
 
+    @Test
+    void rejectsBlankWebhookTypeParam() {
+        assertThatThrownBy(() -> buildDispatcher(BlankTypeHandler.class))
+                .hasRootCauseInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("blank @WebhookType value")
+                .hasMessageContaining(BlankTypeEvent.class.getName());
+    }
+
     // --- helpers / configs ---
 
     private void buildDispatcher(Class<?>... beanClasses) {
@@ -398,5 +406,13 @@ class WebhookDispatcherTest {
     static class DuplicateB {
         @WebhookHandler
         void a2(EventA e) {}
+    }
+
+    @WebhookType("   ")
+    static class BlankTypeEvent {}
+
+    static class BlankTypeHandler {
+        @WebhookHandler
+        void bad(BlankTypeEvent e) {}
     }
 }

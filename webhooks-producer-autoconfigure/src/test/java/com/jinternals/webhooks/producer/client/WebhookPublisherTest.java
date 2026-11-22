@@ -38,6 +38,11 @@ class WebhookPublisherTest {
         public String id = "x";
     }
 
+    @WebhookType("   ")
+    static class BlankTypeEvent {
+        public String id = "x";
+    }
+
     private ObjectMapper objectMapper;
     private WebhookSigner signer;
     private WebhookTransport transport;
@@ -96,6 +101,14 @@ class WebhookPublisherTest {
         assertThatThrownBy(() -> publisher.publish("crm", new NotAnEvent()))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("is not annotated with @WebhookType");
+    }
+
+    @Test
+    void rejectsEventWithBlankWebhookTypeValue() {
+        assertThatThrownBy(() -> publisher.publish("crm", new BlankTypeEvent()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("has a blank @WebhookType value")
+                .hasMessageContaining(BlankTypeEvent.class.getName());
     }
 
     @Test

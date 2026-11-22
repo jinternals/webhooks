@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.jinternals.webhooks.consumer.registry.typefixtures.alpha.AlphaEvent;
 import com.jinternals.webhooks.consumer.registry.typefixtures.beta.BetaEvent;
+import com.jinternals.webhooks.consumer.registry.typefixtures.blank.BlankTypeEvent;
 import com.jinternals.webhooks.consumer.registry.typefixtures.shapes.Outer;
 import com.jinternals.webhooks.consumer.registry.typefixtures.shapes.sub.SubPackageEvent;
 import com.jinternals.webhooks.core.registry.WebhookTypeRegistry;
@@ -46,6 +47,14 @@ class WebhookTypeScannerTest {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("Duplicate @WebhookType(\"fixture.alpha\")")
                 .hasMessageContaining(AlphaEvent.class.getName());
+    }
+
+    @Test
+    void scanRejectsBlankWebhookTypeValue() {
+        assertThatThrownBy(() -> WebhookTypeScanner.scan(BlankTypeEvent.class.getPackageName()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("@WebhookType value must not be blank")
+                .hasMessageContaining(BlankTypeEvent.class.getName());
     }
 
     @Test

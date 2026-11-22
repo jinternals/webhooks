@@ -130,6 +130,12 @@ public class WebhookDispatcher implements InitializingBean {
                 wantsMetadata = true;
                 metadataFirst = (i == 0);
             } else if (paramType.isAnnotationPresent(WebhookType.class)) {
+                if (paramType.getAnnotation(WebhookType.class).value().isBlank()) {
+                    throw new IllegalStateException(invalid(method)
+                            + " declares event parameter "
+                            + paramType.getName()
+                            + " with a blank @WebhookType value.");
+                }
                 if (eventType != null) {
                     throw new IllegalStateException(invalid(method) + " has more than one @WebhookType parameter.");
                 }
