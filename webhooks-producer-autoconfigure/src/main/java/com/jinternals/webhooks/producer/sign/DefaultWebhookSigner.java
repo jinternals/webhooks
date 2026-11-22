@@ -1,6 +1,7 @@
 package com.jinternals.webhooks.producer.sign;
 
 import com.jinternals.webhooks.core.sign.Ed25519Keys;
+import org.springframework.lang.Nullable;
 
 /**
  * The shipped default {@link WebhookSigner}: selects the Standard Webhooks signing scheme
@@ -25,7 +26,7 @@ public class DefaultWebhookSigner implements WebhookSigner {
     private final WebhookSigner ed25519 = new Ed25519WebhookSigner();
 
     @Override
-    public String sign(String secret, String endpointId, String messageId, long timestamp, String payload) {
+    public String sign(String secret, @Nullable String endpointId, String messageId, long timestamp, String payload) {
         if (Ed25519Keys.isPublicKey(secret)) {
             throw new IllegalArgumentException(
                     "Destination is configured with an Ed25519 public key (whpk_); a producer must sign with the "

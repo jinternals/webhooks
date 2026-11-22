@@ -1,5 +1,7 @@
 package com.jinternals.webhooks.core.config;
 
+import org.springframework.lang.Nullable;
+
 /**
  * Thrown at <strong>startup</strong> when webhook configuration is invalid in a way the context cannot
  * recover from — a missing or malformed signing key, a missing endpoint id for the asymmetric {@code v2a}
@@ -38,7 +40,7 @@ public class WebhookConfigurationException extends RuntimeException {
      * @param action      how to fix it (becomes the failure report's <em>Action</em>)
      * @param cause       the underlying failure (e.g. a key-decode or URL-parse error), kept for the stack
      */
-    public WebhookConfigurationException(String description, String action, Throwable cause) {
+    public WebhookConfigurationException(String description, String action, @Nullable Throwable cause) {
         super(description, cause);
         this.action = action;
     }

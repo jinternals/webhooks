@@ -2,6 +2,7 @@ package com.jinternals.webhooks.producer.transport;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import org.springframework.lang.Nullable;
 
 /**
  * Renders a destination URL in a form that is safe to place in logs and exception messages (see SPEC.md
@@ -29,7 +30,7 @@ public final class SafeUrl {
      * Return a log-safe rendering of {@code url}: scheme, host, port and path only — userinfo and query
      * removed. Never returns {@code null}.
      */
-    public static String sanitize(String url) {
+    public static String sanitize(@Nullable String url) {
         if (url == null) {
             return NULL_URL;
         }
@@ -111,7 +112,8 @@ public final class SafeUrl {
      * @return the message with every occurrence of {@code url} replaced by its sanitized form; {@code null} in,
      *     {@code null} out
      */
-    public static String redactMessage(String message, String url) {
+    @Nullable
+    public static String redactMessage(@Nullable String message, @Nullable String url) {
         if (message == null || url == null) {
             return message;
         }

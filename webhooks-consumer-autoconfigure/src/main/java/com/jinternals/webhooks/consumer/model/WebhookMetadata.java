@@ -9,6 +9,7 @@ import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import org.springframework.lang.Nullable;
 
 /**
  * Immutable metadata handed to webhook handlers alongside the deserialized event (see SPEC.md §9).
@@ -32,9 +33,9 @@ public record WebhookMetadata(
 
         // --- Standard Webhooks envelope / headers ---
         String type,
-        String webhookId,
-        Instant attemptTimestamp, // webhook-timestamp header (delivery attempt time) — nullable when unsigned
-        Instant eventTimestamp, // body "timestamp" (when the event occurred) — nullable
+        @Nullable String webhookId,
+        @Nullable Instant attemptTimestamp, // webhook-timestamp header (delivery attempt time) — nullable when unsigned
+        @Nullable Instant eventTimestamp, // body "timestamp" (when the event occurred) — nullable
 
         // --- Endpoint context ---
         String endpointPath,

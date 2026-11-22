@@ -1,5 +1,7 @@
 package com.jinternals.webhooks.consumer.idempotency;
 
+import org.springframework.lang.Nullable;
+
 /**
  * Duplicate detection on {@code webhook-id} (see SPEC.md §11). This is the <strong>extension point
  * (SPI)</strong> for idempotency: the shipped implementations are {@link NoOpIdempotencyGuard}
@@ -34,17 +36,17 @@ public interface IdempotencyGuard {
      * reserved, so the caller should proceed), or {@code false} when it has already been reserved or
      * processed (so the caller should skip it as a duplicate). A null/blank id is never a duplicate.
      */
-    boolean tryBegin(String webhookId);
+    boolean tryBegin(@Nullable String webhookId);
 
     /**
      * Commit a reservation made by {@link #tryBegin(String)} once the delivery has been processed, so
      * future retries of the same id are suppressed.
      */
-    void markProcessed(String webhookId);
+    void markProcessed(@Nullable String webhookId);
 
     /**
      * Release a reservation made by {@link #tryBegin(String)} when processing <em>failed</em>, so the
      * sender's retry of the same id is allowed to run instead of being skipped as a duplicate.
      */
-    void release(String webhookId);
+    void release(@Nullable String webhookId);
 }

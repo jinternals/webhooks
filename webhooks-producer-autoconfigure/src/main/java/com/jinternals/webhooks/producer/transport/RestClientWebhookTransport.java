@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.lang.Nullable;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
@@ -86,10 +87,12 @@ public class RestClientWebhookTransport implements WebhookTransport {
      * HTTP-date (e.g. {@code "Wed, 21 Oct 2015 07:28:00 GMT"}). Returns {@code null} when the header is
      * absent or unparseable, and clamps a past HTTP-date to {@link Duration#ZERO} rather than negative.
      */
+    @Nullable
     static Duration parseRetryAfter(HttpHeaders responseHeaders) {
         return parseRetryAfter(responseHeaders, Clock.systemUTC());
     }
 
+    @Nullable
     static Duration parseRetryAfter(HttpHeaders responseHeaders, Clock clock) {
         String value = responseHeaders.getFirst(HttpHeaders.RETRY_AFTER);
         if (value == null) {
@@ -108,6 +111,7 @@ public class RestClientWebhookTransport implements WebhookTransport {
         }
     }
 
+    @Nullable
     private static Duration parseHttpDate(String value, Clock clock) {
         try {
             ZonedDateTime when = ZonedDateTime.parse(value, DateTimeFormatter.RFC_1123_DATE_TIME);

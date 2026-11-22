@@ -2,6 +2,7 @@ package com.jinternals.webhooks.producer.transport;
 
 import java.time.Duration;
 import java.util.Optional;
+import org.springframework.lang.Nullable;
 
 /**
  * Thrown when an outbound webhook delivery fails — a non-2xx response from the destination or a
@@ -25,13 +26,14 @@ public class WebhookDeliveryException extends RuntimeException {
     private final int statusCode;
 
     /** The parsed {@code Retry-After} delay, or {@code null} when absent/unparseable. */
+    @Nullable
     private final Duration retryAfter;
 
     public WebhookDeliveryException(String message) {
         this(message, 0);
     }
 
-    public WebhookDeliveryException(String message, Throwable cause) {
+    public WebhookDeliveryException(String message, @Nullable Throwable cause) {
         super(message, cause);
         this.statusCode = 0;
         this.retryAfter = null;
@@ -41,7 +43,7 @@ public class WebhookDeliveryException extends RuntimeException {
         this(message, statusCode, null);
     }
 
-    public WebhookDeliveryException(String message, int statusCode, Duration retryAfter) {
+    public WebhookDeliveryException(String message, int statusCode, @Nullable Duration retryAfter) {
         super(message);
         this.statusCode = statusCode;
         this.retryAfter = retryAfter;

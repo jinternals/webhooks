@@ -9,7 +9,7 @@ import org.springframework.util.ReflectionUtils;
  * can be invoked with the event (and optionally the {@link WebhookMetadata}) in the right order
  * (see SPEC.md §10).
  */
-public final class WebhookHandlerMethod {
+final class WebhookHandlerMethod {
 
     private final Object bean;
     private final Method method;
@@ -17,8 +17,7 @@ public final class WebhookHandlerMethod {
     private final boolean wantsMetadata;
     private final boolean metadataFirst;
 
-    public WebhookHandlerMethod(
-            Object bean, Method method, Class<?> eventType, boolean wantsMetadata, boolean metadataFirst) {
+    WebhookHandlerMethod(Object bean, Method method, Class<?> eventType, boolean wantsMetadata, boolean metadataFirst) {
         this.bean = bean;
         this.method = method;
         this.eventType = eventType;
@@ -27,12 +26,12 @@ public final class WebhookHandlerMethod {
         ReflectionUtils.makeAccessible(method);
     }
 
-    public Class<?> eventType() {
+    Class<?> eventType() {
         return eventType;
     }
 
     /** Invoke the handler, supplying metadata only if the method declares it. */
-    public void invoke(Object event, WebhookMetadata metadata) {
+    void invoke(Object event, WebhookMetadata metadata) {
         Object[] args;
         if (!wantsMetadata) {
             args = new Object[] {event};

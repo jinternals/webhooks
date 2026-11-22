@@ -1,5 +1,7 @@
 package com.jinternals.webhooks.producer.sign;
 
+import org.springframework.lang.Nullable;
+
 /**
  * Disabled {@link WebhookSigner}: signs nothing. Wired when {@code webhooks.producer.signing-enabled=false}
  * (see SPEC.md §19f). {@link #isEnabled()} returns {@code false}, which tells the producer to require no
@@ -22,7 +24,7 @@ public class NoOpWebhookSigner implements WebhookSigner {
      * value that could be put on the wire.
      */
     @Override
-    public String sign(String secret, String endpointId, String messageId, long timestamp, String payload) {
+    public String sign(String secret, @Nullable String endpointId, String messageId, long timestamp, String payload) {
         throw new UnsupportedOperationException(
                 "Signing is disabled (webhooks.producer.signing-enabled=false); NoOpWebhookSigner does not sign");
     }

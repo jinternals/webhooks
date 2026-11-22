@@ -5,6 +5,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.List;
+import org.springframework.lang.Nullable;
 import org.springframework.util.ReflectionUtils;
 
 /**
@@ -46,7 +47,7 @@ public final class WebhookRedactor {
      * Non-annotated fields are rendered with their {@code toString()}; {@code @Redact} fields are
      * masked. Returns {@code "null"} for a null event.
      */
-    public static String toRedactedString(Object event) {
+    public static String toRedactedString(@Nullable Object event) {
         if (event == null) {
             return "null";
         }
@@ -66,7 +67,7 @@ public final class WebhookRedactor {
     }
 
     /** Mask a single value: full {@code ***REDACTED***}, or keep {@code show} trailing chars. */
-    public static String mask(Object value, int show) {
+    public static String mask(@Nullable Object value, int show) {
         if (value == null) {
             return "null";
         }

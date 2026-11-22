@@ -2,6 +2,7 @@ package com.jinternals.webhooks.core.sign;
 
 import com.jinternals.webhooks.core.config.WebhookConfigurationException;
 import java.util.List;
+import org.springframework.lang.Nullable;
 
 /**
  * Shared, scheme-aware validation of Standard Webhooks signing material, used at <strong>startup</strong> by
@@ -64,7 +65,7 @@ public final class SigningSchemeValidator {
     public static void validateAsymmetric(
             String targetDescription,
             String endpointIdProperty,
-            String endpointId,
+            @Nullable String endpointId,
             List<String> secrets,
             boolean expectPrivate) {
         boolean asymmetric = usesAsymmetric(secrets);
@@ -132,7 +133,7 @@ public final class SigningSchemeValidator {
      * Whether the endpoint id is set but <em>no</em> asymmetric key is present — the one "ignored setting"
      * case a caller may want to warn about (an endpoint id on a purely {@code v1} target has no effect).
      */
-    public static boolean isEndpointIdIgnored(String endpointId, List<String> secrets) {
+    public static boolean isEndpointIdIgnored(@Nullable String endpointId, List<String> secrets) {
         return endpointId != null && !endpointId.isBlank() && !usesAsymmetric(secrets);
     }
 

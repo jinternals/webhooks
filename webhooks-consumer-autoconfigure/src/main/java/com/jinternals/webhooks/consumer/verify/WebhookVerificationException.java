@@ -1,5 +1,7 @@
 package com.jinternals.webhooks.consumer.verify;
 
+import org.springframework.lang.Nullable;
+
 /**
  * Thrown when an inbound webhook fails authenticity or freshness verification — missing required headers,
  * malformed or stale/future {@code webhook-timestamp}, missing endpoint secret, or no matching signature in
@@ -21,11 +23,11 @@ public class WebhookVerificationException extends RuntimeException {
 
     private static final long serialVersionUID = 1L;
 
-    public WebhookVerificationException(String message) {
+    public WebhookVerificationException(@Nullable String message) {
         super(message);
     }
 
-    public WebhookVerificationException(String message, Throwable cause) {
+    public WebhookVerificationException(@Nullable String message, @Nullable Throwable cause) {
         super(message, cause);
     }
 }

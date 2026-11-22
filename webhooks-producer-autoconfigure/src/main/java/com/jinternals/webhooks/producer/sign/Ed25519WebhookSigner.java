@@ -5,6 +5,7 @@ import com.jinternals.webhooks.core.sign.Ed25519Signatures;
 import com.jinternals.webhooks.core.sign.SigningSchemeValidator;
 import java.security.PrivateKey;
 import java.util.concurrent.ConcurrentMap;
+import org.springframework.lang.Nullable;
 import org.springframework.util.ConcurrentReferenceHashMap;
 
 /**
@@ -25,7 +26,7 @@ public class Ed25519WebhookSigner implements WebhookSigner {
     private final ConcurrentMap<String, PrivateKey> privateKeys = new ConcurrentReferenceHashMap<>();
 
     @Override
-    public String sign(String secret, String endpointId, String messageId, long timestamp, String payload) {
+    public String sign(String secret, @Nullable String endpointId, String messageId, long timestamp, String payload) {
         if (secret == null || secret.isBlank()) {
             throw new IllegalArgumentException("No signing secret configured for this destination");
         }

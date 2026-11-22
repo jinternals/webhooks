@@ -20,11 +20,11 @@ import org.springframework.web.servlet.HandlerMapping;
  * trailing-slash/path-matching configuration, because the pattern is exactly the one
  * {@link WebhookEndpointRegistry} registered from {@code Endpoint.getPath()} (see SPEC.md §7).
  */
-public class EndpointResolvingInterceptor implements HandlerInterceptor {
+class EndpointResolvingInterceptor implements HandlerInterceptor {
 
     private final Map<String, Endpoint> byPattern = new HashMap<>();
 
-    public EndpointResolvingInterceptor(WebhookProperties properties) {
+    EndpointResolvingInterceptor(WebhookProperties properties) {
         for (Endpoint endpoint : properties.getConsumer().getEndpoints()) {
             byPattern.put(endpoint.getPath(), endpoint);
         }

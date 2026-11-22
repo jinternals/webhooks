@@ -14,8 +14,9 @@ contain breaking changes; they will always be called out under **Changed** or **
   - `webhooks-core` — Standard Webhooks wire model, `@WebhookType` / `@Redact`, redactor, type registry,
     secret SPI, Ed25519 key/signature utilities.
   - `webhooks-consumer-autoconfigure` / `webhooks-consumer-starter` — signature verification (`v1` HMAC-SHA256
-    and `v2a` Ed25519), secret rotation, optional replay window, type-based dispatch to `@WebhookHandler`
-    methods, Bean Validation, sync/async execution, idempotency guard, failure hooks, Micrometer metrics.
+    and `v2a` Ed25519), secret rotation, replay-window protection (enabled by default, `5m` tolerance),
+    type-based dispatch to `@WebhookHandler` methods, Bean Validation, sync/async execution, idempotency guard,
+    failure hooks, Micrometer metrics.
   - `webhooks-producer-autoconfigure` / `webhooks-producer-starter` — declarative `@WebhookClient`
     interfaces, envelope building, `v1`/`v2a` signing with dual-signing for rotation, in-process retry with
     backoff, HTTP timeouts, destination URL allow-list (SSRF guard).
@@ -35,6 +36,22 @@ contain breaking changes; they will always be called out under **Changed** or **
 - `WebhookMetadata.deliveryLag()` now returns `Optional<Duration>` (matching `eventLag()`) so unsigned
   deliveries without a `webhook-timestamp` header never NPE, and `WebhookMetadata.toString()` renders
   `redactedEvent()` with `authorization` / `proxy-authorization` / `cookie` headers masked.
+- Consumer SPIs (`WebhookVerifier`, `TimestampValidator`, `VerificationFailureReason`) now throw the
+  library-owned unchecked `com.jinternals.webhooks.consumer.verify.WebhookVerificationException` rather than
+  leaking `com.standardwebhooks.exceptions.WebhookVerificationException`.
+- Standard Webhooks specification alignment:
+  - Enabled `webhooks.consumer.replay-window-enabled=true` (`5m` tolerance) by default.
+  - Enforced `whsec_` prefix and `24..64` decoded key bytes (`SymmetricKeys`) for symmetric `v1` secrets at
+    startup and runtime.
+  - Rejected blank or `.`-containing `webhook-id` values on both consumer header parsing and producer signing.
+  - Updated `RetryingWebhookTransport` (`AttemptAwareWebhookTransport`) and `WebhookPublisher` to refresh
+    `webhook-timestamp` and re-compute `webhook-signature` on every retry attempt while keeping `webhook-id`
+    and the serialized JSON envelope `timestamp` constant.
+- Virtual-thread & hot-path improvements: replaced `synchronized` in `InMemoryIdempotencyGuard` with
+  `ReentrantLock`, switched `WebhookRedactor` to `ClassValue`, cached decoded Ed25519/HMAC keys and Micrometer
+  meters in `ConcurrentReferenceHashMap`, enforced defensive immutability on `DeliveryFailure` and
+  `WebhookMetadata`, added `Clock` injection (`ObjectProvider<Clock>`) across consumer and producer, tightened
+  internal helper visibility, and added `@NonNullApi` / `@Nullable` package annotations.
 
 ### Fixed
 

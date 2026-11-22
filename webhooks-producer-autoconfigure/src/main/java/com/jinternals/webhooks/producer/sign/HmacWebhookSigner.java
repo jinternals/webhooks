@@ -5,6 +5,7 @@ import com.jinternals.webhooks.core.sign.SymmetricKeys;
 import com.standardwebhooks.Webhook;
 import com.standardwebhooks.exceptions.WebhookSigningException;
 import java.util.concurrent.ConcurrentMap;
+import org.springframework.lang.Nullable;
 import org.springframework.util.ConcurrentReferenceHashMap;
 
 /**
@@ -25,7 +26,7 @@ public class HmacWebhookSigner implements WebhookSigner {
     private final ConcurrentMap<String, Webhook> webhooks = new ConcurrentReferenceHashMap<>();
 
     @Override
-    public String sign(String secret, String endpointId, String messageId, long timestamp, String payload) {
+    public String sign(String secret, @Nullable String endpointId, String messageId, long timestamp, String payload) {
         if (secret == null || secret.isBlank()) {
             throw new IllegalArgumentException("No signing secret configured for this destination");
         }

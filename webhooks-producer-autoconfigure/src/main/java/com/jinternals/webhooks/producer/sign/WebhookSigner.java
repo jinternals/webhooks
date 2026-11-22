@@ -1,5 +1,7 @@
 package com.jinternals.webhooks.producer.sign;
 
+import org.springframework.lang.Nullable;
+
 /**
  * Pluggable <strong>message-signing SPI</strong> for outbound webhooks (see SPEC.md §19, §19f, §19i). Produces
  * the {@code webhook-signature} header contribution for a given secret, message id, timestamp, and raw payload.
@@ -44,7 +46,7 @@ public interface WebhookSigner {
      *                                  endpoint id
      * @throws IllegalStateException    if the secret is malformed, or signing otherwise fails
      */
-    String sign(String secret, String endpointId, String messageId, long timestamp, String payload);
+    String sign(String secret, @Nullable String endpointId, String messageId, long timestamp, String payload);
 
     /**
      * Whether this signer actually produces a signature. The default {@code true} covers every real signing

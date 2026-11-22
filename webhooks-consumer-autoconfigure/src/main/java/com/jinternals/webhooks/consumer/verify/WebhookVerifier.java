@@ -2,6 +2,7 @@ package com.jinternals.webhooks.consumer.verify;
 
 import java.util.List;
 import java.util.Map;
+import org.springframework.lang.Nullable;
 
 /**
  * Pluggable <strong>message-verification SPI</strong> for inbound webhooks (see SPEC.md §8, §8f, §8e). Verifies
@@ -44,6 +45,6 @@ public interface WebhookVerifier {
      *                                      window, or the signature is invalid for every candidate
      *                                      secret / no secret is configured
      */
-    void verify(List<String> secrets, String endpointId, String rawBody, Map<String, List<String>> headers)
+    void verify(List<String> secrets, @Nullable String endpointId, String rawBody, Map<String, List<String>> headers)
             throws WebhookVerificationException;
 }

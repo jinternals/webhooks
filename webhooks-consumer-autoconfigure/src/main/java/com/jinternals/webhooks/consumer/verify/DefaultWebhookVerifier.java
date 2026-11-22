@@ -3,6 +3,7 @@ package com.jinternals.webhooks.consumer.verify;
 import com.jinternals.webhooks.core.sign.Ed25519Keys;
 import java.util.List;
 import java.util.Map;
+import org.springframework.lang.Nullable;
 
 /**
  * The shipped default {@link WebhookVerifier}: selects the Standard Webhooks verification scheme
@@ -35,7 +36,8 @@ public class DefaultWebhookVerifier implements WebhookVerifier {
     }
 
     @Override
-    public void verify(List<String> secrets, String endpointId, String rawBody, Map<String, List<String>> headers)
+    public void verify(
+            List<String> secrets, @Nullable String endpointId, String rawBody, Map<String, List<String>> headers)
             throws WebhookVerificationException {
         if (secrets == null || secrets.isEmpty()) {
             throw new WebhookVerificationFailure(
@@ -54,7 +56,7 @@ public class DefaultWebhookVerifier implements WebhookVerifier {
     }
 
     /** Route one secret to the scheme its prefix selects. */
-    private boolean matches(String secret, String endpointId, String rawBody, WebhookSignatureHeaders parsed)
+    private boolean matches(String secret, @Nullable String endpointId, String rawBody, WebhookSignatureHeaders parsed)
             throws WebhookVerificationFailure {
         if (Ed25519Keys.isPrivateKey(secret)) {
             throw new IllegalStateException(

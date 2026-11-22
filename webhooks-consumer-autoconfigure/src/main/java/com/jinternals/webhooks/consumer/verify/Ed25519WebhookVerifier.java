@@ -6,6 +6,7 @@ import java.security.PublicKey;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentMap;
+import org.springframework.lang.Nullable;
 import org.springframework.util.ConcurrentReferenceHashMap;
 
 /**
@@ -36,7 +37,8 @@ public class Ed25519WebhookVerifier implements WebhookVerifier {
     }
 
     @Override
-    public void verify(List<String> secrets, String endpointId, String rawBody, Map<String, List<String>> headers)
+    public void verify(
+            List<String> secrets, @Nullable String endpointId, String rawBody, Map<String, List<String>> headers)
             throws WebhookVerificationException {
         if (secrets == null || secrets.isEmpty()) {
             throw new WebhookVerificationFailure(
@@ -59,7 +61,7 @@ public class Ed25519WebhookVerifier implements WebhookVerifier {
      * Package-private so {@link DefaultWebhookVerifier} can reuse it per-secret without re-running the shared
      * header/timestamp skeleton, while still enforcing {@link #requireValidEndpointId(String)}.
      */
-    boolean matches(String secret, String endpointId, String rawBody, WebhookSignatureHeaders parsed)
+    boolean matches(String secret, @Nullable String endpointId, String rawBody, WebhookSignatureHeaders parsed)
             throws WebhookVerificationFailure {
         requireValidEndpointId(endpointId);
         PublicKey publicKey = publicKeys.computeIfAbsent(secret, Ed25519Keys::decodePublicKey);
@@ -79,7 +81,7 @@ public class Ed25519WebhookVerifier implements WebhookVerifier {
      * A {@code v2a} verification cannot proceed without a valid, dot-free endpoint id that is part of the
      * signed content.
      */
-    private static void requireValidEndpointId(String endpointId) throws WebhookVerificationFailure {
+    private static void requireValidEndpointId(@Nullable String endpointId) throws WebhookVerificationFailure {
         if (endpointId == null || endpointId.isBlank()) {
             throw new WebhookVerificationFailure(
                     VerificationFailureReason.NO_SECRET,

@@ -1,6 +1,7 @@
 package com.jinternals.webhooks.core.registry;
 
 import java.util.Map;
+import org.springframework.lang.Nullable;
 
 /**
  * Maps a Standard Webhooks {@code type} string to its {@code @WebhookType}-annotated Java class
@@ -20,6 +21,7 @@ public class WebhookTypeRegistry {
     }
 
     /** The target class for an event type, or {@code null} if the type is unknown. */
+    @Nullable
     public Class<?> classOf(String type) {
         return byType.get(type);
     }

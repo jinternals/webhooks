@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.locks.ReentrantLock;
+import org.springframework.lang.Nullable;
 
 /**
  * Best-effort, in-memory dedupe on {@code webhook-id} (see SPEC.md §11). Enabled with
@@ -68,7 +69,7 @@ public class InMemoryIdempotencyGuard implements IdempotencyGuard {
     }
 
     @Override
-    public boolean tryBegin(String webhookId) {
+    public boolean tryBegin(@Nullable String webhookId) {
         if (webhookId == null || webhookId.isBlank()) {
             return true;
         }
@@ -86,7 +87,7 @@ public class InMemoryIdempotencyGuard implements IdempotencyGuard {
     }
 
     @Override
-    public void markProcessed(String webhookId) {
+    public void markProcessed(@Nullable String webhookId) {
         if (webhookId == null || webhookId.isBlank()) {
             return;
         }
@@ -101,7 +102,7 @@ public class InMemoryIdempotencyGuard implements IdempotencyGuard {
     }
 
     @Override
-    public void release(String webhookId) {
+    public void release(@Nullable String webhookId) {
         if (webhookId == null || webhookId.isBlank()) {
             return;
         }

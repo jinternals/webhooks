@@ -21,11 +21,11 @@ import org.springframework.web.method.support.ModelAndViewContainer;
  * ({@code 413}) as soon as the body exceeds the limit, so an oversized or slow POST cannot exhaust
  * memory or threads before verification even runs.
  */
-public class RawBodyArgumentResolver implements HandlerMethodArgumentResolver {
+class RawBodyArgumentResolver implements HandlerMethodArgumentResolver {
 
     private final long maxBodyBytes;
 
-    public RawBodyArgumentResolver(long maxBodyBytes) {
+    RawBodyArgumentResolver(long maxBodyBytes) {
         this.maxBodyBytes = maxBodyBytes;
     }
 

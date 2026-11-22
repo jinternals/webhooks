@@ -8,6 +8,7 @@ import java.security.MessageDigest;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentMap;
+import org.springframework.lang.Nullable;
 import org.springframework.util.ConcurrentReferenceHashMap;
 
 /**
@@ -48,7 +49,8 @@ public class HmacWebhookVerifier implements WebhookVerifier {
     }
 
     @Override
-    public void verify(List<String> secrets, String endpointId, String rawBody, Map<String, List<String>> headers)
+    public void verify(
+            List<String> secrets, @Nullable String endpointId, String rawBody, Map<String, List<String>> headers)
             throws WebhookVerificationException {
         if (secrets == null || secrets.isEmpty()) {
             throw new WebhookVerificationFailure(

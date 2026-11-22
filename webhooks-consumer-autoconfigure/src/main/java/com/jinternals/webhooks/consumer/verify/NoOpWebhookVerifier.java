@@ -2,6 +2,7 @@ package com.jinternals.webhooks.consumer.verify;
 
 import java.util.List;
 import java.util.Map;
+import org.springframework.lang.Nullable;
 
 /**
  * Disabled {@link WebhookVerifier}: verifies nothing and accepts <strong>every</strong> request. Wired when
@@ -21,7 +22,8 @@ public class NoOpWebhookVerifier implements WebhookVerifier {
      * only to satisfy the SPI contract; it performs no HMAC and reads none of its arguments.
      */
     @Override
-    public void verify(List<String> secrets, String endpointId, String rawBody, Map<String, List<String>> headers) {
+    public void verify(
+            List<String> secrets, @Nullable String endpointId, String rawBody, Map<String, List<String>> headers) {
         // Verification disabled: accept every request without checking the signature.
     }
 }

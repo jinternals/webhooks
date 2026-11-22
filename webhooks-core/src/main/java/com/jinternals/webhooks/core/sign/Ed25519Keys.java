@@ -8,6 +8,7 @@ import java.security.PublicKey;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
+import org.springframework.lang.Nullable;
 
 /**
  * Decodes the Standard Webhooks asymmetric ({@code v2a}) key serializations into JDK key objects (see
@@ -60,12 +61,12 @@ public final class Ed25519Keys {
     private Ed25519Keys() {}
 
     /** Whether a secret string is an Ed25519 private key ({@code whsk_}-prefixed). */
-    public static boolean isPrivateKey(String secret) {
+    public static boolean isPrivateKey(@Nullable String secret) {
         return secret != null && secret.startsWith(PRIVATE_KEY_PREFIX);
     }
 
     /** Whether a secret string is an Ed25519 public key ({@code whpk_}-prefixed). */
-    public static boolean isPublicKey(String secret) {
+    public static boolean isPublicKey(@Nullable String secret) {
         return secret != null && secret.startsWith(PUBLIC_KEY_PREFIX);
     }
 
