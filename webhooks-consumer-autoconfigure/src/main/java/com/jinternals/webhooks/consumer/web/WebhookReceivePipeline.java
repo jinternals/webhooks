@@ -2,6 +2,7 @@ package com.jinternals.webhooks.consumer.web;
 
 import com.fasterxml.jackson.core.JacksonException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.ObjectReader;
 import com.jinternals.webhooks.consumer.config.WebhookProperties.Endpoint;
 import com.jinternals.webhooks.consumer.idempotency.IdempotencyGuard;
 import com.jinternals.webhooks.consumer.metadata.MetadataFactory;
@@ -37,7 +38,7 @@ public class WebhookReceivePipeline {
 
     private final WebhookBodyVerifier bodyVerifier;
     private final IdempotencyGuard idempotency;
-    private final ObjectMapper objectMapper;
+    private final ObjectReader envelopeReader;
     private final EventResolver eventResolver;
     private final MetadataFactory metadataFactory;
     private final ReceiveObservabilityRecorder observability;
@@ -53,7 +54,7 @@ public class WebhookReceivePipeline {
             TimedHandlerDispatcher eventDispatcher) {
         this.bodyVerifier = bodyVerifier;
         this.idempotency = idempotency;
-        this.objectMapper = objectMapper;
+        this.envelopeReader = objectMapper.readerFor(Envelope.class);
         this.eventResolver = eventResolver;
         this.metadataFactory = metadataFactory;
         this.observability = observability;
@@ -126,6 +127,7 @@ public class WebhookReceivePipeline {
         String type = accepted.type();
         Object event = accepted.event();
         WebhookMetadata metadata = metadataFactory.build(request, envelope, event, headers, endpoint.getPath());
+        eventDispatcher.requireHandler(event, metadata);
         observability.record(type, metadata);
         eventDispatcher.dispatch(type, event, metadata);
     }
@@ -133,7 +135,7 @@ public class WebhookReceivePipeline {
     /** Parse the verified raw body into an {@link Envelope}, mapping a malformed body to a 400. */
     private Envelope parse(String rawBody) {
         try {
-            Envelope envelope = objectMapper.readValue(rawBody, Envelope.class);
+            Envelope envelope = envelopeReader.readValue(rawBody);
             if (envelope == null) {
                 throw new InvalidPayloadException("Webhook payload must be a JSON object", null);
             }

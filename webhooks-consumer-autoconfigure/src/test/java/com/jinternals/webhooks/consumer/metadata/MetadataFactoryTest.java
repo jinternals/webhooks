@@ -237,4 +237,47 @@ class MetadataFactoryTest {
         assertThat(meta.headers().get("webhook-signature")).isEqualTo("***REDACTED***");
         assertThat(meta.headers().get("cookie")).isEqualTo("***REDACTED***");
     }
+
+    @Test
+    void handlesCommaOnlySingleHopForwardedForNumericOffsetTimestampAndDuplicateMixedCaseHeaders() {
+        MetadataFactory factory = new MetadataFactory(List.of());
+
+        // 1) "X-Forwarded-For: ," and ", 10.0.0.1" must fall back to remoteAddr instead of throwing AIOOBE!
+        MockHttpServletRequest commaOnly = new MockHttpServletRequest();
+        commaOnly.addHeader("x-forwarded-for", ",");
+        commaOnly.setRemoteAddr("10.9.9.1");
+        assertThat(factory.build(commaOnly, envelope("t", null), new Object(), Map.of(), "/p")
+                        .sourceIp())
+                .isEqualTo("10.9.9.1");
+
+        MockHttpServletRequest leadingComma = new MockHttpServletRequest();
+        leadingComma.addHeader("x-forwarded-for", " , 203.0.113.7");
+        leadingComma.setRemoteAddr("10.9.9.2");
+        assertThat(factory.build(leadingComma, envelope("t", null), new Object(), Map.of(), "/p")
+                        .sourceIp())
+                .isEqualTo("10.9.9.2");
+
+        // 2) Single-hop X-Forwarded-For (no comma, comma == -1) AND leading-char comma boundary!
+        MockHttpServletRequest singleHop = new MockHttpServletRequest();
+        singleHop.addHeader("x-forwarded-for", "198.51.100.42");
+        singleHop.setRemoteAddr("10.9.9.3");
+        assertThat(factory.build(singleHop, envelope("t", null), new Object(), Map.of(), "/p")
+                        .sourceIp())
+                .isEqualTo("198.51.100.42");
+
+        // 3) ISO-8601 numeric offset (+02:00) parses cleanly to the exact UTC Instant!
+        WebhookMetadata withOffset =
+                factory.build(singleHop, envelope("t", "2026-01-15T12:30:00+02:00"), new Object(), Map.of(), "/p");
+        assertThat(withOffset.eventTimestamp()).isEqualTo(Instant.parse("2026-01-15T10:30:00Z"));
+
+        // 4) Mixed-case duplicate header keys preserve the first non-null value consistently with verification!
+        Map<String, List<String>> dupMixed = new java.util.LinkedHashMap<>();
+        dupMixed.put("X-Tenant", List.of("tenant-a"));
+        dupMixed.put("x-tenant", List.of("tenant-b"));
+        dupMixed.put("X-Fallback", List.of());
+        dupMixed.put("x-fallback", List.of("recovered"));
+        WebhookMetadata meta = factory.build(singleHop, envelope("t", null), new Object(), dupMixed, "/p");
+        assertThat(meta.headers().get("x-tenant")).isEqualTo("tenant-a");
+        assertThat(meta.headers().get("x-fallback")).isEqualTo("recovered");
+    }
 }

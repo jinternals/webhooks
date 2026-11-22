@@ -1,6 +1,7 @@
 package com.jinternals.webhooks.sample.consumer.nats;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.ObjectWriter;
 import com.jinternals.webhooks.consumer.annotations.WebhookHandler;
 import com.jinternals.webhooks.consumer.model.WebhookMetadata;
 import com.jinternals.webhooks.sample.consumer.nats.events.ContactCreated;
@@ -26,12 +27,12 @@ public class DurableInboxHandlers {
     private static final Logger log = LoggerFactory.getLogger(DurableInboxHandlers.class);
 
     private final JetStream jetStream;
-    private final ObjectMapper objectMapper;
+    private final ObjectWriter inboundWriter;
     private final NatsConsumerProperties properties;
 
     public DurableInboxHandlers(JetStream jetStream, ObjectMapper objectMapper, NatsConsumerProperties properties) {
         this.jetStream = jetStream;
-        this.objectMapper = objectMapper;
+        this.inboundWriter = objectMapper.writerFor(InboundWebhookMessage.class);
         this.properties = properties;
     }
 
@@ -46,19 +47,21 @@ public class DurableInboxHandlers {
                 MDC.get(TraceContextFilter.TRACE_MDC_KEY),
                 event);
         try {
-            byte[] bytes = objectMapper.writeValueAsBytes(inbound);
+            byte[] bytes = inboundWriter.writeValueAsBytes(inbound);
             PublishOptions.Builder opts = PublishOptions.builder().stream(properties.getStream());
             if (metadata.webhookId() != null && !metadata.webhookId().isBlank()) {
                 opts.messageId(metadata.webhookId());
             }
             PublishAck ack = jetStream.publish(properties.getSubject(), bytes, opts.build());
-            log.info(
-                    "Persisted verified webhook id={} type={} to NATS stream={} seq={} event={}",
-                    metadata.webhookId(),
-                    metadata.type(),
-                    ack.getStream(),
-                    ack.getSeqno(),
-                    metadata.redactedEvent());
+            if (log.isInfoEnabled()) {
+                log.info(
+                        "Persisted verified webhook id={} type={} to NATS stream={} seq={} event={}",
+                        metadata.webhookId(),
+                        metadata.type(),
+                        ack.getStream(),
+                        ack.getSeqno(),
+                        metadata.redactedEvent());
+            }
         } catch (Exception e) {
             throw new IllegalStateException(
                     "Failed to persist inbound webhook " + metadata.webhookId() + " to NATS JetStream", e);

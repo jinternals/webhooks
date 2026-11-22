@@ -6,6 +6,7 @@ import com.jinternals.webhooks.core.model.WebhookHeaders;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.DateTimeException;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -76,11 +77,12 @@ public class MetadataFactory {
         Map<String, String> headers = new LinkedHashMap<>();
         for (Map.Entry<String, List<String>> entry : rawHeaders.entrySet()) {
             String name = entry.getKey().toLowerCase(Locale.ROOT);
-            List<String> values = entry.getValue();
-            String value = REDACTED_HEADERS.contains(name)
-                    ? REDACTED
-                    : (values == null || values.isEmpty()) ? null : values.get(0);
-            headers.put(name, value);
+            if (REDACTED_HEADERS.contains(name)) {
+                headers.put(name, REDACTED);
+            } else if (headers.get(name) == null) {
+                List<String> values = entry.getValue();
+                headers.put(name, (values == null || values.isEmpty()) ? null : values.get(0));
+            }
         }
         return headers;
     }
@@ -103,15 +105,15 @@ public class MetadataFactory {
         }
     }
 
-    /** Body timestamp is ISO 8601 and nullable. */
+    /** Body timestamp is ISO 8601 (UTC {@code Z} or numeric offset) and nullable. */
     private static Instant parseEventTimestamp(String value) {
-        // As above: blank falls through to Instant.parse(""), which throws and is caught, so there
+        // As above: blank falls through to OffsetDateTime.parse(""), which throws and is caught, so there
         // is no observable difference from an explicit blank check.
         if (value == null) {
             return null;
         }
         try {
-            return Instant.parse(value.trim());
+            return OffsetDateTime.parse(value.trim()).toInstant();
         } catch (DateTimeParseException e) {
             return null;
         }
@@ -125,8 +127,12 @@ public class MetadataFactory {
      */
     private static String clientIp(HttpServletRequest request) {
         String forwarded = request.getHeader("x-forwarded-for");
-        if (forwarded != null && !forwarded.isBlank()) {
-            return forwarded.split(",")[0].trim();
+        if (forwarded != null) {
+            int comma = forwarded.indexOf(',');
+            String firstHop = (comma >= 0 ? forwarded.substring(0, comma) : forwarded).trim();
+            if (!firstHop.isEmpty()) {
+                return firstHop;
+            }
         }
         return request.getRemoteAddr();
     }

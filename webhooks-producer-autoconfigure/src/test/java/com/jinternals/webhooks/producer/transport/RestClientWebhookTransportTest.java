@@ -260,5 +260,9 @@ class RestClientWebhookTransportTest {
                 .hasMessageContaining("failed:")
                 .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.type(WebhookDeliveryException.class))
                 .satisfies(e -> assertThat(e.getStatusCode()).isEmpty()); // transport error carries no status
+
+        assertThatThrownBy(() -> transport.send(null, HEADERS, "{\"a\":1}"))
+                .isInstanceOf(WebhookDeliveryException.class)
+                .hasMessageContaining("destination URL is null");
     }
 }

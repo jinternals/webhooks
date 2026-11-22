@@ -38,8 +38,16 @@ public class Ed25519WebhookSigner implements WebhookSigner {
             throw new IllegalArgumentException("endpoint-id must not contain '.' — it is the signed-content delimiter");
         }
         SigningSchemeValidator.requireValidMessageId(messageId);
-        PrivateKey privateKey = privateKeys.computeIfAbsent(secret, Ed25519Keys::decodePrivateKey);
+        PrivateKey privateKey = privateKeys.computeIfAbsent(secret, Ed25519WebhookSigner::newPrivateKey);
         String signature = Ed25519Signatures.sign(privateKey, endpointId, messageId, timestamp, payload);
         return Ed25519Signatures.VERSION + "," + signature;
+    }
+
+    private static PrivateKey newPrivateKey(String secret) {
+        try {
+            return Ed25519Keys.decodePrivateKey(secret);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalStateException("Invalid Ed25519 private key configured: " + e.getMessage(), e);
+        }
     }
 }

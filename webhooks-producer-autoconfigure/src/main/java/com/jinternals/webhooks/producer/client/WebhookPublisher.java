@@ -1,9 +1,8 @@
 package com.jinternals.webhooks.producer.client;
 
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.jinternals.webhooks.core.annotations.WebhookType;
 import com.jinternals.webhooks.core.model.WebhookHeaders;
 import com.jinternals.webhooks.core.secret.SecretProvider;
@@ -18,6 +17,8 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.function.Supplier;
 
 /**
@@ -41,6 +42,7 @@ public class WebhookPublisher {
     private final SecretProvider<Destination> secretProvider;
     private final WebhookProducerProperties properties;
     private final Clock clock;
+    private final ConcurrentMap<Class<?>, String> eventTypes = new ConcurrentHashMap<>();
 
     public WebhookPublisher(
             ObjectMapper objectMapper,
@@ -154,40 +156,38 @@ public class WebhookPublisher {
      * verifies successfully — zero-downtime blue/green rotation.
      */
     private String sign(List<String> secrets, String endpointId, String messageId, long timestamp, String payload) {
-        StringBuilder combined = new StringBuilder();
+        String combined = null;
         for (String secret : secrets) {
-            if (combined.length() > 0) {
-                combined.append(' ');
-            }
-            combined.append(signer.sign(secret, endpointId, messageId, timestamp, payload));
+            String sig = signer.sign(secret, endpointId, messageId, timestamp, payload);
+            combined = (combined == null) ? sig : combined + " " + sig;
         }
-        return combined.toString();
+        return combined;
     }
 
-    /** The {@code type} string from the event's {@link WebhookType} annotation. */
-    private static String typeOf(Object event) {
-        WebhookType type = event.getClass().getAnnotation(WebhookType.class);
+    /** The {@code type} string from the event's {@link WebhookType} annotation, cached per event class. */
+    private String typeOf(Object event) {
+        return eventTypes.computeIfAbsent(event.getClass(), WebhookPublisher::resolveType);
+    }
+
+    private static String resolveType(Class<?> eventClass) {
+        WebhookType type = eventClass.getAnnotation(WebhookType.class);
         if (type == null) {
-            throw new IllegalArgumentException(
-                    "Event " + event.getClass().getName() + " is not annotated with @WebhookType");
+            throw new IllegalArgumentException("Event " + eventClass.getName() + " is not annotated with @WebhookType");
         }
         if (type.value().isBlank()) {
-            throw new IllegalArgumentException(
-                    "Event " + event.getClass().getName() + " has a blank @WebhookType value");
+            throw new IllegalArgumentException("Event " + eventClass.getName() + " has a blank @WebhookType value");
         }
         return type.value();
     }
 
-    /** Serialize the full envelope {@code {type, timestamp, data}} exactly once. */
+    @JsonPropertyOrder({"type", "timestamp", "data"})
+    private record OutboundEnvelope(String type, String timestamp, Object data) {}
+
+    /** Serialize the full envelope {@code {type, timestamp, data}} in a single streaming pass. */
     private String serialize(String type, Instant timestamp, Object event) {
         try {
-            ObjectNode envelope = objectMapper.createObjectNode();
-            envelope.put("type", type);
-            envelope.put("timestamp", timestamp.toString());
-            JsonNode data = objectMapper.valueToTree(event);
-            envelope.set("data", data);
-            return objectMapper.writeValueAsString(envelope);
-        } catch (JsonProcessingException | IllegalArgumentException e) {
+            return objectMapper.writeValueAsString(new OutboundEnvelope(type, timestamp.toString(), event));
+        } catch (JsonProcessingException e) {
             throw new IllegalStateException("Failed to serialize webhook payload: " + e.getMessage(), e);
         }
     }

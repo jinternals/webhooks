@@ -1,6 +1,7 @@
 package com.jinternals.webhooks.sample.consumer.nats;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.ObjectReader;
 import com.jinternals.webhooks.consumer.dispatch.HandlerFailureListener;
 import io.nats.client.JetStream;
 import io.nats.client.JetStreamSubscription;
@@ -33,7 +34,7 @@ public class NatsInboundWorker implements SmartLifecycle {
     private static final Logger log = LoggerFactory.getLogger(NatsInboundWorker.class);
 
     private final JetStream jetStream;
-    private final ObjectMapper objectMapper;
+    private final ObjectReader inboundReader;
     private final ContactProjectionService projectionService;
     private final HandlerFailureListener failureListener;
     private final NatsConsumerProperties properties;
@@ -48,7 +49,7 @@ public class NatsInboundWorker implements SmartLifecycle {
             HandlerFailureListener failureListener,
             NatsConsumerProperties properties) {
         this.jetStream = jetStream;
-        this.objectMapper = objectMapper;
+        this.inboundReader = objectMapper.readerFor(InboundWebhookMessage.class);
         this.projectionService = projectionService;
         this.failureListener = failureListener;
         this.properties = properties;
@@ -148,7 +149,7 @@ public class NatsInboundWorker implements SmartLifecycle {
         long attempt = msg.metaData() != null ? msg.metaData().deliveredCount() : 1L;
         InboundWebhookMessage inbound;
         try {
-            inbound = objectMapper.readValue(msg.getData(), InboundWebhookMessage.class);
+            inbound = inboundReader.readValue(msg.getData());
         } catch (Exception malformed) {
             log.error("Poison inbound message could not be parsed; routing to DLQ", malformed);
             String poisonKey = msg.metaData() != null

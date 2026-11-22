@@ -17,7 +17,6 @@ import com.jinternals.webhooks.consumer.metadata.MetadataFactory;
 import com.jinternals.webhooks.consumer.metrics.WebhookMetrics;
 import com.jinternals.webhooks.consumer.support.LogCapture;
 import com.jinternals.webhooks.consumer.validation.PayloadValidator;
-import com.jinternals.webhooks.consumer.verify.ConfigSecretProvider;
 import com.jinternals.webhooks.consumer.verify.DefaultWebhookVerifier;
 import com.jinternals.webhooks.consumer.verify.NoOpTimestampValidator;
 import com.jinternals.webhooks.consumer.verify.NoOpWebhookVerifier;
@@ -301,18 +300,68 @@ class WebhookConsumerAutoConfigurationTest {
     @Test
     void secretValidatorFailsFastOnAMissingEndpointSecret() {
         // The validator must actually enforce the secret contract: an endpoint with no secret makes it throw
-        // at startup (afterPropertiesSet). Proves it was built around the properties + provider, not typed.
+        // at startup (afterPropertiesSet). Using an empty ObjectProvider also exercises ConfigSecretProvider::new.
         WebhookProperties properties = new WebhookProperties();
         Endpoint endpoint = new Endpoint();
         endpoint.setPath("/webhooks/crm");
         endpoint.setSecret(null);
         properties.getConsumer().getEndpoints().add(endpoint);
 
-        SecretValidator validator = autoConfig.secretValidator(properties, new ConfigSecretProvider());
+        ObjectProvider<SecretProvider<Endpoint>> emptyProvider =
+                new org.springframework.beans.factory.support.DefaultListableBeanFactory()
+                        .getBeanProvider(org.springframework.core.ResolvableType.forClassWithGenerics(
+                                SecretProvider.class, Endpoint.class));
+        SecretValidator validator = autoConfig.secretValidator(properties, emptyProvider);
 
         assertThatThrownBy(validator::afterPropertiesSet)
                 .isInstanceOf(com.jinternals.webhooks.core.config.WebhookConfigurationException.class)
                 .hasMessageContaining("No webhook secret configured");
+    }
+
+    @Test
+    void customProducerDestinationSecretProviderDoesNotBackOffConsumerAndCustomEndpointProviderOverridesDefault() {
+        // Coexistence regression guard: defining @Bean("destinationSecretProvider") SecretProvider<String>
+        // (or Destination) in a dual producer+consumer app MUST NOT cause consumer's SecretProvider<Endpoint>
+        // to fail or back off, while a custom @Bean SecretProvider<Endpoint> (under any bean name) overrides
+        // ConfigSecretProvider cleanly!
+        new org.springframework.boot.test.context.runner.ApplicationContextRunner()
+                .withUserConfiguration(AutoPackageAnchor.class, ForeignGenericSecretProviderConfig.class)
+                .withConfiguration(org.springframework.boot.autoconfigure.AutoConfigurations.of(
+                        WebhookConsumerAutoConfiguration.class,
+                        org.springframework.boot.autoconfigure.jackson.JacksonAutoConfiguration.class,
+                        org.springframework.boot.autoconfigure.validation.ValidationAutoConfiguration.class))
+                .withPropertyValues(
+                        "webhooks.consumer.endpoints[0].path=/webhooks/crm",
+                        "webhooks.consumer.endpoints[0].secret=whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw")
+                .run(ctx -> {
+                    assertThat(ctx).hasNotFailed();
+                    assertThat(ctx).hasBean("endpointSecretProvider");
+                });
+
+        new org.springframework.boot.test.context.runner.ApplicationContextRunner()
+                .withUserConfiguration(AutoPackageAnchor.class, CustomEndpointSecretProviderConfig.class)
+                .withConfiguration(org.springframework.boot.autoconfigure.AutoConfigurations.of(
+                        WebhookConsumerAutoConfiguration.class,
+                        org.springframework.boot.autoconfigure.jackson.JacksonAutoConfiguration.class,
+                        org.springframework.boot.autoconfigure.validation.ValidationAutoConfiguration.class))
+                .withPropertyValues("webhooks.consumer.endpoints[0].path=/webhooks/crm")
+                .run(ctx -> assertThat(ctx).hasNotFailed());
+    }
+
+    @org.springframework.context.annotation.Configuration(proxyBeanMethods = false)
+    static class ForeignGenericSecretProviderConfig {
+        @org.springframework.context.annotation.Bean("destinationSecretProvider")
+        SecretProvider<String> destinationSecretProvider() {
+            return target -> List.of("whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw");
+        }
+    }
+
+    @org.springframework.context.annotation.Configuration(proxyBeanMethods = false)
+    static class CustomEndpointSecretProviderConfig {
+        @org.springframework.context.annotation.Bean
+        SecretProvider<Endpoint> vaultEndpointSecretProvider() {
+            return endpoint -> List.of("whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw");
+        }
     }
 
     @Test

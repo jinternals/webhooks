@@ -90,7 +90,9 @@ class WebhookRequestHeadersTest {
         Map<String, List<String>> collected = WebhookRequestHeaders.collect(request);
         assertThat(collected.get("webhook-signature")).containsExactly("v1,sig1", "v1,sig2");
 
-        Map<String, List<String>> uncollectedMixed = Map.of("Webhook-Id", List.of("msg_direct"));
+        Map<String, List<String>> uncollectedMixed = new java.util.LinkedHashMap<>();
+        uncollectedMixed.put("WEBHOOK-ID", List.of());
+        uncollectedMixed.put("Webhook-Id", List.of("msg_direct"));
         assertThat(WebhookRequestHeaders.first(uncollectedMixed, "webhook-id")).isEqualTo("msg_direct");
         assertThat(WebhookRequestHeaders.first(uncollectedMixed, "x-absent")).isNull();
     }

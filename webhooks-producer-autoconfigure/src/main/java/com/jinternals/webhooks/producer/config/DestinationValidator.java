@@ -58,7 +58,7 @@ public class DestinationValidator implements InitializingBean {
         for (Map.Entry<String, Destination> entry : properties.getDestinations().entrySet()) {
             String name = entry.getKey();
             Destination destination = entry.getValue();
-            validateUrl(name, destination.getUrl());
+            validateUrl(name, destination == null ? null : destination.getUrl());
             if (properties.isSigningEnabled()) {
                 validateSecrets(name, destination);
             }

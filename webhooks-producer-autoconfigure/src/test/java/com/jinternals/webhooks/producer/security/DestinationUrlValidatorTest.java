@@ -105,5 +105,8 @@ class DestinationUrlValidatorTest {
                 .isInstanceOf(WebhookDeliveryException.class);
         assertThatThrownBy(() -> validator.validate("http://[2001:db8::2]:8080/webhooks"))
                 .isInstanceOf(WebhookDeliveryException.class);
+        assertThatThrownBy(() -> validator.validate(null))
+                .isInstanceOf(WebhookDeliveryException.class)
+                .hasMessageContaining("Invalid destination URL: <null>");
     }
 }

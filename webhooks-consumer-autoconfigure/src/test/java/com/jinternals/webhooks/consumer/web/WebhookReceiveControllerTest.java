@@ -640,5 +640,17 @@ class WebhookReceiveControllerTest {
         assertThatThrownBy(() -> timed.dispatch("contact.created", new ContactCreated(), meta()))
                 .isInstanceOf(NoWebhookHandlerException.class);
         verify(neverExecuted, never()).execute(anyString(), any());
+
+        // And through the full pipeline, a missing @WebhookHandler MUST NOT increment webhook.received!
+        WebhookMetrics isolatedMetrics = mock(WebhookMetrics.class);
+        WebhookReceiveController missingHandlerController = controllerWith(isolatedMetrics);
+        doThrow(new NoWebhookHandlerException("contact.created", ContactCreated.class.getName()))
+                .when(dispatcher)
+                .requireHandler(any(), any());
+        MockHttpServletRequest missingHandlerReq = request(endpoint, "msg_no_handler", "1700000000");
+        assertThatThrownBy(() -> missingHandlerController.handle(
+                        missingHandlerReq, "{\"type\":\"contact.created\",\"data\":{\"id\":\"c-1\"}}"))
+                .isInstanceOf(NoWebhookHandlerException.class);
+        verify(isolatedMetrics, never()).received(anyString());
     }
 }

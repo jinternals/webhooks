@@ -92,7 +92,8 @@ class Ed25519WebhookSignerTest {
     @Test
     void rejectsAMalformedPrivateKey() {
         assertThatThrownBy(() -> signer.sign("whsk_not valid base64!!!", ENDPOINT_ID, MSG_ID, TIMESTAMP, PAYLOAD))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Invalid Ed25519 private key configured");
     }
 
     @Test

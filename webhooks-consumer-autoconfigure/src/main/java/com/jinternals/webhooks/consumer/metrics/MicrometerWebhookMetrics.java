@@ -5,8 +5,8 @@ import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import java.time.Duration;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import org.springframework.util.ConcurrentReferenceHashMap;
 
 /**
  * {@link WebhookMetrics} backed by a Micrometer {@link MeterRegistry} (see SPEC.md §20.6/A4,
@@ -30,9 +30,9 @@ public final class MicrometerWebhookMetrics implements WebhookMetrics {
     private final MeterRegistry registry;
     private final DistributionSummary deliveryLag;
     private final DistributionSummary eventLag;
-    private final ConcurrentMap<String, Counter> receivedCounters = new ConcurrentReferenceHashMap<>();
-    private final ConcurrentMap<String, Counter> verificationFailedCounters = new ConcurrentReferenceHashMap<>();
-    private final ConcurrentMap<String, Timer> handleTimers = new ConcurrentReferenceHashMap<>();
+    private final ConcurrentMap<String, Counter> receivedCounters = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, Counter> verificationFailedCounters = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, Timer> handleTimers = new ConcurrentHashMap<>();
 
     public MicrometerWebhookMetrics(MeterRegistry registry) {
         this.registry = registry;

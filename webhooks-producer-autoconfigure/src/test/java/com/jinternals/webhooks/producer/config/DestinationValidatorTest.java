@@ -291,5 +291,11 @@ class DestinationValidatorTest {
         assertThatThrownBy(nullReturningValidator::afterPropertiesSet)
                 .isInstanceOf(WebhookConfigurationException.class)
                 .hasMessageContaining("No signing secret configured");
+
+        WebhookProducerProperties nullEntryProps = new WebhookProducerProperties();
+        nullEntryProps.getDestinations().put("broken", null);
+        assertThatThrownBy(() -> validator(nullEntryProps, allowAll).afterPropertiesSet())
+                .isInstanceOf(WebhookConfigurationException.class)
+                .hasMessageContaining("No URL configured for webhook destination 'broken'");
     }
 }

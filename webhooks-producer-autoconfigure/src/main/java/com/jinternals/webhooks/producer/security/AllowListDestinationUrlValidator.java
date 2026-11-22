@@ -35,6 +35,9 @@ public class AllowListDestinationUrlValidator implements DestinationUrlValidator
 
     @Override
     public void validate(String url) {
+        if (url == null) {
+            throw new WebhookDeliveryException("Invalid destination URL: " + SafeUrl.sanitize(null));
+        }
         URI uri;
         try {
             uri = new URI(url);

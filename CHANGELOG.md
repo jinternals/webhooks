@@ -54,10 +54,13 @@ contain breaking changes; they will always be called out under **Changed** or **
     `webhook-timestamp` and re-compute `webhook-signature` on every retry attempt while keeping `webhook-id`
     and the serialized JSON envelope `timestamp` constant.
 - Virtual-thread & hot-path improvements: replaced `synchronized` in `InMemoryIdempotencyGuard` with
-  `ReentrantLock`, switched `WebhookRedactor` to `ClassValue`, cached decoded Ed25519/HMAC keys and Micrometer
-  meters in `ConcurrentReferenceHashMap`, enforced defensive immutability on `DeliveryFailure` and
-  `WebhookMetadata`, added `Clock` injection (`ObjectProvider<Clock>`) across consumer and producer, tightened
-  internal helper visibility, and added `@NonNullApi` / `@Nullable` package annotations.
+  `ReentrantLock`, switched `WebhookRedactor` to `ClassValue`, cached `WebhookPublisher` `@WebhookType` lookups
+  per event class, serialized outbound envelopes in a single streaming Jackson pass without intermediate
+  `ObjectNode` trees, cached inbound `Envelope` and per-event-type `ObjectReader` instances, cached decoded
+  Ed25519/HMAC keys in `ConcurrentReferenceHashMap` and bounded Micrometer meters in `ConcurrentHashMap`,
+  enforced defensive immutability on `DeliveryFailure` and `WebhookMetadata`, added `Clock` injection
+  (`ObjectProvider<Clock>`) across consumer and producer, tightened internal helper visibility, and added
+  `@NonNullApi` / `@Nullable` package annotations.
 
 ### Fixed
 
@@ -94,9 +97,17 @@ contain breaking changes; they will always be called out under **Changed** or **
 - Rejected JSON literal `null` envelopes with `400 Bad Request` (`InvalidPayloadException`), released
   `IdempotencyGuard` reservations on `Error` as well as `RuntimeException`, protected committed entries in
   `InMemoryIdempotencyGuard` against late `release()` without sliding TTL on rejected duplicates, failed
-  eagerly with `500` on missing `@WebhookHandler` before `async` submission, supported generic bridge and
-  overridden `@WebhookHandler` methods plus package-private `@WebhookClient` `default` methods, skipped
-  registering `EndpointResolvingInterceptor` when `endpoints` is empty, and pre-hashed `v2a` Ed25519 payloads
-  once per verification with a signature count cap.
+  eagerly with `500` on missing `@WebhookHandler` before `async` submission or `webhook.received` metric
+  recording, supported generic bridge and overridden `@WebhookHandler` methods plus package-private
+  `@WebhookClient` `default` methods, skipped registering `EndpointResolvingInterceptor` when `endpoints` is
+  empty (while including trailing-slash variants), and pre-hashed `v2a` Ed25519 payloads once per verification
+  with a signature count cap.
+- Isolated consumer `SecretProvider<Endpoint>` (`defaultCandidate = false` + `ObjectProvider`) so a custom
+  `@Bean("destinationSecretProvider")` in dual producer+consumer apps never backs off consumer secret
+  resolution, rejected duplicate `webhook-id` / `webhook-timestamp` headers and non-canonical timestamp strings,
+  normalized RFC 9110 `, `-folded `webhook-signature` headers, guarded comma-only `X-Forwarded-For` headers and
+  ISO-8601 numeric-offset event timestamps in `MetadataFactory`, fast-failed oversized `Content-Length`
+  requests before opening the servlet `InputStream`, and included `spring-boot-starter-json` in
+  `webhooks-producer-autoconfigure` for out-of-the-box `java.time` serialization in non-web apps.
 
 [Unreleased]: https://github.com/jinternals/webhooks/commits/main

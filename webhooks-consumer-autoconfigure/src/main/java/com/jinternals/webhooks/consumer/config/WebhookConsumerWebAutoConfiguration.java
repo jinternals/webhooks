@@ -8,6 +8,7 @@ import com.jinternals.webhooks.consumer.idempotency.IdempotencyGuard;
 import com.jinternals.webhooks.consumer.metadata.MetadataFactory;
 import com.jinternals.webhooks.consumer.metrics.WebhookMetrics;
 import com.jinternals.webhooks.consumer.validation.PayloadValidator;
+import com.jinternals.webhooks.consumer.verify.ConfigSecretProvider;
 import com.jinternals.webhooks.consumer.verify.WebhookVerifier;
 import com.jinternals.webhooks.consumer.web.WebConfiguration;
 import com.jinternals.webhooks.consumer.web.WebhookEndpointRegistry;
@@ -67,7 +68,7 @@ public class WebhookConsumerWebAutoConfiguration {
     @ConditionalOnMissingBean
     public WebhookReceivePipeline webhookReceivePipeline(
             WebhookVerifier verifier,
-            SecretProvider<Endpoint> secretProvider,
+            ObjectProvider<SecretProvider<Endpoint>> secretProvider,
             WebhookTypeRegistry webhookTypeRegistry,
             PayloadValidator payloadValidator,
             ObjectMapper objectMapper,
@@ -78,7 +79,8 @@ public class WebhookConsumerWebAutoConfiguration {
             WebhookDispatcher dispatcher,
             WebhookMetrics metrics,
             ObjectProvider<Clock> clockProvider) {
-        WebhookBodyVerifier bodyVerifier = new WebhookBodyVerifier(verifier, secretProvider, metrics);
+        WebhookBodyVerifier bodyVerifier =
+                new WebhookBodyVerifier(verifier, secretProvider.getIfAvailable(ConfigSecretProvider::new), metrics);
         EventResolver eventResolver =
                 new EventResolver(webhookTypeRegistry, payloadValidator, objectMapper, properties);
         ReceiveObservabilityRecorder observabilityRecorder =

@@ -1,6 +1,5 @@
 package com.jinternals.webhooks.consumer.web.receive;
 
-import com.fasterxml.jackson.core.JacksonException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -13,6 +12,9 @@ import com.jinternals.webhooks.consumer.web.error.InvalidPayloadException;
 import com.jinternals.webhooks.consumer.web.error.UnknownTypeException;
 import com.jinternals.webhooks.core.model.Envelope;
 import com.jinternals.webhooks.core.registry.WebhookTypeRegistry;
+import java.io.IOException;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -42,6 +44,8 @@ public class EventResolver {
      * host app's global {@link ObjectMapper} leniency (SPEC §6a).
      */
     private final ObjectReader strictEventReader;
+
+    private final ConcurrentMap<Class<?>, ObjectReader> eventReaders = new ConcurrentHashMap<>();
 
     public EventResolver(
             WebhookTypeRegistry typeRegistry,
@@ -104,9 +108,11 @@ public class EventResolver {
         }
         Object event;
         try {
-            event = strictEventReader.treeToValue(data, eventClass);
-        } catch (JacksonException e) {
-            throw new InvalidPayloadException(type, e.getOriginalMessage(), e);
+            event = eventReaders
+                    .computeIfAbsent(eventClass, strictEventReader::forType)
+                    .readValue(data);
+        } catch (IOException e) {
+            throw new InvalidPayloadException(type, e.getMessage(), e);
         }
         payloadValidator.validate(type, event);
         return event;

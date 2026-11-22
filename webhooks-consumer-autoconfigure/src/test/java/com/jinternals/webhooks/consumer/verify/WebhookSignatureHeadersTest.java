@@ -149,4 +149,50 @@ class WebhookSignatureHeadersTest {
                 .satisfies(e -> assertThat(((WebhookVerificationFailure) e).reason())
                         .isEqualTo(VerificationFailureReason.MISSING_HEADERS));
     }
+
+    @Test
+    void rejectsDuplicateIdOrTimestampNonCanonicalTimestampsAndNormalizesProxyFoldedSignatures() throws Exception {
+        // 1) Duplicate webhook-id (either multi-valued or mixed-case keys) -> SIGNATURE failure (no smuggling)
+        assertThatThrownBy(() -> WebhookSignatureHeaders.from(Map.of(
+                        WebhookHeaders.ID, List.of("msg_1", "msg_2"),
+                        WebhookHeaders.TIMESTAMP, List.of("1700000000"),
+                        WebhookHeaders.SIGNATURE, List.of("v1,sig"))))
+                .isInstanceOf(WebhookVerificationFailure.class)
+                .satisfies(e -> assertThat(((WebhookVerificationFailure) e).reason())
+                        .isEqualTo(VerificationFailureReason.SIGNATURE));
+
+        // 2) Duplicate webhook-timestamp -> TIMESTAMP failure
+        assertThatThrownBy(() -> WebhookSignatureHeaders.from(Map.of(
+                        WebhookHeaders.ID, List.of("msg_1"),
+                        WebhookHeaders.TIMESTAMP, List.of("1700000000", "1700000001"),
+                        WebhookHeaders.SIGNATURE, List.of("v1,sig"))))
+                .isInstanceOf(WebhookVerificationFailure.class)
+                .satisfies(e -> assertThat(((WebhookVerificationFailure) e).reason())
+                        .isEqualTo(VerificationFailureReason.TIMESTAMP));
+
+        // 3) Non-canonical timestamps ("+1700000000", "01700000000", "-0") -> TIMESTAMP failure
+        for (String nonCanonical : List.of("+1700000000", "01700000000", "-0")) {
+            assertThatThrownBy(() -> WebhookSignatureHeaders.from(Map.of(
+                            WebhookHeaders.ID, List.of("msg_1"),
+                            WebhookHeaders.TIMESTAMP, List.of(nonCanonical),
+                            WebhookHeaders.SIGNATURE, List.of("v1,sig"))))
+                    .isInstanceOf(WebhookVerificationFailure.class)
+                    .satisfies(e -> assertThat(((WebhookVerificationFailure) e).reason())
+                            .isEqualTo(VerificationFailureReason.TIMESTAMP));
+        }
+
+        // 4) RFC 9110 §5.3 proxy ", "-folded webhook-signature normalizes to space-separated tokens,
+        //    while non-whitespace trailing comma ("v1,sigA,extra") remains intact (and fails matching).
+        WebhookSignatureHeaders folded = WebhookSignatureHeaders.from(Map.of(
+                WebhookHeaders.ID, List.of("msg_1"),
+                WebhookHeaders.TIMESTAMP, List.of("1700000000"),
+                WebhookHeaders.SIGNATURE, List.of("v1,sigA, v2a,sigB")));
+        assertThat(folded.signature).isEqualTo("v1,sigA v2a,sigB");
+
+        WebhookSignatureHeaders tampered = WebhookSignatureHeaders.from(Map.of(
+                WebhookHeaders.ID, List.of("msg_1"),
+                WebhookHeaders.TIMESTAMP, List.of("1700000000"),
+                WebhookHeaders.SIGNATURE, List.of("v1,sigA,extra")));
+        assertThat(tampered.signature).isEqualTo("v1,sigA,extra");
+    }
 }

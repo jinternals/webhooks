@@ -2,7 +2,7 @@
 //
 // Signs each request with a valid Standard Webhooks signature in-script, so it exercises the REAL
 // hot path: verify -> parse -> deserialize -> validate -> dispatch. Reports p50/p95/p99
-// latency and throughput, split by scenario via tags.
+// latency and throughput, split by endpoint via tags.
 //
 //   Install:  brew install k6
 //   Run:      k6 run load-test.js
@@ -12,6 +12,7 @@
 //                                   or via Docker:  docker compose up consumer
 import http from "k6/http";
 import crypto from "k6/crypto";
+import encoding from "k6/encoding";
 import { check } from "k6";
 import { Trend } from "k6/metrics";
 
@@ -27,31 +28,19 @@ export const options = {
   thresholds: {
     // Baseline guard-rails; tune to your target SLO once you have numbers.
     http_req_failed: ["rate<0.01"],
-    "http_req_duration{scenario:crm_created}": ["p(99)<250"],
+    "http_req_duration{endpoint:crm_created}": ["p(99)<250"],
   },
 };
 
 const createdLatency = new Trend("crm_created_latency", true);
 
-// The HMAC key is the RAW bytes of the base64 secret body. k6's crypto.hmac takes the key as a
-// string whose char codes are the key bytes, so we base64-decode the secret into such a string once.
-const SECRET_KEY = b64decode(SECRET_B64);
+// Decode the base64 secret body into a raw ArrayBuffer ("a") once: passing a JS string to crypto.hmac
+// UTF-8-encodes char codes >= 0x80 and corrupts binary keys.
+const SECRET_KEY = encoding.b64decode(SECRET_B64, "std", "a");
 
 // Standard Webhooks signature: v1,<base64 HMAC-SHA256 of "id.timestamp.body">.
 function sign(id, ts, body) {
   return `v1,${crypto.hmac("sha256", SECRET_KEY, `${id}.${ts}.${body}`, "base64")}`;
-}
-
-// Minimal base64 -> binary (latin1) string decode (k6 has no atob).
-function b64decode(b64) {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-  let out = "", bits = 0, val = 0;
-  for (const c of b64.replace(/=+$/, "")) {
-    val = (val << 6) | chars.indexOf(c);
-    bits += 6;
-    if (bits >= 8) { bits -= 8; out += String.fromCharCode((val >> bits) & 0xff); }
-  }
-  return out;
 }
 
 function post(path, body) {
@@ -63,7 +52,7 @@ function post(path, body) {
     "webhook-timestamp": ts,
     "webhook-signature": sign(id, ts, body),
   };
-  return http.post(`${BASE}${path}`, body, { headers, tags: { scenario: "crm_created" } });
+  return http.post(`${BASE}${path}`, body, { headers, tags: { endpoint: "crm_created" } });
 }
 
 export default function () {

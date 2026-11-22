@@ -7,8 +7,8 @@ Supports both signing schemes, selected by the secret/key prefix:
     with HMAC-SHA256 using the base64-decoded key, header `webhook-signature: v1,<base64>`.
 
   • v2a (asymmetric Ed25519) — key starts `whsk_` (an Ed25519 PRIVATE key). Signs Ed25519 over
-    SHA-256(`endpoint_id.webhook-id.webhook-timestamp.body`), header `v2a,<base64>`. Requires
-    --endpoint-id, which is mixed into the signed content but never sent on the wire (SPEC §19i).
+    SHA-256(`endpoint_id.webhook-id.webhook-timestamp.body`), header `webhook-signature: v2a,<base64>`.
+    Requires --endpoint-id, which is mixed into the signed content but never sent on the wire (SPEC §19i).
     v2a needs the `cryptography` package: pip install cryptography
 """
 import argparse

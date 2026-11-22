@@ -1,6 +1,7 @@
 package com.jinternals.webhooks.sample.producer.nats;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.ObjectReader;
 import com.jinternals.webhooks.core.model.WebhookHeaders;
 import com.jinternals.webhooks.core.secret.SecretProvider;
 import com.jinternals.webhooks.producer.config.WebhookProducerProperties;
@@ -56,8 +57,9 @@ public class NatsOutboundRelayWorker implements SmartLifecycle {
     private static final Logger log = LoggerFactory.getLogger(NatsOutboundRelayWorker.class);
 
     private final JetStream jetStream;
-    private final ObjectMapper objectMapper;
+    private final ObjectReader messageReader;
     private final WebhookProducerProperties producerProperties;
+    private final Map<String, Destination> destinationsByUrl;
     private final NatsProducerProperties natsProperties;
     private final WebhookSigner signer;
     private final SecretProvider<Destination> secretProvider;
@@ -81,8 +83,15 @@ public class NatsOutboundRelayWorker implements SmartLifecycle {
             @Qualifier("webhookProducerRestClient") RestClient restClient,
             ObjectProvider<Clock> clockProvider) {
         this.jetStream = jetStream;
-        this.objectMapper = objectMapper;
+        this.messageReader = objectMapper.readerFor(OutboundWebhookMessage.class);
         this.producerProperties = producerProperties;
+        Map<String, Destination> indexed = new LinkedHashMap<>();
+        for (Destination d : producerProperties.getDestinations().values()) {
+            if (d != null && d.getUrl() != null) {
+                indexed.putIfAbsent(d.getUrl(), d);
+            }
+        }
+        this.destinationsByUrl = Map.copyOf(indexed);
         this.natsProperties = natsProperties;
         this.signer = signer;
         this.secretProvider = secretProvider;
@@ -191,7 +200,7 @@ public class NatsOutboundRelayWorker implements SmartLifecycle {
         long attempt = msg.metaData() != null ? msg.metaData().deliveredCount() : 1L;
         OutboundWebhookMessage queued;
         try {
-            queued = objectMapper.readValue(msg.getData(), OutboundWebhookMessage.class);
+            queued = messageReader.readValue(msg.getData());
         } catch (Exception malformed) {
             log.error("Poison outbound message could not be parsed; routing to DLQ", malformed);
             String poisonKey = msg.metaData() != null
@@ -231,11 +240,13 @@ public class NatsOutboundRelayWorker implements SmartLifecycle {
 
         try {
             msg.ackSync(Duration.ofSeconds(2));
-            log.info(
-                    "Delivered outbound webhook id={} attempt={} target={}",
-                    queued.webhookId(),
-                    attempt,
-                    SafeUrl.sanitize(queued.url()));
+            if (log.isInfoEnabled()) {
+                log.info(
+                        "Delivered outbound webhook id={} attempt={} target={}",
+                        queued.webhookId(),
+                        attempt,
+                        SafeUrl.sanitize(queued.url()));
+            }
         } catch (InterruptedException ie) {
             Thread.currentThread().interrupt();
             log.warn("Interrupted while acking outbound webhook id={}", queued.webhookId());
@@ -246,7 +257,7 @@ public class NatsOutboundRelayWorker implements SmartLifecycle {
 
     private Map<String, List<String>> buildAttemptHeaders(OutboundWebhookMessage queued) {
         long attemptSeconds = clock.instant().getEpochSecond();
-        Map<String, List<String>> headers = new LinkedHashMap<>();
+        Map<String, List<String>> headers = new LinkedHashMap<>(4);
         headers.put(WebhookHeaders.ID, List.of(queued.webhookId()));
         headers.put(WebhookHeaders.TIMESTAMP, List.of(Long.toString(attemptSeconds)));
         if (signer.isEnabled()) {
@@ -256,26 +267,28 @@ public class NatsOutboundRelayWorker implements SmartLifecycle {
                 throw new WebhookDeliveryException(
                         "No signing secret configured for destination URL: " + SafeUrl.sanitize(queued.url()));
             }
-            StringBuilder combined = new StringBuilder();
+            String combined = null;
             for (String secret : secrets) {
                 if (secret == null || secret.isBlank()) {
                     throw new WebhookDeliveryException("Null/blank signing secret returned for destination URL: "
                             + SafeUrl.sanitize(queued.url()));
                 }
-                if (combined.length() > 0) {
-                    combined.append(' ');
-                }
-                combined.append(signer.sign(
-                        secret, destination.getEndpointId(), queued.webhookId(), attemptSeconds, queued.body()));
+                String sig = signer.sign(
+                        secret, destination.getEndpointId(), queued.webhookId(), attemptSeconds, queued.body());
+                combined = (combined == null) ? sig : combined + " " + sig;
             }
-            headers.put(WebhookHeaders.SIGNATURE, List.of(combined.toString()));
+            headers.put(WebhookHeaders.SIGNATURE, List.of(combined));
         }
         return headers;
     }
 
     private Destination findDestinationByUrl(String url) {
+        Destination indexed = url != null ? destinationsByUrl.get(url) : null;
+        if (indexed != null) {
+            return indexed;
+        }
         return producerProperties.getDestinations().values().stream()
-                .filter(d -> url.equals(d.getUrl()))
+                .filter(d -> url != null && url.equals(d.getUrl()))
                 .findFirst()
                 .orElseThrow(() -> new WebhookDeliveryException(
                         "No configured webhook destination matches URL: " + SafeUrl.sanitize(url)));

@@ -46,6 +46,9 @@ class RawBodyArgumentResolver implements HandlerMethodArgumentResolver {
         if (request == null) {
             return "";
         }
+        if (request.getContentLengthLong() > maxBodyBytes) {
+            throw new PayloadTooLargeException(maxBodyBytes);
+        }
         return readBounded(request.getInputStream());
     }
 

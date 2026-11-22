@@ -39,6 +39,7 @@ public class WebhookProducerProperties {
 
     /** Named destinations keyed by the name used in {@code @WebhookClient(destination = "...")}. */
     @NotNull
+    @Valid
     private Map<String, Destination> destinations = new LinkedHashMap<>();
 
     /**

@@ -45,6 +45,9 @@ public class RestClientWebhookTransport implements WebhookTransport {
 
     @Override
     public void send(String url, Map<String, List<String>> headers, String body) {
+        if (url == null) {
+            throw new WebhookDeliveryException("Webhook delivery to <null> failed: destination URL is null");
+        }
         urlValidator.validate(url);
         try {
             restClient

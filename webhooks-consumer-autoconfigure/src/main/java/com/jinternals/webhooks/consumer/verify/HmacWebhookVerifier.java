@@ -73,15 +73,17 @@ public class HmacWebhookVerifier implements WebhookVerifier {
      * signatures. Package-private so {@link DefaultWebhookVerifier} can reuse it per-secret without re-running
      * the shared header/timestamp skeleton.
      */
+    private static final String VERSION_PREFIX = "v1,";
+
     boolean matches(String secret, String rawBody, WebhookSignatureHeaders parsed) {
-        String expected = expectedSignature(secret, parsed.msgId, parsed.timestamp, rawBody);
+        byte[] expectedBytes = expectedSignature(secret, parsed.msgId, parsed.timestamp, rawBody)
+                .getBytes(StandardCharsets.UTF_8);
         for (String versioned : parsed.signature.split(" ")) {
-            String[] parts = versioned.split(",", 2);
-            if (parts.length < 2 || !"v1".equals(parts[0])) {
+            if (!versioned.startsWith(VERSION_PREFIX)) {
                 continue;
             }
             if (MessageDigest.isEqual(
-                    parts[1].getBytes(StandardCharsets.UTF_8), expected.getBytes(StandardCharsets.UTF_8))) {
+                    versioned.substring(VERSION_PREFIX.length()).getBytes(StandardCharsets.UTF_8), expectedBytes)) {
                 return true;
             }
         }
@@ -91,9 +93,10 @@ public class HmacWebhookVerifier implements WebhookVerifier {
     /** The bare (unversioned) expected signature for the inputs, via the official library's HMAC. */
     private String expectedSignature(String secret, String msgId, long timestamp, String rawBody) {
         try {
-            Webhook webhook = webhooks.computeIfAbsent(secret, this::newWebhook);
+            Webhook webhook = webhooks.computeIfAbsent(secret, HmacWebhookVerifier::newWebhook);
             // Webhook#sign returns "v1,<base64>"; we compare the base64 portion.
-            return doSign(webhook, msgId, timestamp, rawBody).split(",")[1];
+            String signed = doSign(webhook, msgId, timestamp, rawBody);
+            return signed.substring(signed.indexOf(',') + 1);
         } catch (WebhookSigningException e) {
             // A valid (already-constructed) secret never fails to sign, so this is unreachable in
             // practice; surface a misconfiguration rather than a silent non-match if it ever does.
@@ -112,7 +115,7 @@ public class HmacWebhookVerifier implements WebhookVerifier {
         return webhook.sign(msgId, timestamp, rawBody);
     }
 
-    private Webhook newWebhook(String secret) {
+    private static Webhook newWebhook(String secret) {
         try {
             return new Webhook(SymmetricKeys.decodeSecret(secret));
         } catch (Exception e) {

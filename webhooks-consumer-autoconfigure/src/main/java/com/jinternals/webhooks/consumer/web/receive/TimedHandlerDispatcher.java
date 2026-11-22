@@ -28,6 +28,10 @@ public class TimedHandlerDispatcher {
         this.metrics = metrics;
     }
 
+    public void requireHandler(Object event, WebhookMetadata metadata) {
+        dispatcher.requireHandler(event, metadata);
+    }
+
     public void dispatch(String type, Object event, WebhookMetadata metadata) {
         dispatcher.requireHandler(event, metadata);
         handlerExecutor.execute(type, () -> {

@@ -29,17 +29,26 @@ final class WebhookSignatureHeaders {
     }
 
     /**
+     * Matches RFC 9110 §5.3 proxy header folding ({@code ", "}) immediately preceding another
+     * {@code <version>,<base64>} signature token so proxy-folded {@code webhook-signature} headers verify
+     * identically to space-delimited headers without loosening single-signature comma validation.
+     */
+    private static final java.util.regex.Pattern PROXY_FOLDED_SIGNATURES =
+            java.util.regex.Pattern.compile(",\\s+(?=[A-Za-z0-9]+,)");
+
+    /**
      * Read and validate the required headers.
      *
      * @throws WebhookVerificationFailure {@code MISSING_HEADERS} if any of the three is absent (or
      *                                    {@code webhook-id} is blank), {@code SIGNATURE} if
-     *                                    {@code webhook-id} contains {@code '.'} (the signed-content
-     *                                    delimiter), or {@code TIMESTAMP} if {@code webhook-timestamp} is
-     *                                    not a long
+     *                                    {@code webhook-id} is duplicated or contains {@code '.'} (the
+     *                                    signed-content delimiter), or {@code TIMESTAMP} if
+     *                                    {@code webhook-timestamp} is duplicated or not a canonical base-10
+     *                                    {@code long}
      */
     static WebhookSignatureHeaders from(Map<String, List<String>> headers) throws WebhookVerificationFailure {
-        String msgId = firstHeader(headers, WebhookHeaders.ID);
-        String msgTimestamp = firstHeader(headers, WebhookHeaders.TIMESTAMP);
+        String msgId = singleHeader(headers, WebhookHeaders.ID, VerificationFailureReason.SIGNATURE);
+        String msgTimestamp = singleHeader(headers, WebhookHeaders.TIMESTAMP, VerificationFailureReason.TIMESTAMP);
         String msgSignature = joinedHeaders(headers, WebhookHeaders.SIGNATURE);
         if (msgId == null || msgId.isBlank() || msgTimestamp == null || msgSignature.isBlank()) {
             throw new WebhookVerificationFailure(VerificationFailureReason.MISSING_HEADERS, "Missing required headers");
@@ -54,26 +63,39 @@ final class WebhookSignatureHeaders {
         } catch (NumberFormatException e) {
             throw new WebhookVerificationFailure(VerificationFailureReason.TIMESTAMP, "Invalid timestamp header");
         }
+        if (!Long.toString(timestamp).equals(msgTimestamp)) {
+            throw new WebhookVerificationFailure(VerificationFailureReason.TIMESTAMP, "Invalid timestamp header");
+        }
         return new WebhookSignatureHeaders(msgId, timestamp, msgSignature);
     }
 
     @Nullable
-    private static String firstHeader(Map<String, List<String>> headers, String name) {
+    private static String singleHeader(
+            Map<String, List<String>> headers, String name, VerificationFailureReason duplicateReason)
+            throws WebhookVerificationFailure {
+        String found = null;
         for (Map.Entry<String, List<String>> entry : headers.entrySet()) {
             if (entry.getKey().equalsIgnoreCase(name)) {
                 List<String> values = entry.getValue();
-                if (values != null && !values.isEmpty()) {
-                    return values.get(0);
+                if (values == null) {
+                    continue;
+                }
+                for (String value : values) {
+                    if (found != null) {
+                        throw new WebhookVerificationFailure(
+                                duplicateReason, "Multiple " + name + " headers are not allowed");
+                    }
+                    found = value;
                 }
             }
         }
-        return null;
+        return found;
     }
 
     /**
-     * Collect all header values for {@code name} (case-insensitively) joined by {@code ' '}, so senders or
-     * proxies that emit repeated {@code webhook-signature} header lines (RFC 9110 §5.3) verify identically
-     * to a single space-delimited {@code webhook-signature} value.
+     * Collect all header values for {@code name} (case-insensitively) joined by {@code ' '} (and normalizing
+     * RFC 9110 §5.3 {@code ", "} proxy header folding), so senders or proxies that emit or fold repeated
+     * {@code webhook-signature} header lines verify identically to a single space-delimited value.
      */
     private static String joinedHeaders(Map<String, List<String>> headers, String name) {
         List<String> collected = new ArrayList<>();
@@ -85,6 +107,6 @@ final class WebhookSignatureHeaders {
                 }
             }
         }
-        return String.join(" ", collected);
+        return PROXY_FOLDED_SIGNATURES.matcher(String.join(" ", collected)).replaceAll(" ");
     }
 }

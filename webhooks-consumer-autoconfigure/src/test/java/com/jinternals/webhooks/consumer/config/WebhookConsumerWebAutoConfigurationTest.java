@@ -48,13 +48,18 @@ class WebhookConsumerWebAutoConfigurationTest {
 
     private final WebhookConsumerWebAutoConfiguration autoConfig = new WebhookConsumerWebAutoConfiguration();
 
-    @SuppressWarnings("unchecked")
+    private static org.springframework.beans.factory.ObjectProvider<SecretProvider<Endpoint>> emptySecretProvider() {
+        return new org.springframework.beans.factory.support.DefaultListableBeanFactory()
+                .getBeanProvider(org.springframework.core.ResolvableType.forClassWithGenerics(
+                        SecretProvider.class, Endpoint.class));
+    }
+
     private WebhookReceivePipeline pipeline() {
         var clockProvider = new org.springframework.beans.factory.support.DefaultListableBeanFactory()
                 .getBeanProvider(java.time.Clock.class);
         return autoConfig.webhookReceivePipeline(
                 mock(WebhookVerifier.class),
-                mock(SecretProvider.class),
+                emptySecretProvider(),
                 new WebhookTypeRegistry(Map.of()),
                 mock(PayloadValidator.class),
                 new ObjectMapper(),
@@ -77,10 +82,11 @@ class WebhookConsumerWebAutoConfigurationTest {
     }
 
     @Test
-    void receivePipelineIsProducedAndWired() {
-        // Drive a real accepted delivery through the auto-configured pipeline so the default Clock::systemUTC
-        // fallback inside ReceiveObservabilityRecorder is actually evaluated (killing a null-clock mutant).
+    void receivePipelineIsProducedAndWired() throws Exception {
+        // Drive a real accepted delivery through the auto-configured pipeline so BOTH ConfigSecretProvider::new
+        // and Clock::systemUTC fallbacks are evaluated (killing null-supplier mutants).
         WebhookMetrics metrics = mock(WebhookMetrics.class);
+        WebhookVerifier verifier = mock(WebhookVerifier.class);
         IdempotencyGuard idempotency = new com.jinternals.webhooks.consumer.idempotency.NoOpIdempotencyGuard();
         WebhookTypeRegistry typeRegistry = new WebhookTypeRegistry(Map.of("contact.created", SampleEvent.class));
         MetadataFactory metadataFactory = new MetadataFactory(List.of());
@@ -89,10 +95,9 @@ class WebhookConsumerWebAutoConfigurationTest {
         var clockProvider = new org.springframework.beans.factory.support.DefaultListableBeanFactory()
                 .getBeanProvider(java.time.Clock.class);
 
-        @SuppressWarnings("unchecked")
         WebhookReceivePipeline p = autoConfig.webhookReceivePipeline(
-                mock(WebhookVerifier.class),
-                mock(SecretProvider.class),
+                verifier,
+                emptySecretProvider(),
                 typeRegistry,
                 mock(PayloadValidator.class),
                 new ObjectMapper(),
@@ -107,12 +112,19 @@ class WebhookConsumerWebAutoConfigurationTest {
         org.springframework.mock.web.MockHttpServletRequest req =
                 new org.springframework.mock.web.MockHttpServletRequest();
         Endpoint ep = endpoint("/webhooks/crm");
+        ep.setSecret("whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw");
         p.process(
                 req,
                 ep,
                 "{\"type\":\"contact.created\",\"timestamp\":\"2023-11-14T22:13:20Z\",\"data\":{\"id\":\"1\"}}",
                 Map.of("webhook-id", List.of("msg_1"), "webhook-timestamp", List.of("1700000000")));
 
+        verify(verifier)
+                .verify(
+                        org.mockito.ArgumentMatchers.eq(List.of("whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw")),
+                        any(),
+                        any(),
+                        any());
         verify(metrics).received("contact.created");
         verify(metrics).deliveryLag(any());
         verify(metrics).eventLag(any());

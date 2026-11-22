@@ -48,11 +48,12 @@ public final class WebhookRequestHeaders {
      * mixed-case maps supplied directly by callers.
      */
     public static String first(Map<String, List<String>> headers, String name) {
-        String lower = name.toLowerCase(Locale.ROOT);
         for (Map.Entry<String, List<String>> entry : headers.entrySet()) {
-            if (lower.equals(entry.getKey().toLowerCase(Locale.ROOT))) {
+            if (entry.getKey().equalsIgnoreCase(name)) {
                 List<String> values = entry.getValue();
-                return (values == null || values.isEmpty()) ? null : values.get(0);
+                if (values != null && !values.isEmpty()) {
+                    return values.get(0);
+                }
             }
         }
         return null;

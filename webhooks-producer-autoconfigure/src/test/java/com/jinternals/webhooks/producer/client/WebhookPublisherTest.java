@@ -151,8 +151,6 @@ class WebhookPublisherTest {
     @Test
     void wrapsSerializationFailure() throws Exception {
         ObjectMapper failing = mock(ObjectMapper.class);
-        when(failing.createObjectNode()).thenReturn(new ObjectMapper().createObjectNode());
-        when(failing.valueToTree(org.mockito.ArgumentMatchers.any())).thenReturn(new ObjectMapper().createObjectNode());
         when(failing.writeValueAsString(org.mockito.ArgumentMatchers.any()))
                 .thenThrow(new JsonMappingException(null, "boom"));
         when(secretProvider.secretsFor(crm)).thenReturn(List.of("whsec_abc"));
@@ -381,23 +379,44 @@ class WebhookPublisherTest {
         assertThat(attemptHeaders.get(1)).doesNotContainKey(WebhookHeaders.SIGNATURE);
     }
 
+    @WebhookType("invoice.issued")
+    record InvoiceIssued(String id, java.time.Instant issuedAt) {}
+
+    @WebhookType("broken.cycle")
+    static class CyclicEvent {
+        public CyclicEvent self = this;
+    }
+
     @Test
-    void rejectsNullSecretsListFromProviderAndWrapsValueToTreeIllegalArgumentException() {
+    void rejectsNullSecretsListWrapsUnserializableCycleAndSerializesJavaTimeOutOfTheBox() throws Exception {
         when(secretProvider.secretsFor(crm)).thenReturn(null);
         assertThatThrownBy(() -> publisher.publish("crm", new ContactCreated()))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("No signing secret configured");
 
-        com.fasterxml.jackson.databind.ObjectMapper brokenMapper =
-                mock(com.fasterxml.jackson.databind.ObjectMapper.class);
-        when(brokenMapper.createObjectNode())
-                .thenReturn(new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode());
-        when(brokenMapper.valueToTree(org.mockito.ArgumentMatchers.any()))
-                .thenThrow(new IllegalArgumentException("unserializable cycle"));
-        WebhookPublisher brokenPublisher =
-                new WebhookPublisher(brokenMapper, signer, transport, secretProvider, properties);
-        assertThatThrownBy(() -> brokenPublisher.publish("crm", new ContactCreated()))
+        assertThatThrownBy(() -> publisher.publish("crm", new CyclicEvent()))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("Failed to serialize webhook payload");
+
+        // spring-boot-starter-json registers JavaTimeModule automatically even in non-web producer apps:
+        new org.springframework.boot.test.context.runner.ApplicationContextRunner()
+                .withConfiguration(org.springframework.boot.autoconfigure.AutoConfigurations.of(
+                        org.springframework.boot.autoconfigure.jackson.JacksonAutoConfiguration.class))
+                .run(ctx -> {
+                    ObjectMapper bootMapper = ctx.getBean(ObjectMapper.class);
+                    when(secretProvider.secretsFor(crm)).thenReturn(List.of("whsec_abc"));
+                    when(signer.sign(eq("whsec_abc"), isNull(), anyString(), anyLong(), anyString()))
+                            .thenReturn("v1,sig");
+                    WebhookPublisher bootPublisher =
+                            new WebhookPublisher(bootMapper, signer, transport, secretProvider, properties);
+                    bootPublisher.publish(
+                            "crm", new InvoiceIssued("inv-1", java.time.Instant.parse("2026-01-15T10:30:00Z")));
+
+                    ArgumentCaptor<String> sentBody = ArgumentCaptor.forClass(String.class);
+                    verify(transport).send(anyString(), org.mockito.ArgumentMatchers.anyMap(), sentBody.capture());
+                    var root = bootMapper.readTree(sentBody.getValue());
+                    assertThat(root.fieldNames()).toIterable().containsExactly("type", "timestamp", "data");
+                    assertThat(root.get("data").get("issuedAt").asText()).isEqualTo("2026-01-15T10:30:00Z");
+                });
     }
 }

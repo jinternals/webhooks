@@ -49,9 +49,17 @@ public class WebConfiguration implements WebMvcConfigurer {
      * can be asserted directly, since {@link InterceptorRegistry} is opaque to tests.
      */
     List<String> interceptorPathPatterns() {
-        return properties.getConsumer().getEndpoints().stream()
-                .map(Endpoint::getPath)
-                .filter(p -> p != null && !p.isBlank())
-                .toList();
+        List<String> patterns = new java.util.ArrayList<>();
+        for (Endpoint endpoint : properties.getConsumer().getEndpoints()) {
+            String path = endpoint.getPath();
+            if (path == null || path.isBlank()) {
+                continue;
+            }
+            patterns.add(path);
+            if (!path.endsWith("/")) {
+                patterns.add(path + "/");
+            }
+        }
+        return List.copyOf(patterns);
     }
 }

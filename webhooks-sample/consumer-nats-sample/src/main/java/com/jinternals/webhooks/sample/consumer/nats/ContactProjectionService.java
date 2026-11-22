@@ -1,11 +1,11 @@
 package com.jinternals.webhooks.sample.consumer.nats;
 
 import com.jinternals.webhooks.core.redact.WebhookRedactor;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.ReentrantLock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -15,6 +15,9 @@ import org.springframework.stereotype.Service;
  * {@code INSERT ... ON CONFLICT DO NOTHING} / upsert) so even if a worker crashes in the narrow window after
  * the DB write and before {@code msg.ackSync}, JetStream's redelivery to a sibling consumer instance is a
  * safe no-op.
+ *
+ * <p>Guarded by a {@link ReentrantLock} rather than {@code synchronized} so virtual threads in
+ * {@link NatsInboundWorker} never pin carrier threads under contention on Java 21.
  */
 @Service
 public class ContactProjectionService {
@@ -22,13 +25,13 @@ public class ContactProjectionService {
     private static final Logger log = LoggerFactory.getLogger(ContactProjectionService.class);
     private static final int MAX_RETAINED_PROJECTIONS = 10_000;
 
-    private final Map<String, InboundWebhookMessage> processedByWebhookId =
-            Collections.synchronizedMap(new LinkedHashMap<>(256, 0.75f, true) {
-                @Override
-                protected boolean removeEldestEntry(Map.Entry<String, InboundWebhookMessage> eldest) {
-                    return size() > MAX_RETAINED_PROJECTIONS;
-                }
-            });
+    private final ReentrantLock lock = new ReentrantLock();
+    private final Map<String, InboundWebhookMessage> processedByWebhookId = new LinkedHashMap<>(256, 0.75f, true) {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<String, InboundWebhookMessage> eldest) {
+            return size() > MAX_RETAINED_PROJECTIONS;
+        }
+    };
     private final AtomicBoolean failNext = new AtomicBoolean(false);
 
     public void process(InboundWebhookMessage message) {
@@ -38,12 +41,21 @@ public class ContactProjectionService {
         String key = message.webhookId() != null
                 ? message.webhookId()
                 : message.contact().getId();
-        if (processedByWebhookId.putIfAbsent(key, message) == null) {
-            log.info(
-                    "contact.created processed from NATS inbox id={} webhookId={} event={}",
-                    message.contact().getId(),
-                    message.webhookId(),
-                    WebhookRedactor.toRedactedString(message.contact()));
+        boolean firstTime;
+        lock.lock();
+        try {
+            firstTime = processedByWebhookId.putIfAbsent(key, message) == null;
+        } finally {
+            lock.unlock();
+        }
+        if (firstTime) {
+            if (log.isInfoEnabled()) {
+                log.info(
+                        "contact.created processed from NATS inbox id={} webhookId={} event={}",
+                        message.contact().getId(),
+                        message.webhookId(),
+                        WebhookRedactor.toRedactedString(message.contact()));
+            }
         } else {
             log.info("Idempotent no-op for redelivered NATS inbox message webhookId={}", message.webhookId());
         }
@@ -54,12 +66,20 @@ public class ContactProjectionService {
     }
 
     public List<InboundWebhookMessage> processed() {
-        synchronized (processedByWebhookId) {
+        lock.lock();
+        try {
             return List.copyOf(processedByWebhookId.values());
+        } finally {
+            lock.unlock();
         }
     }
 
     public void clear() {
-        processedByWebhookId.clear();
+        lock.lock();
+        try {
+            processedByWebhookId.clear();
+        } finally {
+            lock.unlock();
+        }
     }
 }

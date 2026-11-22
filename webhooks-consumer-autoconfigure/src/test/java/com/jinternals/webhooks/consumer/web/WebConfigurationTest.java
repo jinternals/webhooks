@@ -16,15 +16,19 @@ class WebConfigurationTest {
     }
 
     @Test
-    void scopesInterceptorToConfiguredPathsAndDropsNullOrBlank() {
+    void scopesInterceptorToConfiguredPathsIncludingTrailingSlashVariantAndDropsNullOrBlank() {
         WebhookProperties properties = new WebhookProperties();
-        // One valid, one null, one blank: the interceptor must be scoped to the valid path only, so a
-        // misconfigured (null/blank) endpoint can't widen it to every request in the host app.
-        properties.getConsumer().setEndpoints(List.of(endpoint("/webhooks/crm"), endpoint(null), endpoint("   ")));
+        // One normal path, one already ending with '/', one null, one blank: the interceptor scopes to exact +
+        // trailing-slash variants without doubling '//', and drops null/blank endpoints.
+        properties
+                .getConsumer()
+                .setEndpoints(List.of(
+                        endpoint("/webhooks/crm"), endpoint("/webhooks/billing/"), endpoint(null), endpoint("   ")));
 
         WebConfiguration config = new WebConfiguration(properties);
 
-        assertThat(config.interceptorPathPatterns()).containsExactly("/webhooks/crm");
+        assertThat(config.interceptorPathPatterns())
+                .containsExactly("/webhooks/crm", "/webhooks/crm/", "/webhooks/billing/");
     }
 
     @Test

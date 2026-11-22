@@ -89,15 +89,29 @@ class RawBodyArgumentResolverTest {
     }
 
     @Test
-    void rejectsBodyOneByteOverLimit() {
-        // total == limit + 1 must fail: the smallest possible overage, distinguishing `>` from `>=`.
+    void rejectsChunkedBodyOneByteOverLimitWhenContentLengthUnknown() throws Exception {
+        // Chunked Transfer-Encoding requests report Content-Length == -1L, bypassing the header fast-fail
+        // and exercising the streaming byte counter at `total == limit + 1` (distinguishing `>` from `>=`).
         RawBodyArgumentResolver resolver = new RawBodyArgumentResolver(4);
-        MockHttpServletRequest request = new MockHttpServletRequest();
-        request.setContent("12345".getBytes(StandardCharsets.UTF_8)); // 5 bytes = limit + 1
+        jakarta.servlet.http.HttpServletRequest chunkedOver = mock(jakarta.servlet.http.HttpServletRequest.class);
+        when(chunkedOver.getContentLengthLong()).thenReturn(-1L);
+        when(chunkedOver.getInputStream())
+                .thenReturn(new org.springframework.mock.web.DelegatingServletInputStream(
+                        new java.io.ByteArrayInputStream("12345".getBytes(StandardCharsets.UTF_8))));
 
         assertThatThrownBy(() -> resolver.resolveArgument(
-                        param(0), new ModelAndViewContainer(), new ServletWebRequest(request), null))
+                        param(0), new ModelAndViewContainer(), new ServletWebRequest(chunkedOver), null))
                 .isInstanceOf(PayloadTooLargeException.class);
+
+        // And a chunked request of exactly 4 bytes (== limit) succeeds!
+        jakarta.servlet.http.HttpServletRequest chunkedExact = mock(jakarta.servlet.http.HttpServletRequest.class);
+        when(chunkedExact.getContentLengthLong()).thenReturn(-1L);
+        when(chunkedExact.getInputStream())
+                .thenReturn(new org.springframework.mock.web.DelegatingServletInputStream(
+                        new java.io.ByteArrayInputStream("1234".getBytes(StandardCharsets.UTF_8))));
+        assertThat(resolver.resolveArgument(
+                        param(0), new ModelAndViewContainer(), new ServletWebRequest(chunkedExact), null))
+                .isEqualTo("1234");
     }
 
     @Test
@@ -123,5 +137,24 @@ class RawBodyArgumentResolverTest {
 
         Object body = resolver.resolveArgument(param(0), new ModelAndViewContainer(), webRequest, null);
         assertThat(body).isEqualTo("");
+    }
+
+    @Test
+    void fastFailsOversizedContentLengthHeaderBeforeOpeningInputStream() throws Exception {
+        RawBodyArgumentResolver resolver = new RawBodyArgumentResolver(4);
+
+        // Content-Length == 5 (> 4) fails immediately WITHOUT calling getInputStream()!
+        jakarta.servlet.http.HttpServletRequest oversized = mock(jakarta.servlet.http.HttpServletRequest.class);
+        when(oversized.getContentLengthLong()).thenReturn(5L);
+        assertThatThrownBy(() -> resolver.resolveArgument(
+                        param(0), new ModelAndViewContainer(), new ServletWebRequest(oversized), null))
+                .isInstanceOf(PayloadTooLargeException.class);
+        org.mockito.Mockito.verify(oversized, org.mockito.Mockito.never()).getInputStream();
+
+        // Content-Length == 4 (== limit) does NOT fast-fail and reads normally (pins > vs >= boundary).
+        MockHttpServletRequest exact = new MockHttpServletRequest();
+        exact.setContent("abcd".getBytes(StandardCharsets.UTF_8));
+        assertThat(resolver.resolveArgument(param(0), new ModelAndViewContainer(), new ServletWebRequest(exact), null))
+                .isEqualTo("abcd");
     }
 }

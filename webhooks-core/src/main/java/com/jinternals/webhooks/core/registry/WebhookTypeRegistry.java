@@ -20,10 +20,10 @@ public class WebhookTypeRegistry {
         this.byType = Map.copyOf(byType);
     }
 
-    /** The target class for an event type, or {@code null} if the type is unknown. */
+    /** The target class for an event type, or {@code null} if the type is unknown or {@code null}. */
     @Nullable
-    public Class<?> classOf(String type) {
-        return byType.get(type);
+    public Class<?> classOf(@Nullable String type) {
+        return type == null ? null : byType.get(type);
     }
 
     public Map<String, Class<?>> asMap() {

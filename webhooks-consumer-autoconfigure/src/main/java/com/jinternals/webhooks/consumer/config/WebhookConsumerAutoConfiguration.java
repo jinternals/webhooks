@@ -175,9 +175,21 @@ public class WebhookConsumerAutoConfiguration {
                 : new NoOpIdempotencyGuard();
     }
 
-    /** Default secret source: Spring config (endpoint {@code secret} + {@code additional-secrets}). */
-    @Bean
-    @ConditionalOnMissingBean
+    /**
+     * Default secret source: Spring config (endpoint {@code secret} + {@code additional-secrets}).
+     *
+     * <p>Registered as {@code defaultCandidate = false} and guarded by bean name rather than the raw
+     * {@code SecretProvider} type: when both consumer and producer starters coexist in one application and the
+     * host defines a {@code @Bean("destinationSecretProvider") SecretProvider<Destination>}, a raw-type
+     * {@link ConditionalOnMissingBean} check would falsely back off this consumer provider. Consumers resolve
+     * {@code ObjectProvider<SecretProvider<Endpoint>>} (which performs full generic type matching, preferring any
+     * host-defined {@code SecretProvider<Endpoint>} regardless of bean name and falling back to
+     * {@link ConfigSecretProvider}).
+     */
+    @Bean(
+            name = {"secretProvider", "endpointSecretProvider"},
+            defaultCandidate = false)
+    @ConditionalOnMissingBean(name = {"secretProvider", "endpointSecretProvider"})
     public SecretProvider<Endpoint> secretProvider() {
         return new ConfigSecretProvider();
     }
@@ -185,8 +197,9 @@ public class WebhookConsumerAutoConfiguration {
     /** Fails the context at startup if any endpoint secret is missing or malformed (SPEC §14a). */
     @Bean
     @ConditionalOnMissingBean
-    public SecretValidator secretValidator(WebhookProperties properties, SecretProvider<Endpoint> secretProvider) {
-        return new SecretValidator(properties, secretProvider);
+    public SecretValidator secretValidator(
+            WebhookProperties properties, ObjectProvider<SecretProvider<Endpoint>> secretProvider) {
+        return new SecretValidator(properties, secretProvider.getIfAvailable(ConfigSecretProvider::new));
     }
 
     /**

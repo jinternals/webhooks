@@ -32,7 +32,7 @@ public class HmacWebhookSigner implements WebhookSigner {
         }
         SigningSchemeValidator.requireValidMessageId(messageId);
         try {
-            Webhook webhook = webhooks.computeIfAbsent(secret, this::newWebhook);
+            Webhook webhook = webhooks.computeIfAbsent(secret, HmacWebhookSigner::newWebhook);
             return doSign(webhook, messageId, timestamp, payload);
         } catch (WebhookSigningException e) {
             throw new IllegalStateException("Failed to sign webhook payload: " + e.getMessage(), e);
@@ -48,7 +48,7 @@ public class HmacWebhookSigner implements WebhookSigner {
         return webhook.sign(messageId, timestamp, payload);
     }
 
-    private Webhook newWebhook(String secret) {
+    private static Webhook newWebhook(String secret) {
         try {
             return new Webhook(SymmetricKeys.decodeSecret(secret));
         } catch (Exception e) {

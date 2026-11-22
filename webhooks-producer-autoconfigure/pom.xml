@@ -25,11 +25,15 @@
             <version>${project.version}</version>
         </dependency>
 
-        <!-- RestClient (default transport) for @WebhookClient delivery. The producer is a client only:
-             it POSTs outbound, it never serves HTTP, so it needs spring-web (RestClient + the HTTP
-             client/message-converter infra) rather than the full spring-boot-starter-web (which drags in
-             spring-webmvc and an embedded Tomcat the producer never uses). A host that is itself a web app
-             already has those; a non-web host stays lean. -->
+        <!-- RestClient + Jackson standard modules (JavaTimeModule, Jdk8Module, ParameterNamesModule) for
+             @WebhookClient delivery. The producer is a client only: it POSTs outbound and never serves HTTP, so
+             it uses spring-boot-starter-json + spring-web rather than spring-boot-starter-web (avoiding
+             spring-webmvc and embedded Tomcat while ensuring non-web hosts can serialize java.time.Instant,
+             LocalDate, Optional, and Java records in @WebhookType payloads out of the box). -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-json</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.springframework</groupId>
             <artifactId>spring-web</artifactId>

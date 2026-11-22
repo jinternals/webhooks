@@ -16,6 +16,7 @@ class WebhookTypeRegistryTest {
         WebhookTypeRegistry registry = new WebhookTypeRegistry(Map.of("sample.one", SampleOne.class));
         assertThat(registry.classOf("sample.one")).isEqualTo(SampleOne.class);
         assertThat(registry.classOf("unknown")).isNull();
+        assertThat(registry.classOf(null)).isNull();
     }
 
     @Test

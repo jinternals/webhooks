@@ -258,4 +258,15 @@ class Ed25519WebhookVerifierTest {
                         List.of(Signing.PUBLIC_KEY), Signing.ENDPOINT_ID, body, headers(id, ts, seventeen)))
                 .isInstanceOf(WebhookVerificationFailure.class);
     }
+
+    @Test
+    void rejectsAMalformedPublicKeyAsIllegalStateMisconfiguration() {
+        assertThatThrownBy(() -> verifier.verify(
+                        List.of("whpk_not valid base64!!!"),
+                        Signing.ENDPOINT_ID,
+                        "{}",
+                        headers("msg_bad_pk", "1700000000", "v2a,x")))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Invalid Ed25519 public key configured");
+    }
 }

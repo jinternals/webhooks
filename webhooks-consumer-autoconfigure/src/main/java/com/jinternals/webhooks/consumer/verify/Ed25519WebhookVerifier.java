@@ -65,22 +65,31 @@ public class Ed25519WebhookVerifier implements WebhookVerifier {
     /** Upper bound on {@code v2a} signature tokens checked per request to bound CPU against hostile headers. */
     static final int MAX_V2A_SIGNATURES = 16;
 
+    private static final String VERSION_PREFIX = Ed25519Signatures.VERSION + ",";
+
     boolean matches(String secret, @Nullable String endpointId, String rawBody, WebhookSignatureHeaders parsed)
             throws WebhookVerificationFailure {
         requireValidEndpointId(endpointId);
-        PublicKey publicKey = publicKeys.computeIfAbsent(secret, Ed25519Keys::decodePublicKey);
+        PublicKey publicKey = publicKeys.computeIfAbsent(secret, Ed25519WebhookVerifier::newPublicKey);
         List<String> candidates = new ArrayList<>();
         for (String versioned : parsed.signature.split(" ")) {
-            String[] parts = versioned.split(",", 2);
-            if (parts.length < 2 || !Ed25519Signatures.VERSION.equals(parts[0])) {
+            if (!versioned.startsWith(VERSION_PREFIX)) {
                 continue;
             }
-            candidates.add(parts[1]);
+            candidates.add(versioned.substring(VERSION_PREFIX.length()));
             if (candidates.size() == MAX_V2A_SIGNATURES) {
                 break;
             }
         }
         return Ed25519Signatures.verifyAny(publicKey, endpointId, parsed.msgId, parsed.timestamp, rawBody, candidates);
+    }
+
+    private static PublicKey newPublicKey(String secret) {
+        try {
+            return Ed25519Keys.decodePublicKey(secret);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalStateException("Invalid Ed25519 public key configured: " + e.getMessage(), e);
+        }
     }
 
     /**

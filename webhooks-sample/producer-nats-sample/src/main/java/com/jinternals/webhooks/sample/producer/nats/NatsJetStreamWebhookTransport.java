@@ -1,6 +1,7 @@
 package com.jinternals.webhooks.sample.producer.nats;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.ObjectWriter;
 import com.jinternals.webhooks.core.model.WebhookHeaders;
 import com.jinternals.webhooks.producer.security.DestinationUrlValidator;
 import com.jinternals.webhooks.producer.transport.SafeUrl;
@@ -33,7 +34,7 @@ public class NatsJetStreamWebhookTransport implements WebhookTransport {
     private static final Logger log = LoggerFactory.getLogger(NatsJetStreamWebhookTransport.class);
 
     private final JetStream jetStream;
-    private final ObjectMapper objectMapper;
+    private final ObjectWriter messageWriter;
     private final DestinationUrlValidator urlValidator;
     private final NatsProducerProperties properties;
 
@@ -43,7 +44,7 @@ public class NatsJetStreamWebhookTransport implements WebhookTransport {
             DestinationUrlValidator urlValidator,
             NatsProducerProperties properties) {
         this.jetStream = jetStream;
-        this.objectMapper = objectMapper;
+        this.messageWriter = objectMapper.writerFor(OutboundWebhookMessage.class);
         this.urlValidator = urlValidator;
         this.properties = properties;
     }
@@ -58,18 +59,20 @@ public class NatsJetStreamWebhookTransport implements WebhookTransport {
         String traceId = MDC.get(TRACE_MDC_KEY);
 
         try {
-            byte[] payload = objectMapper.writeValueAsBytes(new OutboundWebhookMessage(url, webhookId, body, traceId));
+            byte[] payload = messageWriter.writeValueAsBytes(new OutboundWebhookMessage(url, webhookId, body, traceId));
             PublishOptions options = PublishOptions.builder().stream(properties.getStream())
                     .messageId(webhookId)
                     .build();
             PublishAck ack = jetStream.publish(properties.getSubject(), payload, options);
-            log.info(
-                    "Enqueued outbound webhook id={} stream={} seq={} duplicate={} target={}",
-                    webhookId,
-                    ack.getStream(),
-                    ack.getSeqno(),
-                    ack.isDuplicate(),
-                    SafeUrl.sanitize(url));
+            if (log.isInfoEnabled()) {
+                log.info(
+                        "Enqueued outbound webhook id={} stream={} seq={} duplicate={} target={}",
+                        webhookId,
+                        ack.getStream(),
+                        ack.getSeqno(),
+                        ack.isDuplicate(),
+                        SafeUrl.sanitize(url));
+            }
         } catch (Exception e) {
             throw new WebhookDeliveryException(
                     "Failed to persist outbound webhook to NATS JetStream for " + SafeUrl.sanitize(url), e);
