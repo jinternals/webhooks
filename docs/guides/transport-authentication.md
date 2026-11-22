@@ -5,7 +5,12 @@ attaching an `Authorization: Bearer <token>`, and the consumer requiring and val
 the webhook endpoint. This is an **additive** layer: transport auth proves *who is calling*; the HMAC
 signature proves *the message is genuine and untampered*. Keep both.
 
-> For the signature itself (HMAC verification, replay window, rotation, SSRF, redaction) see
+> **Runnable sample apps:** [`webhooks-sample/producer-auth-sample`](../../webhooks-sample/producer-auth-sample)
+> and [`webhooks-sample/consumer-auth-sample`](../../webhooks-sample/consumer-auth-sample) (plus
+> [`docker-compose.auth.yml`](../../webhooks-sample/docker-compose.auth.yml)) implement both sides below
+> end-to-end with JWT bearer tokens + Standard Webhooks `v1` signatures.
+
+> For the signature itself (HMAC/Ed25519 verification, replay window, rotation, SSRF, redaction) see
 > [Verification & security](./verification-and-security.md). For the `WebhookTransport` SPI and the other
 > replaceable beans see [Beans & extension points](../reference/beans-and-spis.md).
 

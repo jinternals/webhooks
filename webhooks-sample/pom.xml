@@ -31,12 +31,19 @@
     <modules>
         <module>producer-sample</module>
         <module>consumer-sample</module>
+        <module>producer-nats-sample</module>
+        <module>consumer-nats-sample</module>
+        <module>producer-auth-sample</module>
+        <module>consumer-auth-sample</module>
+        <module>spi-sample</module>
     </modules>
 
     <properties>
         <java.version>21</java.version>
         <!-- Version of the published webhooks-* libraries the samples consume. -->
         <webhooks.version>0.1.0-SNAPSHOT</webhooks.version>
+        <!-- NATS Java client (JetStream + KeyValue) for the zero-loss queue sample apps. -->
+        <jnats.version>2.20.5</jnats.version>
         <!-- Code formatting, matching the libraries' house style (Palantir Java Format: 4-space, 120-col). -->
         <spotless.version>2.44.5</spotless.version>
     </properties>
@@ -52,6 +59,11 @@
                 <groupId>io.github.jinternals</groupId>
                 <artifactId>webhooks-producer-starter</artifactId>
                 <version>${webhooks.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.nats</groupId>
+                <artifactId>jnats</artifactId>
+                <version>${jnats.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

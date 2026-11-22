@@ -1,0 +1,14 @@
+# ⚠️ DEMO ONLY — secrets are resolved dynamically via custom SecretProvider beans in SpiSampleApplication.
+server:
+  port: 9096
+
+webhooks:
+  consumer:
+    endpoints:
+      - path: /webhooks/crm
+        types:
+          - contact.created
+  producer:
+    destinations:
+      crm:
+        url: ${CRM_WEBHOOK_URL:http://127.0.0.1:9096/webhooks/crm}

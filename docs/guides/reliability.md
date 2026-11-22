@@ -233,9 +233,13 @@ flowchart LR
 ```
 
 **Text summary.** Let the in-process retry handle transient blips; capture abandons via
-`WebhookDeliveryListener` into your own queue/outbox, and run your own worker to replay the send-ready
-request later. The toolkit hands you everything needed to persist and replay, but never holds the state
-itself. See the [Runbook](../operations/runbook.md) for operational patterns.
+`WebhookDeliveryListener` into your own queue/outbox, and run your own worker to replay — or replace
+`WebhookTransport` on the producer **and** persist verified events to a durable inbox before returning `204`
+on the consumer for **end-to-end zero webhook loss** (remembering to refresh `webhook-timestamp` and
+`webhook-signature` on delayed retries so the consumer's `5m` replay window accepts them!). A complete
+runnable NATS JetStream implementation for both producer and consumer is documented in
+**[Zero-webhook-loss queueing](./zero-loss-queueing.md)** (`producer-nats-sample` + `consumer-nats-sample`).
+See the [Runbook](../operations/runbook.md) for operational patterns.
 
 ---
 

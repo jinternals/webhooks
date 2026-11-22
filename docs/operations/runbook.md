@@ -91,10 +91,10 @@ flowchart LR
     W -- "replay send-ready request" --> Dest["destination (recovered)"]
 ```
 
-**Text summary.** Capture abandoned deliveries via `WebhookDeliveryListener` into your own outbox/queue, and
-run a worker that replays the send-ready request once the destination recovers. The toolkit hands you the
-exact signed request to persist; the durability policy is yours. See
-[Reliability → building durable delivery](../guides/reliability.md#building-durable-delivery-on-top).
+**Text summary.** Capture abandoned deliveries via `WebhookDeliveryListener` into your own outbox/queue — or
+wire a durable broker on both producer and consumer with fresh per-attempt signing (so delayed retries pass
+the `5m` replay window). See [Zero-webhook-loss queueing (NATS JetStream)](../guides/zero-loss-queueing.md)
+and [Reliability → building durable delivery](../guides/reliability.md#building-durable-delivery-on-top).
 
 ---
 

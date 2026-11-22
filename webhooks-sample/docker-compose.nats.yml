@@ -1,0 +1,54 @@
+# Zero-webhook-loss stack: NATS JetStream + producer-nats-sample + consumer-nats-sample.
+#
+#   (from webhooks-sample/)  docker compose -f docker-compose.nats.yml up --build
+#
+#("⚠️ DEMO ONLY — public test secret from the Standard Webhooks specification.)
+services:
+  nats:
+    image: nats:2.10-alpine
+    command: ["-js", "-m", "8222"]
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8222/healthz"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+
+  consumer-nats:
+    build:
+      context: ..
+      dockerfile: webhooks-sample/consumer-nats-sample/Dockerfile
+    image: webhooks-consumer-nats-sample
+    ports:
+      - "9093:9093"
+    environment:
+      NATS_URL: nats://nats:4222
+      CRM_WEBHOOK_SECRET: whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw
+    depends_on:
+      nats:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "sh", "-c", "wget -qO- http://localhost:9093/actuator/health | grep -q UP"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 20s
+
+  producer-nats:
+    build:
+      context: ..
+      dockerfile: webhooks-sample/producer-nats-sample/Dockerfile
+    image: webhooks-producer-nats-sample
+    ports:
+      - "9092:9092"
+    environment:
+      NATS_URL: nats://nats:4222
+      CRM_WEBHOOK_URL: http://consumer-nats:9093/webhooks/crm
+      CRM_WEBHOOK_SECRET: whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw
+    depends_on:
+      nats:
+        condition: service_healthy
+      consumer-nats:
+        condition: service_healthy

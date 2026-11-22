@@ -36,7 +36,7 @@ flowchart TD
 | `webhooks-consumer-starter` | Thin Spring Boot starter — the dependency downstream receiver apps add; transitively brings in `webhooks-consumer-autoconfigure` and its runtime deps. |
 | `webhooks-producer-autoconfigure` | The annotation-driven sender (`@WebhookClient`) auto-configuration: envelope building, signing, delivery with in-process retry. Added via `webhooks-producer-starter`. |
 | `webhooks-producer-starter` | Thin Spring Boot starter — the dependency downstream sender apps add; transitively brings in `webhooks-producer-autoconfigure` and its runtime deps. |
-| `webhooks-sample/producer-sample`, `webhooks-sample/consumer-sample` | Two standalone Spring Boot apps (under `webhooks-sample/`, outside the library reactor) demonstrating each side against the published starters. |
+| `webhooks-sample/*` | Standalone Spring Boot sample apps (under `webhooks-sample/`, outside the library reactor): quickstart (`producer-sample`, `consumer-sample`), zero-loss NATS JetStream queueing (`producer-nats-sample`, `consumer-nats-sample`), OAuth2 JWT transport auth (`producer-auth-sample`, `consumer-auth-sample`), and custom SPI overrides (`spi-sample`). |
 
 The two sides are **independent** — you can depend on just the consumer, just the producer, or both. They
 share nothing at runtime; they meet only on the wire.

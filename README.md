@@ -22,15 +22,18 @@ webhooks in Spring Boot applications. The toolkit provides two drop-in auto-conf
 - The **producer** sends outbound webhooks. You declare a `@WebhookClient` interface; the library
   builds the Standard Webhooks envelope from a `@WebhookType` event, signs it, and delivers it.
 
-Both libraries follow Standard Webhooks for headers, the HMAC-SHA256 signature scheme, and the
-timestamp-based replay window. The replay window is **disabled by default** and configurable; see
-[Replay window](#replay-window).
+Both libraries follow Standard Webhooks for headers, symmetric `v1` HMAC-SHA256 and asymmetric `v2a`
+Ed25519 signatures, and the timestamp-based replay window (**enabled by default** with a `5m` tolerance;
+see [Replay window](#replay-window)).
 
 > **📖 Full documentation lives in [`docs/`](./docs/README.md)** — a complete, cross-linked site with
 > diagrams: [Getting started](./docs/getting-started.md) · [Architecture](./docs/architecture.md) ·
 > [Consumer](./docs/guides/consumer.md) / [Producer](./docs/guides/producer.md) guides ·
 > [Verification & security](./docs/guides/verification-and-security.md) ·
-> [Reliability](./docs/guides/reliability.md) · [Observability](./docs/guides/observability.md) ·
+> [Transport authentication](./docs/guides/transport-authentication.md) ·
+> [Reliability](./docs/guides/reliability.md) ·
+> [Zero-webhook-loss queueing (NATS)](./docs/guides/zero-loss-queueing.md) ·
+> [Observability](./docs/guides/observability.md) ·
 > [Configuration reference](./docs/reference/configuration.md) · [Runbook](./docs/operations/runbook.md) ·
 > [FAQ](./docs/operations/faq.md). This README is the quick reference; the docs site is the home.
 
@@ -65,10 +68,10 @@ persistence. The producer retries transient failures *in process* (bounded attem
 calling thread; see [Producer retry](#producer-retry)) but never spools to a queue or disk — once the
 attempts are exhausted it throws `WebhookDeliveryException` to the caller, and the consumer returns the
 appropriate HTTP status code for the sender to act on. Durable, cross-restart retry stays the sender's
-responsibility (plug a queue in behind the `WebhookTransport` bean). The timestamp-based replay window
-defined by Standard Webhooks is what allows a consumer to resist captured-request replay without storage;
-it is **disabled by default** in this toolkit and must be enabled explicitly (see
-[Replay window](#replay-window)).
+responsibility (plug a queue such as NATS JetStream in behind the `WebhookTransport` bean; see
+[Zero-webhook-loss queueing](./docs/guides/zero-loss-queueing.md)). The timestamp-based replay window
+defined by Standard Webhooks allows a consumer to resist captured-request replay without storage and is
+**enabled by default** (`5m` tolerance; see [Replay window](#replay-window)).
 
 ## Modules
 
@@ -81,7 +84,7 @@ The project is a Maven reactor of five library modules — `webhooks-core` plus 
 | `webhooks-consumer-starter` | Thin Spring Boot starter — the dependency receiver apps add; pulls in `webhooks-consumer-autoconfigure` and its runtime deps. |
 | `webhooks-producer-autoconfigure` | The annotation-driven sender auto-configuration (`@WebhookClient`; added via `webhooks-producer-starter`). |
 | `webhooks-producer-starter` | Thin Spring Boot starter — the dependency sender apps add; pulls in `webhooks-producer-autoconfigure` and its runtime deps. |
-| `webhooks-sample/producer-sample`, `webhooks-sample/consumer-sample` | Two standalone Spring Boot apps (under `webhooks-sample/`, outside the library reactor) demonstrating each side against the published starters. |
+| `webhooks-sample/*` | Standalone sample apps (outside the library reactor) demonstrating quickstart `v1`/`v2a` (`producer-sample`, `consumer-sample`), zero-webhook-loss NATS JetStream queueing (`producer-nats-sample`, `consumer-nats-sample`), OAuth2 JWT bearer auth (`producer-auth-sample`, `consumer-auth-sample`), and custom SPI beans (`spi-sample`). |
 
 ## Requirements
 
@@ -684,33 +687,35 @@ for the abandon-path diagram.
 
 ## Running the samples
 
-The runnable demos are two standalone Spring Boot apps under `webhooks-sample/` (outside the library reactor),
-each depending on the published starters.
+The runnable demos live as standalone Spring Boot apps under [`webhooks-sample/`](./webhooks-sample/README.md)
+(outside the library reactor), each depending only on the published starters:
+
+- **`producer-sample` (`:9090`) + `consumer-sample` (`:9091`):** quickstart `v1` HMAC + `v2a` Ed25519,
+  `@Redact` masking, `MetadataContributor`, and `x-trace-id` MDC correlation (`docker-compose.yml`,
+  `./integration-test.sh`).
+- **`producer-nats-sample` (`:9092`) + `consumer-nats-sample` (`:9093`):** **zero-webhook-loss** durable
+  queueing on both sides with NATS JetStream, fresh per-attempt signing, NATS KV `IdempotencyGuard`, and
+  DLQs (`docker-compose.nats.yml`, `./integration-test-nats.sh`; see
+  [Zero-webhook-loss queueing](./docs/guides/zero-loss-queueing.md)).
+- **`producer-auth-sample` (`:9094`) + `consumer-auth-sample` (`:9095`):** OAuth2 JWT `Authorization: Bearer`
+  transport authentication (`401`) layered in front of Standard Webhooks signature verification (`400`)
+  (`docker-compose.auth.yml`; see [Transport authentication](./docs/guides/transport-authentication.md)).
+- **`spi-sample` (`:9096`):** custom `SecretProvider<Endpoint>`, `@Bean("destinationSecretProvider")`,
+  reserve-then-commit `IdempotencyGuard`, `DestinationUrlValidator`, `HandlerFailureListener`, and
+  `WebhookDeliveryListener` with both starters coexisting in one app (see
+  [Beans & extension points](./docs/reference/beans-and-spis.md)).
 
 ```bash
-# from the repo root: build and quality-gate the libraries, installing the starters locally
-mvn -pl webhooks-consumer-starter,webhooks-producer-starter -am install
+# from the repo root: install the starters locally
+mvn -pl webhooks-consumer-starter,webhooks-producer-starter -am install -DskipTests
 
-# from webhooks-sample/: run each side
-mvn -pl consumer-sample spring-boot:run   # receives webhooks on port 9091
-mvn -pl producer-sample spring-boot:run   # sends webhooks on port 9090
+# from webhooks-sample/: build & test all 7 sample apps in parallel
+mvn -T 1C clean verify
 
-# from webhooks-sample/: bring both up together and run the cross-library integration test
-docker compose up --build
-./integration-test.sh
+# run the Docker end-to-end stacks (from webhooks-sample/)
+./integration-test.sh        # quickstart stack
+./integration-test-nats.sh   # zero-webhook-loss NATS JetStream stack
 ```
-
-- **`consumer-sample` (port 9091):** a multi-type CRM endpoint (`/webhooks/crm`) and a single-type
-  billing endpoint (`/webhooks/billing/invoice-paid`) verified with the demo HMAC secret
-  `whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw` (`v1`), plus an asymmetric `/webhooks/crm-v2a` endpoint verified
-  with an Ed25519 public key (`v2a`). It demonstrates `@Redact` masking in the handler logs.
-- **`producer-sample` (port 9090):** two `@WebhookClient` interfaces registered via
-  `@EnableWebhookClients` — `CrmWebhooks` (`v1`, exposed through `POST /publish/contact-created`) and
-  `CrmWebhooksV2a` (`v2a`, exposed through `POST /publish/contact-created-v2a`) — each signing and POSTing a
-  real Standard Webhooks request to the matching consumer endpoint.
-
-The Docker-based `webhooks-sample/integration-test.sh` brings up both apps, publishes via the producer, and
-asserts the consumer handled the webhook — a complete cross-library round trip over real HTTP.
 
 ## Quality gate
 

@@ -1,0 +1,21 @@
+# ⚠️ DEMO ONLY — public sample secrets. Supply real secrets/keys from a secret manager in production.
+server:
+  port: 9095
+
+sample:
+  auth:
+    jwt-secret: ${WEBHOOK_JWT_SECRET:demo-jwt-hs256-signing-key-at-least-32-bytes}
+
+webhooks:
+  consumer:
+    endpoints:
+      - path: /webhooks/crm
+        secret: ${CRM_WEBHOOK_SECRET:whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw}
+        types:
+          - contact.created
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info

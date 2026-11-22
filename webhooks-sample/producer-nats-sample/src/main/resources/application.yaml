@@ -1,0 +1,39 @@
+# ⚠️ DEMO ONLY — public sample secret. Supply real secrets from a secret manager in production.
+server:
+  port: 9092
+
+sample:
+  nats:
+    url: ${NATS_URL:nats://localhost:4222}
+    connect-on-startup: true
+    worker-auto-start: true
+    stream: WEBHOOKS_OUTBOUND
+    subject: webhooks.outbound.send
+    dlq-stream: WEBHOOKS_OUTBOUND_DLQ
+    dlq-subject: webhooks.outbound.dlq.send
+    durable-consumer: webhooks-outbound-relay
+    max-deliver: 5
+    base-retry-delay: 1s
+    max-retry-delay: 30s
+
+webhooks:
+  producer:
+    destinations:
+      crm:
+        url: ${CRM_WEBHOOK_URL:http://localhost:9093/webhooks/crm}
+        secret: ${CRM_WEBHOOK_SECRET:whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, metrics, prometheus
+  metrics:
+    tags:
+      application: webhooks-producer-nats-sample
+
+logging:
+  level:
+    com.jinternals.webhooks: INFO
+  pattern:
+    level: "%5p [traceId=%X{traceId}]"

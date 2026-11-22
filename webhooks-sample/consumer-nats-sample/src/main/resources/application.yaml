@@ -1,0 +1,47 @@
+# ⚠️ DEMO ONLY — public sample secret. Supply real secrets from a secret manager in production.
+server:
+  port: 9093
+
+sample:
+  nats:
+    url: ${NATS_URL:nats://localhost:4222}
+    connect-on-startup: true
+    worker-auto-start: true
+    stream: WEBHOOKS_INBOUND
+    subject: webhooks.inbound.events
+    dlq-stream: WEBHOOKS_INBOUND_DLQ
+    dlq-subject: webhooks.inbound.dlq.events
+    durable-consumer: webhooks-inbound-worker
+    idempotency-bucket: WEBHOOK_IDEMPOTENCY
+    idempotency-ttl: 24h
+    max-deliver: 5
+    retry-delay: 2s
+
+webhooks:
+  consumer:
+    # Keep handler.mode=sync (the default) so HTTP 204 is ONLY returned AFTER @WebhookHandler has
+    # received a durable NATS JetStream PublishAck!
+    handler:
+      mode: sync
+    replay-window-enabled: true
+    replay-tolerance: 5m
+    endpoints:
+      - path: /webhooks/crm
+        secret: ${CRM_WEBHOOK_SECRET:whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw}
+        types:
+          - contact.created
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, metrics, prometheus
+  metrics:
+    tags:
+      application: webhooks-consumer-nats-sample
+
+logging:
+  level:
+    com.jinternals.webhooks: INFO
+  pattern:
+    level: "%5p [webhook.id=%X{webhook.id} traceId=%X{traceId}]"

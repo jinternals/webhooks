@@ -1,0 +1,37 @@
+# Dual-layer security stack: OAuth2 JWT Bearer transport auth + Standard Webhooks v1 HMAC signature.
+#
+#   (from webhooks-sample/)  docker compose -f docker-compose.auth.yml up --build
+#
+# ⚠️ DEMO ONLY — public sample secrets. Supply real secrets/keys from a secret manager in production.
+services:
+  consumer-auth:
+    build:
+      context: ..
+      dockerfile: webhooks-sample/consumer-auth-sample/Dockerfile
+    image: webhooks-consumer-auth-sample
+    ports:
+      - "9095:9095"
+    environment:
+      WEBHOOK_JWT_SECRET: demo-jwt-hs256-signing-key-at-least-32-bytes
+      CRM_WEBHOOK_SECRET: whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw
+    healthcheck:
+      test: ["CMD", "sh", "-c", "wget -qO- http://localhost:9095/actuator/health | grep -q UP"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 20s
+
+  producer-auth:
+    build:
+      context: ..
+      dockerfile: webhooks-sample/producer-auth-sample/Dockerfile
+    image: webhooks-producer-auth-sample
+    ports:
+      - "9094:9094"
+    environment:
+      WEBHOOK_JWT_SECRET: demo-jwt-hs256-signing-key-at-least-32-bytes
+      CRM_WEBHOOK_URL: http://consumer-auth:9095/webhooks/crm
+      CRM_WEBHOOK_SECRET: whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw
+    depends_on:
+      consumer-auth:
+        condition: service_healthy

@@ -81,7 +81,7 @@ IdempotencyGuard redisIdempotency(StringRedisTemplate redis) {
 }
 ```
 
-Sample implementation: [`SharedStoreIdempotencyGuard.java`](../../webhooks-sample/consumer-sample/src/main/java/com/jinternals/webhooks/sample/consumer/spi/SharedStoreIdempotencyGuard.java).
+Sample implementations: [`SharedStoreIdempotencyGuard.java`](../../webhooks-sample/spi-sample/src/main/java/com/jinternals/webhooks/sample/spi/SharedStoreIdempotencyGuard.java) and [`NatsKvIdempotencyGuard.java`](../../webhooks-sample/consumer-nats-sample/src/main/java/com/jinternals/webhooks/sample/consumer/nats/NatsKvIdempotencyGuard.java).
 
 ### Example — consumer secrets from a manager
 
@@ -93,7 +93,7 @@ SecretProvider<WebhookProperties.Endpoint> secretProvider(MySecrets secrets) {
 }
 ```
 
-Sample implementation: [`ConsumerSpiExamplesConfiguration.java`](../../webhooks-sample/consumer-sample/src/main/java/com/jinternals/webhooks/sample/consumer/spi/ConsumerSpiExamplesConfiguration.java).
+Sample implementation: [`SpiSampleApplication.java`](../../webhooks-sample/spi-sample/src/main/java/com/jinternals/webhooks/sample/spi/SpiSampleApplication.java).
 
 ### Example — async handler failure hook
 
@@ -114,7 +114,7 @@ HandlerFailureListener handlerFailureListener(AlertService alerts) {
 }
 ```
 
-Sample implementation: [`LoggingHandlerFailureListener.java`](../../webhooks-sample/consumer-sample/src/main/java/com/jinternals/webhooks/sample/consumer/spi/LoggingHandlerFailureListener.java).
+Sample implementations: [`LoggingHandlerFailureListener.java`](../../webhooks-sample/consumer-nats-sample/src/main/java/com/jinternals/webhooks/sample/consumer/nats/LoggingHandlerFailureListener.java) and [`SpiSampleApplication.java`](../../webhooks-sample/spi-sample/src/main/java/com/jinternals/webhooks/sample/spi/SpiSampleApplication.java).
 
 ### Example — enriching `WebhookMetadata` (`MetadataContributor`)
 
@@ -157,7 +157,7 @@ SecretProvider<WebhookProducerProperties.Destination> destinationSecretProvider(
 }
 ```
 
-Sample implementation: [`ProducerSpiExamplesConfiguration.java`](../../webhooks-sample/producer-sample/src/main/java/com/jinternals/webhooks/sample/producer/spi/ProducerSpiExamplesConfiguration.java).
+Sample implementation: [`SpiSampleApplication.java`](../../webhooks-sample/spi-sample/src/main/java/com/jinternals/webhooks/sample/spi/SpiSampleApplication.java).
 
 ### Example — dead-letter capture
 
@@ -170,7 +170,7 @@ WebhookDeliveryListener deadLetter(OutboxRepository outbox) {
 }
 ```
 
-Sample implementation: [`DeadLetterDeliveryListener.java`](../../webhooks-sample/producer-sample/src/main/java/com/jinternals/webhooks/sample/producer/spi/DeadLetterDeliveryListener.java).
+Sample implementations: [`DeadLetterDeliveryListener.java`](../../webhooks-sample/producer-nats-sample/src/main/java/com/jinternals/webhooks/sample/producer/nats/DeadLetterDeliveryListener.java) and [`SpiSampleApplication.java`](../../webhooks-sample/spi-sample/src/main/java/com/jinternals/webhooks/sample/spi/SpiSampleApplication.java).
 
 ### Example — add an OAuth2 bearer token (transport auth)
 
@@ -191,20 +191,25 @@ WebhookRequestInterceptor bearerTokenInterceptor(OAuth2AuthorizedClientManager c
 }
 ```
 
-Sample implementations: [`BearerTokenWebhookInterceptor.java`](../../webhooks-sample/producer-sample/src/main/java/com/jinternals/webhooks/sample/producer/spi/BearerTokenWebhookInterceptor.java) and [`TraceHeaderWebhookInterceptor.java`](../../webhooks-sample/producer-sample/src/main/java/com/jinternals/webhooks/sample/producer/trace/TraceHeaderWebhookInterceptor.java). Full OAuth2 setup: [Transport authentication guide](../guides/transport-authentication.md).
+Sample implementations: [`ProducerAuthSampleApplication.java`](../../webhooks-sample/producer-auth-sample/src/main/java/com/jinternals/webhooks/sample/producer/auth/ProducerAuthSampleApplication.java) and [`TraceHeaderWebhookInterceptor.java`](../../webhooks-sample/producer-sample/src/main/java/com/jinternals/webhooks/sample/producer/trace/TraceHeaderWebhookInterceptor.java). Full OAuth2 setup: [Transport authentication guide](../guides/transport-authentication.md).
 
-### Example — async transport through a queue
+### Example — durable zero-loss transport through NATS JetStream
 
 ```java
 @Bean
-WebhookTransport queueingTransport(MyQueue queue) {
-    return (url, headers, body) -> queue.enqueue(new OutboundMessage(url, Map.copyOf(headers), body));
-    // Your worker drains the queue and performs the actual signed POST — full durable delivery.
-    // Replacing the transport is for changing the DELIVERY MECHANISM — not for adding a header.
+WebhookTransport natsWebhookTransport(JetStream jetStream, ObjectMapper mapper) {
+    return (url, headers, body) -> {
+        String webhookId = headers.get(WebhookHeaders.ID).get(0);
+        byte[] payload = mapper.writeValueAsBytes(new OutboundWebhookMessage(url, webhookId, body, MDC.get("traceId")));
+        jetStream.publish("webhooks.outbound.send", payload,
+                PublishOptions.builder().stream("WEBHOOKS_OUTBOUND").messageId(webhookId).build());
+    };
+    // A relay worker pulls from WEBHOOKS_OUTBOUND and computes a fresh webhook-timestamp + webhook-signature
+    // on every attempt so delayed retries still pass the receiver's 5m replay window.
 }
 ```
 
-Sample implementation: [`QueueingWebhookTransport.java`](../../webhooks-sample/producer-sample/src/main/java/com/jinternals/webhooks/sample/producer/spi/QueueingWebhookTransport.java).
+Sample implementations: [`NatsJetStreamWebhookTransport.java`](../../webhooks-sample/producer-nats-sample/src/main/java/com/jinternals/webhooks/sample/producer/nats/NatsJetStreamWebhookTransport.java) and [`NatsOutboundRelayWorker.java`](../../webhooks-sample/producer-nats-sample/src/main/java/com/jinternals/webhooks/sample/producer/nats/NatsOutboundRelayWorker.java). Full guide: [Zero-webhook-loss queueing](../guides/zero-loss-queueing.md).
 
 ---
 

@@ -1,69 +1,55 @@
 # Webhooks Toolkit — Sample Apps
 
-Two **standalone** Spring Boot apps that demonstrate the toolkit from both ends, each depending on the
-published `webhooks-*` libraries as a starter would — add one dependency, get everything:
+Standalone Spring Boot applications demonstrating the Webhooks Toolkit against the **published starter
+artifacts** (`webhooks-consumer-starter` and `webhooks-producer-starter`). None of these apps are part of the
+core library reactor — the core libraries stay 100% storage-free and broker-free, while these samples show
+both the zero-dependency defaults and full production extensions (NATS JetStream zero-loss queueing, OAuth2
+JWT bearer transport auth, and custom SPI beans).
 
-| App | Dependency (starter) | Port | Role |
+## Sample catalog
+
+| Sample module(s) | Port(s) | What it demonstrates | Compose / runner |
 | --- | --- | --- | --- |
-| [`producer-sample`](producer-sample) | `webhooks-producer-starter` | `9090` | **Sends** signed webhooks via a `@WebhookClient` |
-| [`consumer-sample`](consumer-sample) | `webhooks-consumer-starter` | `9091` | **Receives**, verifies, validates, and dispatches webhooks |
-
-Each app adds a single **starter** dependency; the starter transitively pulls in that side's
-auto-configuration (`webhooks-*-autoconfigure`) and every runtime dependency it needs — the canonical
-Spring Boot starter experience.
-
-These are **not** part of the libraries' `webhooks-parent` reactor. They consume the *published*
-artifacts, so they build and run independently — exactly like a real downstream app would.
-
-The producer's `POST /publish/contact-created` signs a `contact.created` envelope and delivers it to the
-consumer's `POST /webhooks/crm`; the consumer verifies the signature, deserializes + validates the
-payload, and runs the matching `@WebhookHandler`. A parallel **asymmetric** path —
-`POST /publish/contact-created-v2a` → `POST /webhooks/crm-v2a` — shows the same flow signed with Ed25519
-(`v2a`) instead of HMAC (`v1`), so you can compare the two schemes side by side.
+| [`producer-sample`](producer-sample) + [`consumer-sample`](consumer-sample) | `9090` / `9091` | **Quickstart:** `@WebhookClient`, `@WebhookType`, `@WebhookHandler`, symmetric `v1` (`whsec_`) + asymmetric `v2a` (`whsk_`/`whpk_`), `@Redact`, Bean Validation, `MetadataContributor`, and `x-trace-id` MDC correlation. | [`docker-compose.yml`](docker-compose.yml) · [`integration-test.sh`](integration-test.sh) |
+| [`producer-nats-sample`](producer-nats-sample) + [`consumer-nats-sample`](consumer-nats-sample) | `9092` / `9093` | **Zero-webhook-loss queueing (NATS JetStream):** durable outbound stream (`NatsJetStreamWebhookTransport`) + relay worker with **fresh per-attempt signing** (replay-window safe) + durable consumer inbox (`DurableInboxHandlers` awaiting `PublishAck` before `204`) + distributed `NatsKvIdempotencyGuard` + inbound/outbound DLQs. | [`docker-compose.nats.yml`](docker-compose.nats.yml) · [`integration-test-nats.sh`](integration-test-nats.sh) |
+| [`producer-auth-sample`](producer-auth-sample) + [`consumer-auth-sample`](consumer-auth-sample) | `9094` / `9095` | **Dual-layer transport + message auth:** producer `WebhookRequestInterceptor` minting short-lived OAuth2/HS256 JWT `Authorization: Bearer` tokens per attempt; consumer Spring Security OAuth2 Resource Server (`401`) in front of Standard Webhooks signature verification (`400`). | [`docker-compose.auth.yml`](docker-compose.auth.yml) |
+| [`spi-sample`](spi-sample) | `9096` | **Custom SPIs & single-app coexistence:** both starters in one app, overriding `@Bean SecretProvider<Endpoint>`, `@Bean("destinationSecretProvider") SecretProvider<Destination>`, reserve-then-commit `SharedStoreIdempotencyGuard`, `PrivateIpBlockingUrlValidator` (`DestinationUrlValidator`), `HandlerFailureListener`, and `WebhookDeliveryListener`. | `mvn -pl spi-sample spring-boot:run` |
 
 > [!CAUTION]
 > **Demo credentials — never use them in production.** Every secret and key in this directory
-> (`application.yaml`, `docker-compose.yml`, `smoke-test.sh`, `load-test.*`, `requests.http`) is public:
->
-> - `whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw` is the well-known test secret from the
->   [Standard Webhooks](https://www.standardwebhooks.com/) specification.
-> - The `whsk_4uKP…` / `whpk_uWKK…` Ed25519 key pair was generated solely for these samples.
->
-> Because they are published in this repository, anyone can forge a webhook signed with them. In a real
-> deployment, generate your own secrets/keys and supply them via the environment variables the configs
-> already read (`CRM_WEBHOOK_SECRET`, `BILLING_WEBHOOK_SECRET`, `CRM_V2A_PUBLIC_KEY`, `DEMO_WEBHOOK_SECRET`,
-> `DEMO_V2A_PRIVATE_KEY`, …) from a secret manager — never commit them.
+> (`whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw`, `whsk_4uKP…` / `whpk_uWKK…`, `demo-jwt-hs256-…`) is public so
+> the samples run out of the box. In production, generate unique secrets/keys and inject them from a secret
+> manager via environment variables or `SecretProvider`.
+
+---
 
 ## Prerequisites
 
-Build + install the libraries into your local Maven repo first (the samples resolve
-`0.1.0-SNAPSHOT` from there):
+Install the toolkit starters into your local Maven repository first:
 
 ```bash
-# from the repository root — installs the starters + autoconfigure + core
+# from the repository root
 mvn -pl webhooks-consumer-starter,webhooks-producer-starter -am install -DskipTests
 ```
 
-## Build + test the samples
+## Build & test all 7 sample apps
 
 ```bash
-# from this directory (webhooks-sample/)
-mvn install
+# from webhooks-sample/ — runs all unit + @SpringBootTest suites offline in parallel
+mvn -T 1C clean verify
 ```
 
-This builds both apps and runs their unit + context-load tests.
+---
 
-## Run locally (Maven)
+## 1. Quickstart (`producer-sample` + `consumer-sample`)
 
 ```bash
-# terminal 1 — the receiver
-mvn -pl consumer-sample spring-boot:run      # :9091
-
-# terminal 2 — the sender
-mvn -pl producer-sample spring-boot:run      # :9090
+# Run with Docker Compose + end-to-end test
+./integration-test.sh
 ```
 
-Then publish a webhook through the producer; the consumer handles it:
+Or run with Maven in two terminals (`mvn -pl consumer-sample spring-boot:run` on `:9091` and
+`mvn -pl producer-sample spring-boot:run` on `:9090`):
 
 ```bash
 # v1 (symmetric HMAC): /publish/contact-created -> /webhooks/crm
@@ -77,53 +63,38 @@ curl -i -X POST http://localhost:9090/publish/contact-created-v2a \
   -d '{"id":"c-2","fullName":"Grace Hopper","email":"grace@example.com"}'
 ```
 
-## Run with Docker
+---
 
-Both apps are containerized and wired together with Compose (the producer targets the consumer by its
-service name). Build context is the repository root, so each image builds the libraries from source
-before building the sample.
+## 2. Zero-webhook-loss stack (`producer-nats-sample` + `consumer-nats-sample`)
 
-```bash
-# from this directory (webhooks-sample/)
-docker compose up --build
-```
-
-- producer → http://localhost:9090
-- consumer → http://localhost:9091
-
-## Cross-library integration test (Docker)
-
-`integration-test.sh` brings both apps up with Compose, publishes a `contact.created` through the
-producer, and asserts the consumer actually handled it (log line + `webhook_received_total` metric):
+Brings up `nats:2.10-alpine -js` + `producer-nats-sample` (`:9092`) + `consumer-nats-sample` (`:9093`). See
+the full architectural walkthrough in [Zero-webhook-loss queueing](../docs/guides/zero-loss-queueing.md).
 
 ```bash
-# from this directory (webhooks-sample/)
-./integration-test.sh
+docker compose -f docker-compose.nats.yml up --build -d
+./integration-test-nats.sh
 ```
 
-It tears the stack down on exit. Requires Docker (with the Compose plugin) and `curl`.
+---
 
-## What each app shows
+## 3. OAuth2 JWT transport auth (`producer-auth-sample` + `consumer-auth-sample`)
 
-- **`producer-sample`** — `@EnableWebhookClients(clients = {CrmWebhooks.class, CrmWebhooksV2a.class})` (the
-  zero-scan, explicit registration path), two `@WebhookClient` interfaces (one per destination), a
-  `DeadLetterDeliveryListener` (`WebhookDeliveryListener`), a controller that triggers a signed send, and
-  profile-activated SPI overrides under `spi/` (`BearerTokenWebhookInterceptor`,
-  `@Bean("destinationSecretProvider")`, `QueueingWebhookTransport`). See [producer-sample/](producer-sample).
-- **`consumer-sample`** — `@WebhookType` event POJOs (the type *is* the schema, via Bean Validation),
-  `@WebhookHandler` beans for both a multi-type and a single-type endpoint, `SampleMetadataContributor`
-  (`MetadataContributor`), `LoggingHandlerFailureListener` (`HandlerFailureListener`), and profile-activated
-  SPI overrides under `spi/` (`SharedStoreIdempotencyGuard`, custom `SecretProvider<Endpoint>`).
-  Includes `smoke-test.sh`, `sign.py`, `requests.http`, and load tests. See
-  [consumer-sample/](consumer-sample).
-- **Both signing schemes** ([SPEC §19i](../docs/reference/SPEC.md#19i-asymmetric-signing--ed25519-v2a-whsk_))
-  — the `demo` destination / `/webhooks/crm` endpoint use `v1` (symmetric HMAC, `whsec_`); the `demo-v2a`
-  destination / `/webhooks/crm-v2a` endpoint use `v2a` (asymmetric Ed25519, `whsk_` private key to sign,
-  `whpk_` public key to verify, with a shared `endpoint-id`). The scheme is chosen purely by the key
-  prefix; handler code is identical either way.
-- **End-to-end trace/correlation** ([SPEC §9b](../docs/reference/SPEC.md#9b-correlation--trace-context-app-owned))
-  — the toolkit writes nothing to the `MDC`, so correlation is the app's job, shown across both apps: the
-  producer seeds a trace id (`PublishController`) and copies it onto the outbound webhook with a
-  `WebhookRequestInterceptor` (`TraceHeaderWebhookInterceptor`); the consumer reads that `x-trace-id` header
-  (plus the stable `webhook-id`) into its `MDC` in a servlet filter (`TraceContextFilter`) that runs before
-  the webhook controller. Both apps render the id with `%X{traceId}`, so one trace spans both services.
+See [Transport authentication](../docs/guides/transport-authentication.md).
+
+```bash
+docker compose -f docker-compose.auth.yml up --build -d
+
+curl -i -X POST http://localhost:9094/publish/contact-created \
+  -H 'content-type: application/json' \
+  -d '{"id":"c-auth-1","fullName":"Ada Lovelace","email":"ada@example.com"}'
+```
+
+---
+
+## 4. Custom SPI overrides (`spi-sample`)
+
+See [Beans & extension points](../docs/reference/beans-and-spis.md).
+
+```bash
+mvn -pl spi-sample test
+```

@@ -44,9 +44,10 @@ replaceable bean, every annotation); Operations covers running it in production.
 ### Guides (by topic)
 - **[Consumer guide](./guides/consumer.md)** — the receive pipeline: endpoints, `@WebhookType` events, `@WebhookHandler`, schema validation, unknown-type policy.
 - **[Producer guide](./guides/producer.md)** — the send pipeline: `@WebhookClient`, named destinations, envelope building and signing.
-- **[Verification & security](./guides/verification-and-security.md)** — HMAC verification, the replay window, secret rotation, SSRF guard, redaction-safe logging.
-- **[Transport authentication](./guides/transport-authentication.md)** — adding an OAuth2 `Authorization: Bearer` token on both sides, alongside the HMAC signature.
+- **[Verification & security](./guides/verification-and-security.md)** — HMAC & Ed25519 verification, the replay window, secret rotation, SSRF guard, redaction-safe logging.
+- **[Transport authentication](./guides/transport-authentication.md)** — adding an OAuth2 `Authorization: Bearer` token on both sides, alongside the webhook signature (runnable in `producer-auth-sample` / `consumer-auth-sample`).
 - **[Reliability](./guides/reliability.md)** — in-process retry & backoff, honoring `Retry-After`, sync vs async handling, dead-letter failure hooks.
+- **[Zero-webhook-loss queueing](./guides/zero-loss-queueing.md)** — durable producer + consumer queueing and cross-instance idempotency with NATS JetStream (`producer-nats-sample` / `consumer-nats-sample`).
 - **[Observability](./guides/observability.md)** — structured logging, `webhook-id` correlation, delivery/event lag, opt-in metrics, tracing.
 
 ### Reference (lookup)

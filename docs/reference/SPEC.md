@@ -95,12 +95,12 @@ follows the house style of the `jinternals` projects.
 - ❌ No retry persistence — the producer retries transient failures *in process* only (bounded,
   no queue/disk/scheduler; §19b) and throws `WebhookDeliveryException` once attempts are exhausted; the
   consumer returns the right status code. Durable cross-restart retry stays the sender's job (see §19).
-- ❌ No asymmetric (`ed25519`) signatures (v1).
+- ✅ Both symmetric (`v1` HMAC-SHA256) and asymmetric (`v2a` Ed25519) signatures (§8e, §19i).
 
 > Idempotency normally needs a store (Redis/DB). Since we want **no storage**, idempotency is
-> handled per §10 (optional, in-memory best-effort, off by default). The verifier's replay window
-> (§8b) protects against replay attacks without any storage when enabled — though it ships **off by
-> default**, so enable it for internet-facing endpoints.
+> handled per §11 (optional, in-memory best-effort, off by default; or a custom `IdempotencyGuard` over
+> Redis / NATS KV). The verifier's replay window (§8b) protects against replay attacks without any storage
+> and is **enabled by default** (`5m` tolerance).
 
 ---
 
