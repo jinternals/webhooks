@@ -219,6 +219,9 @@ public class WebhookClientRegistrar implements ImportBeanDefinitionRegistrar {
     }
 
     private void registerClient(BeanDefinitionRegistry registry, String className) {
+        if (registry.containsBeanDefinition(className)) {
+            return;
+        }
         Class<?> clientInterface = loadClient(className);
         validateClient(clientInterface);
         BeanDefinitionBuilder builder = BeanDefinitionBuilder.genericBeanDefinition(WebhookClientFactoryBean.class);

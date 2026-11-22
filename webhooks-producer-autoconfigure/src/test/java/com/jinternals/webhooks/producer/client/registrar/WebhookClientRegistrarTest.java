@@ -101,6 +101,21 @@ class WebhookClientRegistrarTest {
         assertThat(registry.getBeanDefinitionNames()).containsExactly(ScanCrmWebhooks.class.getName());
     }
 
+    @Test
+    void skipsAlreadyRegisteredClientAcrossMultipleEnableWebhookClientsConfigurations() {
+        // Spring Boot 3 disables bean-definition overriding by default; two @Configuration classes whose
+        // @EnableWebhookClients selectors discover the same interface must not collide with
+        // BeanDefinitionOverrideException.
+        DefaultListableBeanFactory registry = new DefaultListableBeanFactory();
+        registry.setAllowBeanDefinitionOverriding(false);
+
+        registrar.registerBeanDefinitions(AnnotationMetadata.introspect(BasePackagesConfig.class), registry);
+        registrar.registerBeanDefinitions(AnnotationMetadata.introspect(BasePackageClassesConfig.class), registry);
+
+        assertThat(registry.getBeanDefinitionNames()).containsExactly(ScanCrmWebhooks.class.getName());
+        assertClientBeanDefinition(registry, ScanCrmWebhooks.class);
+    }
+
     // Placed in the fixtures.scan package so the "scan the annotated class's own package" default finds
     // ScanCrmWebhooks (which lives there) when no selector is set.
     @Test
