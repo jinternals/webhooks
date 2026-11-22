@@ -14,6 +14,11 @@ class WebhookMetadataTest {
 
         @Redact
         String email = "a@b.c";
+
+        @Override
+        public String toString() {
+            return "Event{id=" + id + ", email=" + email + "}";
+        }
     }
 
     private WebhookMetadata meta(Instant attempt, Instant event, Object payload) {
@@ -24,7 +29,15 @@ class WebhookMetadataTest {
     @Test
     void deliveryLagIsPositiveForPastAttempt() {
         WebhookMetadata m = meta(Instant.now().minusSeconds(5), null, new Object());
-        assertThat(m.deliveryLag().getSeconds()).isGreaterThanOrEqualTo(4L);
+        assertThat(m.deliveryLag()).isPresent();
+        assertThat(m.deliveryLag().get().getSeconds()).isGreaterThanOrEqualTo(4L);
+    }
+
+    @Test
+    void deliveryLagEmptyWhenNoAttemptTimestamp() {
+        // When signature verification is disabled, webhook-timestamp may be absent -> attemptTimestamp is null.
+        WebhookMetadata m = meta(null, null, new Object());
+        assertThat(m.deliveryLag()).isEmpty();
     }
 
     @Test
@@ -58,5 +71,22 @@ class WebhookMetadataTest {
     void redactedEventMasksSensitiveFields() {
         WebhookMetadata m = meta(Instant.now(), null, new Event());
         assertThat(m.redactedEvent()).contains("id=c-1").contains("email=***REDACTED***");
+    }
+
+    @Test
+    void toStringRendersRedactedEventSoLoggingMetadataNeverLeaksRedactedFields() {
+        Instant attempt = Instant.ofEpochSecond(1700000000L);
+        Instant eventTs = Instant.ofEpochSecond(1699999990L);
+        WebhookMetadata m = meta(attempt, eventTs, new Event());
+
+        assertThat(m.toString())
+                .contains("type=t")
+                .contains("webhookId=id")
+                .contains("attemptTimestamp=" + attempt)
+                .contains("eventTimestamp=" + eventTs)
+                .contains("endpointPath=/p")
+                .contains("sourceIp=ip")
+                .contains("email=***REDACTED***")
+                .doesNotContain("a@b.c");
     }
 }

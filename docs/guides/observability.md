@@ -89,7 +89,7 @@ flowchart TD
     E --> F
 ```
 
-**Text summary.** `deliveryLag` always exists (the `webhook-timestamp` header is mandatory); `eventLag` is
+**Text summary.** `deliveryLag` is present whenever the request carried a valid `webhook-timestamp` header (mandatory when verification is enabled; `n/a` if omitted while verification is disabled); `eventLag` is
 computed from the optional envelope-level `timestamp`, or reported as `n/a`. They differ when a sender retries
 (new delivery timestamp) an old event (unchanged body timestamp) — separating *transport* delay from *event*
 staleness.
@@ -105,7 +105,7 @@ The same two values are available to your handler via `WebhookMetadata`:
 ```java
 @WebhookHandler
 public void onPaid(InvoicePaid event, WebhookMetadata metadata) {
-    long delivery = metadata.deliveryLag().toMillis();
+    metadata.deliveryLag().ifPresent(lag -> log.info("attempt was {}ms old", lag.toMillis()));
     metadata.eventLag().ifPresent(lag -> log.info("event was {}ms old", lag.toMillis()));
 }
 ```

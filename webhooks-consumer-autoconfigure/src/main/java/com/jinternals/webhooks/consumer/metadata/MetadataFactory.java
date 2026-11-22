@@ -4,12 +4,14 @@ import com.jinternals.webhooks.consumer.model.WebhookMetadata;
 import com.jinternals.webhooks.core.model.Envelope;
 import com.jinternals.webhooks.core.model.WebhookHeaders;
 import jakarta.servlet.http.HttpServletRequest;
+import java.time.DateTimeException;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Builds the immutable {@link WebhookMetadata} handed to handlers (see SPEC.md §9).
@@ -26,6 +28,13 @@ import java.util.Map;
 public class MetadataFactory {
 
     private static final String REDACTED = "***REDACTED***";
+
+    /**
+     * Header names (lower-cased) redacted on metadata construction: the Standard Webhooks signature plus
+     * standard transport-credential headers (e.g. OAuth2 Bearer tokens recommended for transport auth).
+     */
+    private static final Set<String> REDACTED_HEADERS =
+            Set.of(WebhookHeaders.SIGNATURE, "authorization", "proxy-authorization", "cookie");
 
     private final List<MetadataContributor> contributors;
 
@@ -68,7 +77,7 @@ public class MetadataFactory {
         for (Map.Entry<String, List<String>> entry : rawHeaders.entrySet()) {
             String name = entry.getKey();
             List<String> values = entry.getValue();
-            String value = WebhookHeaders.SIGNATURE.equals(name)
+            String value = REDACTED_HEADERS.contains(name)
                     ? REDACTED
                     : (values == null || values.isEmpty()) ? null : values.get(0);
             headers.put(name, value);
@@ -89,7 +98,7 @@ public class MetadataFactory {
         }
         try {
             return Instant.ofEpochSecond(Long.parseLong(value.trim()));
-        } catch (NumberFormatException e) {
+        } catch (NumberFormatException | DateTimeException e) {
             return null;
         }
     }

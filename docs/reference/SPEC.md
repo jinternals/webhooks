@@ -686,7 +686,9 @@ public record WebhookMetadata(
 ) {
 
     /** Convenience: lag between now and the delivery attempt (see STANDARD_WEBHOOKS.md §3a). */
-    public Duration deliveryLag() { return Duration.between(attemptTimestamp, Instant.now()); }
+    public Optional<Duration> deliveryLag() {
+        return Optional.ofNullable(attemptTimestamp).map(t -> Duration.between(t, Instant.now()));
+    }
 
     /** Convenience: lag between now and the actual event time. Null-safe. */
     public Optional<Duration> eventLag() {

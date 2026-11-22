@@ -99,7 +99,7 @@ A handler takes the event, and **optionally** the metadata:
 ```java
 @WebhookHandler
 public void onCreated(ContactCreated event, WebhookMetadata metadata) {
-    log.info("webhook-id={} deliveryLag={}ms", metadata.webhookId(), metadata.deliveryLag().toMillis());
+    log.info("webhook-id={} deliveryLag={}", metadata.webhookId(), metadata.deliveryLag().orElse(null));
 }
 ```
 

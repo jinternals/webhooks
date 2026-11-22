@@ -81,9 +81,17 @@ public final class MicrometerWebhookMetrics implements WebhookMetrics {
     /**
      * Lag is {@code now - senderTimestamp}; a sender whose clock runs ahead of ours produces a negative
      * value that would skew the summary (and misleads as "the future"). Clamp to zero so the distribution
-     * only ever records non-negative latencies.
+     * only ever records non-negative latencies, and saturate on {@code toMillis()} overflow so an extreme
+     * timestamp (when the replay window is disabled) can never fail a delivery with {@code ArithmeticException}.
      */
     private static double clampToZero(Duration lag) {
-        return Math.max(0L, lag.toMillis());
+        if (lag.isNegative()) {
+            return 0.0;
+        }
+        try {
+            return lag.toMillis();
+        } catch (ArithmeticException overflow) {
+            return Long.MAX_VALUE;
+        }
     }
 }

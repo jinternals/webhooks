@@ -33,7 +33,10 @@ class MetadataFactoryTest {
         Map<String, List<String>> rawHeaders = Map.of(
                 "webhook-id", List.of("msg_1"),
                 "webhook-timestamp", List.of("1700000000"),
-                "webhook-signature", List.of("v1,secret-sig"));
+                "webhook-signature", List.of("v1,secret-sig"),
+                "authorization", List.of("Bearer eyJ-secret"),
+                "proxy-authorization", List.of("Basic dXNlcjpwYXNz"),
+                "cookie", List.of("session=topsecret"));
 
         Object event = new Object();
         WebhookMetadata meta = factory.build(
@@ -51,6 +54,9 @@ class MetadataFactoryTest {
         assertThat(meta.sourceIp()).isEqualTo("10.1.2.3");
         assertThat(meta.event()).isSameAs(event);
         assertThat(meta.headers().get("webhook-signature")).isEqualTo("***REDACTED***");
+        assertThat(meta.headers().get("authorization")).isEqualTo("***REDACTED***");
+        assertThat(meta.headers().get("proxy-authorization")).isEqualTo("***REDACTED***");
+        assertThat(meta.headers().get("cookie")).isEqualTo("***REDACTED***");
         assertThat(meta.headers().get("webhook-id")).isEqualTo("msg_1");
         assertThat(meta.header("WEBHOOK-ID")).contains("msg_1");
         assertThat(meta.header("absent")).isEmpty();
@@ -155,9 +161,29 @@ class MetadataFactoryTest {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader("webhook-timestamp", "not-a-number");
 
-        WebhookMetadata meta = factory.build(request, envelope("t", "not-a-date"), new Object(), Map.of(), "/p");
+        WebhookMetadata meta = factory.build(
+                request,
+                envelope("t", "not-a-date"),
+                new Object(),
+                Map.of("webhook-timestamp", List.of("not-a-number")),
+                "/p");
         assertThat(meta.attemptTimestamp()).isNull();
         assertThat(meta.eventTimestamp()).isNull();
+    }
+
+    @Test
+    void outOfRangeEpochSecondTimestampBecomesNullWithoutThrowing() {
+        // Long.MAX_VALUE parses as a long, but exceeds Instant.MAX (~3.15e16) and throws DateTimeException.
+        MetadataFactory factory = new MetadataFactory(List.of());
+        MockHttpServletRequest request = new MockHttpServletRequest();
+
+        WebhookMetadata meta = factory.build(
+                request,
+                envelope("t", null),
+                new Object(),
+                Map.of("webhook-timestamp", List.of(Long.toString(Long.MAX_VALUE))),
+                "/p");
+        assertThat(meta.attemptTimestamp()).isNull();
     }
 
     @Test

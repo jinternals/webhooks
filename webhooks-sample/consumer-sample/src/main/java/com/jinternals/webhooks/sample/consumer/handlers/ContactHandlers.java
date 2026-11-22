@@ -50,6 +50,6 @@ public class ContactHandlers {
                 "contact.deleted id={} via endpoint={} deliveryLag={}",
                 event.getId(),
                 metadata.endpointPath(),
-                metadata.deliveryLag());
+                metadata.deliveryLag().orElse(null));
     }
 }

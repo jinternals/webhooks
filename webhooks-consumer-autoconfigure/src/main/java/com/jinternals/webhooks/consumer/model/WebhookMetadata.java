@@ -3,6 +3,7 @@ package com.jinternals.webhooks.consumer.model;
 import com.jinternals.webhooks.core.redact.WebhookRedactor;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
@@ -20,32 +21,35 @@ import java.util.Optional;
  * unchanged. The stable {@code webhook-id} is always available here via {@link #webhookId()}.
  *
  * <p>Security: the signature value and the signing secret are never placed here; the {@code headers}
- * map has {@code webhook-signature} redacted, so this object is safe to log. The deserialized
- * {@code event} is also carried, but for logging you should prefer {@link #redactedEvent()}, which
- * masks any {@code @Redact} fields (see SPEC.md §9a).
+ * map has {@code webhook-signature} and standard credential headers ({@code authorization},
+ * {@code proxy-authorization}, {@code cookie}) redacted, and {@link #toString()} renders {@link #event()}
+ * via {@link #redactedEvent()} so this object is genuinely safe to log (see SPEC.md §9a).
  */
 public record WebhookMetadata(
 
         // --- Standard Webhooks envelope / headers ---
         String type,
         String webhookId,
-        Instant attemptTimestamp, // webhook-timestamp header (delivery attempt time)
+        Instant attemptTimestamp, // webhook-timestamp header (delivery attempt time) — nullable when unsigned
         Instant eventTimestamp, // body "timestamp" (when the event occurred) — nullable
 
         // --- Endpoint context ---
         String endpointPath,
         String sourceIp,
 
-        // --- The deserialized event (log it via redactedEvent(), not toString()) ---
+        // --- The deserialized event (log it via redactedEvent(), not event().toString()) ---
         Object event,
 
         // --- Escape hatch ---
-        Map<String, String> headers, // all headers, lower-cased, signature REDACTED
+        Map<String, String> headers, // all headers, lower-cased, signature + auth headers REDACTED
         Map<String, Object> attributes) {
 
-    /** Lag between now and the delivery attempt (grows with retries). */
-    public Duration deliveryLag() {
-        return Duration.between(attemptTimestamp, Instant.now());
+    /**
+     * Lag between now and the delivery attempt (grows with retries). Empty when no valid
+     * {@code webhook-timestamp} header was present (e.g. when signature verification is disabled).
+     */
+    public Optional<Duration> deliveryLag() {
+        return Optional.ofNullable(attemptTimestamp).map(t -> Duration.between(t, Instant.now()));
     }
 
     /** Lag between now and the actual event time. Empty if the body had no timestamp. */
@@ -53,9 +57,9 @@ public record WebhookMetadata(
         return Optional.ofNullable(eventTimestamp).map(t -> Duration.between(t, Instant.now()));
     }
 
-    /** Case-insensitive header lookup (signature is redacted). */
+    /** Case-insensitive header lookup (signature and auth headers are redacted). */
     public Optional<String> header(String name) {
-        return Optional.ofNullable(headers.get(name.toLowerCase()));
+        return Optional.ofNullable(headers.get(name.toLowerCase(Locale.ROOT)));
     }
 
     /** Typed attribute lookup from the escape-hatch map. */
@@ -72,5 +76,23 @@ public record WebhookMetadata(
      */
     public String redactedEvent() {
         return WebhookRedactor.toRedactedString(event);
+    }
+
+    /**
+     * Log-safe string representation: renders {@link #event} via {@link #redactedEvent()} rather than
+     * calling {@code event.toString()}, so {@code @Redact} fields are never exposed if a caller logs the
+     * metadata record directly.
+     */
+    @Override
+    public String toString() {
+        return "WebhookMetadata[type=" + type
+                + ", webhookId=" + webhookId
+                + ", attemptTimestamp=" + attemptTimestamp
+                + ", eventTimestamp=" + eventTimestamp
+                + ", endpointPath=" + endpointPath
+                + ", sourceIp=" + sourceIp
+                + ", event=" + redactedEvent()
+                + ", headers=" + headers
+                + ", attributes=" + attributes + "]";
     }
 }

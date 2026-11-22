@@ -112,4 +112,15 @@ class MicrometerWebhookMetricsTest {
         assertThat(summary.count()).isEqualTo(1L);
         assertThat(summary.totalAmount()).isEqualTo(0.0);
     }
+
+    @Test
+    void lagSaturatesInsteadOfOverflowingOnExtremePositiveOrNegativeDurations() {
+        // Duration.ofSeconds(Long.MAX_VALUE).toMillis() throws ArithmeticException; clampToZero must saturate
+        // positive overflow to Long.MAX_VALUE and clamp huge negative durations to 0.0 without throwing.
+        metrics.deliveryLag(Duration.ofSeconds(Long.MAX_VALUE));
+        metrics.eventLag(Duration.ofSeconds(Long.MIN_VALUE));
+
+        assertThat(registry.get("webhook.delivery.lag").summary().max()).isEqualTo((double) Long.MAX_VALUE);
+        assertThat(registry.get("webhook.event.lag").summary().max()).isEqualTo(0.0);
+    }
 }
