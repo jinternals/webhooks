@@ -2,11 +2,13 @@ package com.jinternals.webhooks.producer.config;
 
 import com.jinternals.webhooks.core.config.WebhookConfigurationException;
 import com.jinternals.webhooks.core.secret.SecretProvider;
+import com.jinternals.webhooks.core.sign.Ed25519Keys;
 import com.jinternals.webhooks.core.sign.SigningSchemeValidator;
 import com.jinternals.webhooks.producer.config.WebhookProducerProperties.Destination;
 import com.jinternals.webhooks.producer.security.DestinationUrlValidator;
 import com.jinternals.webhooks.producer.transport.SafeUrl;
 import com.jinternals.webhooks.producer.transport.WebhookDeliveryException;
+import com.standardwebhooks.Webhook;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.List;
@@ -57,7 +59,9 @@ public class DestinationValidator implements InitializingBean {
             String name = entry.getKey();
             Destination destination = entry.getValue();
             validateUrl(name, destination.getUrl());
-            validateSecrets(name, destination);
+            if (properties.isSigningEnabled()) {
+                validateSecrets(name, destination);
+            }
             log.info("Validated webhook destination '{}'", name);
         }
     }
@@ -73,8 +77,10 @@ public class DestinationValidator implements InitializingBean {
         try {
             uri = new URI(url);
         } catch (URISyntaxException e) {
+            // URISyntaxException#getMessage() embeds the raw input URL ("reason at index N: <url>"), so redact
+            // it before building the report — otherwise userinfo credentials or query tokens leak to startup logs.
             throw new WebhookConfigurationException(
-                    "Invalid URL for webhook destination '" + name + "': " + e.getMessage(),
+                    "Invalid URL for webhook destination '" + name + "': " + SafeUrl.redactMessage(e.getMessage(), url),
                     "Correct " + base + ".url to a valid absolute URL (scheme + host), e.g. "
                             + "https://crm.example.com/webhooks.",
                     e);
@@ -110,8 +116,7 @@ public class DestinationValidator implements InitializingBean {
         }
         String target = "webhook destination '" + name + "'";
         // v2a (whsk_) rules: endpoint-id required + dot-free, each Ed25519 private key well-formed, and no
-        // consumer-side public key (whpk_) used where a private key belongs. HMAC (whsec_) secrets are left
-        // to the upstream library at sign time; a malformed one fails there with its own clear message.
+        // consumer-side public key (whpk_) used where a private key belongs.
         SigningSchemeValidator.validateAsymmetric(
                 target, base + ".endpoint-id", destination.getEndpointId(), secrets, true);
         if (SigningSchemeValidator.isEndpointIdIgnored(destination.getEndpointId(), secrets)) {
@@ -119,6 +124,27 @@ public class DestinationValidator implements InitializingBean {
                     "endpoint-id is set on {} but all its secrets are symmetric (whsec_, v1); endpoint-id is "
                             + "only used for the asymmetric v2a scheme and will be ignored",
                     target);
+        }
+        for (String secret : secrets) {
+            validateSymmetricSecret(name, base, secret);
+        }
+    }
+
+    /** Validate a {@code whsec_} HMAC secret via the upstream library; Ed25519 keys are handled above. */
+    private void validateSymmetricSecret(String name, String base, String secret) {
+        // Only whsk_ (private) or whsec_ secrets can reach here: any whpk_ (public) key was already rejected
+        // by validateAsymmetric (a producer signs with the private key), so there is no whpk_ branch to test.
+        if (Ed25519Keys.isPrivateKey(secret)) {
+            return; // asymmetric material already validated by SigningSchemeValidator
+        }
+        try {
+            new Webhook(secret);
+        } catch (Exception e) {
+            throw new WebhookConfigurationException(
+                    "Invalid signing secret for webhook destination '" + name + "': " + e.getMessage(),
+                    "Provide a valid Standard Webhooks symmetric secret (whsec_ followed by Base64 key "
+                            + "material) for " + base + ".secret, or use a whsk_ Ed25519 private key for v2a.",
+                    e);
         }
     }
 }

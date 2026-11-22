@@ -111,7 +111,7 @@ public final class SafeUrl {
      * @return the message with every occurrence of {@code url} replaced by its sanitized form; {@code null} in,
      *     {@code null} out
      */
-    static String redactMessage(String message, String url) {
+    public static String redactMessage(String message, String url) {
         if (message == null || url == null) {
             return message;
         }

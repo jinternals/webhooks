@@ -23,6 +23,7 @@ class DestinationValidatorTest {
     private final DestinationUrlValidator allowAll = new AllowAllDestinationUrlValidator();
     private final ConfigDestinationSecretProvider secretProvider = new ConfigDestinationSecretProvider();
 
+    private static final String HMAC_SECRET = "whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw";
     private static final String PRIVATE_KEY = "whsk_4uKPjji/dhB8w6GW3YYDnIMYvXcdHrvH6lidTr4Z+EY=";
     private static final String PUBLIC_KEY = "whpk_uWKK13PfwqyOgrqT0OrWKcS2uVD7e89+oUKnkoPjx7w=";
 
@@ -46,7 +47,7 @@ class DestinationValidatorTest {
 
     @Test
     void acceptsAWellFormedDestination() {
-        WebhookProducerProperties properties = propertiesWith("crm", "https://crm.example.com/webhooks", "whsec_abc");
+        WebhookProducerProperties properties = propertiesWith("crm", "https://crm.example.com/webhooks", HMAC_SECRET);
 
         assertThatCode(() -> validator(properties, allowAll).afterPropertiesSet())
                 .doesNotThrowAnyException();
@@ -54,7 +55,7 @@ class DestinationValidatorTest {
 
     @Test
     void rejectsADestinationWithNoUrl() {
-        WebhookProducerProperties properties = propertiesWith("crm", null, "whsec_abc");
+        WebhookProducerProperties properties = propertiesWith("crm", null, HMAC_SECRET);
 
         assertThatThrownBy(() -> validator(properties, allowAll).afterPropertiesSet())
                 .isInstanceOf(WebhookConfigurationException.class)
@@ -64,7 +65,7 @@ class DestinationValidatorTest {
 
     @Test
     void rejectsADestinationWithABlankUrl() {
-        WebhookProducerProperties properties = propertiesWith("crm", "   ", "whsec_abc");
+        WebhookProducerProperties properties = propertiesWith("crm", "   ", HMAC_SECRET);
 
         assertThatThrownBy(() -> validator(properties, allowAll).afterPropertiesSet())
                 .isInstanceOf(WebhookConfigurationException.class)
@@ -72,19 +73,23 @@ class DestinationValidatorTest {
     }
 
     @Test
-    void rejectsADestinationWithASyntacticallyInvalidUrl() {
-        WebhookProducerProperties properties = propertiesWith("crm", "ht tp://broken url", "whsec_abc");
+    void rejectsADestinationWithASyntacticallyInvalidUrlAndRedactsEmbeddedSecrets() {
+        String secretBearingBadUrl = "https://alice:s3cr3t@crm.example.com/webhooks?token=topsecret broken";
+        WebhookProducerProperties properties = propertiesWith("crm", secretBearingBadUrl, HMAC_SECRET);
 
         assertThatThrownBy(() -> validator(properties, allowAll).afterPropertiesSet())
                 .isInstanceOf(WebhookConfigurationException.class)
                 .hasMessageContaining("Invalid URL")
-                .hasMessageContaining("crm");
+                .hasMessageContaining("crm")
+                .hasMessageContaining("https://crm.example.com/webhooks")
+                .hasMessageNotContaining("s3cr3t")
+                .hasMessageNotContaining("topsecret");
     }
 
     @Test
     void rejectsADestinationWhoseUrlHasNoHost() {
         // A URI with no authority/host (e.g. a bare path) cannot be delivered to.
-        WebhookProducerProperties properties = propertiesWith("crm", "file:///tmp/webhooks", "whsec_abc");
+        WebhookProducerProperties properties = propertiesWith("crm", "file:///tmp/webhooks", HMAC_SECRET);
 
         assertThatThrownBy(() -> validator(properties, allowAll).afterPropertiesSet())
                 .isInstanceOf(WebhookConfigurationException.class)
@@ -102,10 +107,40 @@ class DestinationValidatorTest {
     }
 
     @Test
+    void rejectsAMalformedSymmetricSecret() {
+        WebhookProducerProperties properties =
+                propertiesWith("crm", "https://crm.example.com/webhooks", "whsec_not-valid-base64!!!");
+
+        assertThatThrownBy(() -> validator(properties, allowAll).afterPropertiesSet())
+                .isInstanceOf(WebhookConfigurationException.class)
+                .hasMessageContaining("Invalid signing secret")
+                .hasMessageContaining("crm")
+                .satisfies(e -> assertThat(((WebhookConfigurationException) e).getAction())
+                        .contains("webhooks.producer.destinations.crm.secret"));
+    }
+
+    @Test
+    void skipsSecretValidationButStillValidatesUrlWhenSigningDisabled() {
+        // With signing disabled (NoOpWebhookSigner), destinations need no secret — but MUST still have a valid URL.
+        WebhookProducerProperties secretless = propertiesWith("crm", "https://crm.example.com/webhooks", null);
+        secretless.setSigningEnabled(false);
+
+        assertThatCode(() -> validator(secretless, allowAll).afterPropertiesSet())
+                .doesNotThrowAnyException();
+
+        WebhookProducerProperties urlless = propertiesWith("crm", null, null);
+        urlless.setSigningEnabled(false);
+
+        assertThatThrownBy(() -> validator(urlless, allowAll).afterPropertiesSet())
+                .isInstanceOf(WebhookConfigurationException.class)
+                .hasMessageContaining("No URL configured");
+    }
+
+    @Test
     void rejectsADestinationWhoseHostIsNotAllowListedAtBoot() {
         // The active URL guard must run at startup: a destination outside the allow-list fails at boot, not
         // on the first delivery. Proves validateUrl delegates to urlValidator.validate(url).
-        WebhookProducerProperties properties = propertiesWith("crm", "https://evil.example.com/webhooks", "whsec_abc");
+        WebhookProducerProperties properties = propertiesWith("crm", "https://evil.example.com/webhooks", HMAC_SECRET);
         DestinationUrlValidator allowList = new AllowListDestinationUrlValidator(List.of("crm.example.com"));
 
         assertThatThrownBy(() -> validator(properties, allowList).afterPropertiesSet())
@@ -118,7 +153,7 @@ class DestinationValidatorTest {
 
     @Test
     void acceptsAnAllowListedHostAtBoot() {
-        WebhookProducerProperties properties = propertiesWith("crm", "https://crm.example.com/webhooks", "whsec_abc");
+        WebhookProducerProperties properties = propertiesWith("crm", "https://crm.example.com/webhooks", HMAC_SECRET);
         DestinationUrlValidator allowList = new AllowListDestinationUrlValidator(List.of("crm.example.com"));
 
         assertThatCode(() -> validator(properties, allowList).afterPropertiesSet())
@@ -203,7 +238,7 @@ class DestinationValidatorTest {
         // endpoint-id has no effect on a purely symmetric (whsec_, v1) destination; the validator must accept
         // it but warn, so a misplaced setting is noticed without failing the context.
         WebhookProducerProperties properties =
-                propertiesWith("crm", "https://crm.example.com/webhooks", "whsec_abc", "ep_crm");
+                propertiesWith("crm", "https://crm.example.com/webhooks", HMAC_SECRET, "ep_crm");
 
         try (var logs = com.jinternals.webhooks.producer.support.LogCapture.forClass(DestinationValidator.class)) {
             assertThatCode(() -> validator(properties, allowAll).afterPropertiesSet())
