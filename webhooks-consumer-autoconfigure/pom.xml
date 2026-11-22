@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.jinternals</groupId>
+        <artifactId>webhooks-parent</artifactId>
+        <version>0.0.1-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>webhooks-consumer-autoconfigure</artifactId>
+    <name>webhooks-consumer-autoconfigure</name>
+    <description>Standard Webhooks consumer auto-configuration (no storage). Add webhooks-consumer-starter instead of depending on this directly.</description>
+
+    <dependencies>
+        <!-- Shared wire model, @Type/@Redact, redactor, type registry, secret SPI. Explicit version
+             (not inherited from the reactor's dependencyManagement) so the INSTALLED pom is self-contained:
+             external consumers resolving this artifact still pull webhooks-core transitively. -->
+        <dependency>
+            <groupId>com.jinternals</groupId>
+            <artifactId>webhooks-core</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!-- Spring MVC: the listener registers POST mappings at runtime. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!-- Auto-configuration + @ConfigurationProperties support. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-autoconfigure</artifactId>
+        </dependency>
+
+        <!-- Observability (see §13). The Micrometer Observation API backs @Observed on the dispatcher;
+             the host app's actuator auto-wires a real ObservationRegistry (metrics via its MeterRegistry,
+             traces if a tracer bridge is present). Without actuator this degrades to ObservationRegistry.NOOP. -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-observation</artifactId>
+        </dependency>
+
+        <!-- Opt-in consumer metrics (§20.6/A4). MicrometerWebhookMetrics compiles against the core
+             Meter API (Counter/Timer/MeterRegistry), but the metrics bean is guarded by
+             @ConditionalOnBean(MeterRegistry) + @ConditionalOnClass, so this is an OPTIONAL dependency:
+             a host with actuator already has it (actuator pulls micrometer-core); a host without it
+             neither needs nor loads the meter-backed implementation, and the no-op default is used. -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-core</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- AOP so Micrometer's ObservedAspect can advise @Observed methods (brings aspectjweaver).
+             OPTIONAL: the ObservedAspect bean is guarded by @ConditionalOnClass(ProceedingJoinPoint),
+             so the listener degrades gracefully without AOP (no @Observed dispatch timing). A host that
+             wants it adds spring-boot-starter-aop itself, so the starter does not force it downstream. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-aop</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- Official Standard Webhooks verification library. -->
+        <dependency>
+            <groupId>com.standardwebhooks</groupId>
+            <artifactId>standardwebhooks</artifactId>
+        </dependency>
+
+        <!-- Classpath scanning for @WebhookType event classes (WebhookTypeScanner) lives here, in the
+             consumer, keeping webhooks-core free of the scanning dependency. -->
+        <dependency>
+            <groupId>org.reflections</groupId>
+            <artifactId>reflections</artifactId>
+        </dependency>
+
+        <!-- Per-type payload validation via Bean Validation on the @Type class (§6a). -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+
+        <!-- Generates configuration metadata for webhooks.consumer.* properties. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-configuration-processor</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                        </path>
+                        <path>
+                            <groupId>org.springframework.boot</groupId>
+                            <artifactId>spring-boot-configuration-processor</artifactId>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+
+            <!--
+              JaCoCo line+branch 100% gate over the WHOLE module. Only annotation types are excluded
+              (they carry no executable code); everything else — including the config/* auto-config and
+              web-config wiring and the model/* metadata type — must be covered.
+            -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <configuration>
+                    <excludes>
+                        <exclude>com/jinternals/webhooks/consumer/annotations/**</exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+
+            <!-- PITest 100% mutation gate over the WHOLE module — nothing is excluded from mutation. -->
+            <plugin>
+                <groupId>org.pitest</groupId>
+                <artifactId>pitest-maven</artifactId>
+                <configuration>
+                    <targetClasses>
+                        <param>com.jinternals.webhooks.consumer.*</param>
+                    </targetClasses>
+                    <targetTests>
+                        <param>com.jinternals.webhooks.consumer.*</param>
+                    </targetTests>
+                    <outputFormats>
+                        <param>HTML</param>
+                        <param>XML</param>
+                    </outputFormats>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

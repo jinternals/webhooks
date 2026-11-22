@@ -1,0 +1,65 @@
+### Webhooks Consumer — sample requests
+#
+# Standard Webhooks requires a valid signature. The signatures below are
+# PLACEHOLDERS and will be rejected (400). To get a working request, generate
+# signed headers with sign.py:
+#
+#   # v1 (symmetric HMAC) — the /webhooks/crm endpoint:
+#   python3 sign.py --secret whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw \
+#     --url http://localhost:9091/webhooks/crm \
+#     --type contact.created \
+#     --data '{"id":"c-1","fullName":"John Smith","email":"john@example.com"}'
+#
+#   # v2a (asymmetric Ed25519) — the /webhooks/crm-v2a endpoint. Sign with the
+#   # PRIVATE key (whsk_) and the shared endpoint-id (needs `pip install cryptography`):
+#   python3 sign.py --secret whsk_4uKPjji/dhB8w6GW3YYDnIMYvXcdHrvH6lidTr4Z+EY= \
+#     --endpoint-id ep_2fVZdC8Kx9TR4ZoCqHWt3NnLgRb \
+#     --url http://localhost:9091/webhooks/crm-v2a \
+#     --type contact.created \
+#     --data '{"id":"c-1","fullName":"John Smith","email":"john@example.com"}'
+#
+# ...then paste the webhook-id / webhook-timestamp / webhook-signature it prints.
+
+@host = http://localhost:9091
+
+### Multi-type endpoint — contact.created (replace signature!)
+POST {{host}}/webhooks/crm
+content-type: application/json
+webhook-id: msg_REPLACE_ME
+webhook-timestamp: 0
+webhook-signature: v1,REPLACE_ME
+
+{"type":"contact.created","timestamp":"2026-11-13T12:00:00Z","data":{"id":"c-1","fullName":"John Smith","email":"john@example.com"}}
+
+### Multi-type endpoint — contact.updated
+POST {{host}}/webhooks/crm
+content-type: application/json
+webhook-id: msg_REPLACE_ME
+webhook-timestamp: 0
+webhook-signature: v1,REPLACE_ME
+
+{"type":"contact.updated","timestamp":"2026-11-13T12:00:00Z","data":{"id":"c-1","fullName":"Jane","email":"jane@example.com"}}
+
+### Single-type endpoint — invoice.paid
+POST {{host}}/webhooks/billing/invoice-paid
+content-type: application/json
+webhook-id: msg_REPLACE_ME
+webhook-timestamp: 0
+webhook-signature: v1,REPLACE_ME
+
+{"type":"invoice.paid","timestamp":"2026-11-13T12:00:00Z","data":{"invoiceId":"i-1","customerId":"c-1","amount":10.5,"currency":"USD"}}
+
+### Asymmetric endpoint (v2a) — contact.created (replace signature with the whsk_ one!)
+POST {{host}}/webhooks/crm-v2a
+content-type: application/json
+webhook-id: msg_REPLACE_ME
+webhook-timestamp: 0
+webhook-signature: v2a,REPLACE_ME
+
+{"type":"contact.created","timestamp":"2026-11-13T12:00:00Z","data":{"id":"c-1","fullName":"John Smith","email":"john@example.com"}}
+
+### Metrics (Prometheus)
+GET {{host}}/actuator/prometheus
+
+### Metrics (list)
+GET {{host}}/actuator/metrics

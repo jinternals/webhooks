@@ -1,0 +1,11 @@
+webhooks:
+  consumer:
+    endpoints:
+      - path: /webhooks/crm
+        secret: whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw
+        types:
+          - contact.created
+      # A second endpoint with no type allow-list (accepts ALL known @Type events) so the
+      # registry's "[ALL]" log branch is exercised end-to-end.
+      - path: /webhooks/all
+        secret: whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw

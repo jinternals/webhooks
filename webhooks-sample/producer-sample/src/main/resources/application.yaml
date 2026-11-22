@@ -1,0 +1,84 @@
+server:
+  port: 9090
+
+webhooks:
+  # ── Producer side ──────────────────────────────────────────────────────
+  # Named {url, secret} destinations selected by @WebhookClient(destination = "..."). Two destinations
+  # are shown side by side so you can compare the two signing schemes:
+  #   • "demo"     — CrmWebhooks     -> /webhooks/crm      (v1,  symmetric HMAC, whsec_)
+  #   • "demo-v2a" — CrmWebhooksV2a  -> /webhooks/crm-v2a  (v2a, asymmetric Ed25519, whsk_/whpk_)
+  # POST /publish/contact-created drives the v1 path; POST /publish/contact-created-v2a drives the v2a
+  # path. Both send a real signed contact.created webhook the consumer sample then verifies and handles.
+  producer:
+    destinations:
+      # ── v1 (symmetric HMAC) destination ─────────────────────────────────
+      # Signs with a whsec_ shared secret; the receiver verifies with the SAME
+      # secret. Use v1 when both sides share one trust domain.
+      demo:
+        url: ${DEMO_WEBHOOK_URL:http://localhost:9091/webhooks/crm}
+        secret: ${DEMO_WEBHOOK_SECRET:whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw}
+        # ── Zero-downtime secret rotation (blue/green), sender side ─────────
+        # The producer DUAL-SIGNS: it signs the same payload with the primary
+        # secret AND every additional-secret, sending all signatures in one
+        # space-separated webhook-signature header. A receiver that accepts
+        # either secret verifies successfully. Uncomment during a rotation:
+        # additional-secrets:
+        #   - ${DEMO_WEBHOOK_SECRET_OLD:whsec_OLDOLDOLDOLDOLDOLDOLDOLDOLDOLDOL}
+
+      # ── v2a (asymmetric Ed25519) destination ────────────────────────────
+      # Signs with a whsk_ Ed25519 PRIVATE key; the receiver verifies with the
+      # matching whpk_ PUBLIC key — the secret never leaves this app, so a leak
+      # of the receiver's config can't forge deliveries. The scheme is chosen by
+      # the key PREFIX (whsk_ -> v2a); no other config switches it on.
+      #
+      # endpoint-id is REQUIRED for v2a: it is mixed into the signed content
+      # (endpoint_id.msg_id.timestamp.payload) so one key pair can serve many
+      # endpoints without a signature being replayable across them. It must match
+      # the consumer's endpoint-id EXACTLY, must not contain '.', and is never
+      # sent on the wire — both sides configure it out of band. See SPEC §19i.
+      demo-v2a:
+        url: ${DEMO_V2A_WEBHOOK_URL:http://localhost:9091/webhooks/crm-v2a}
+        secret: ${DEMO_V2A_PRIVATE_KEY:whsk_4uKPjji/dhB8w6GW3YYDnIMYvXcdHrvH6lidTr4Z+EY=}
+        endpoint-id: ${DEMO_V2A_ENDPOINT_ID:ep_2fVZdC8Kx9TR4ZoCqHWt3NnLgRb}
+
+    # ── In-process retry (SPEC §19b) ─────────────────────────────────────────
+    # Transient failures (5xx, 429, timeout/connection error) are retried in
+    # process — no queue, disk, or scheduler. ON by default (3 attempts). Shown
+    # here at the defaults; set max-attempts: 1 to disable retry entirely.
+    # retry:
+    #   max-attempts: 3        # total attempts incl. the first; 1 disables retry
+    #   initial-backoff: 500ms # before the 2nd attempt; doubles up to max-backoff
+    #   max-backoff: 5s        # ceiling on any single backoff
+    #   jitter: 0.5            # 0.0–1.0; fraction of each backoff randomised down
+
+    # ── HTTP timeouts (SPEC §19c) ────────────────────────────────────────────
+    # A timeout is a transport error and is therefore retryable. Defaults shown.
+    # http:
+    #   connect-timeout: 5s    # max time to establish the TCP connection
+    #   read-timeout: 10s      # max time to wait for the response once connected
+
+    # ── Destination URL guard / SSRF (SPEC §19d) ─────────────────────────────
+    # Empty (default) = no restriction. List hostnames to enforce an allow-list
+    # (exact, case-insensitive; subdomains are NOT implied).
+    # security:
+    #   allowed-hosts:
+    #     - localhost
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, metrics, prometheus
+  metrics:
+    tags:
+      application: webhooks-producer-sample
+
+logging:
+  level:
+    com.jinternals.webhooks: INFO
+  # End-to-end trace example (SPEC §9b): trace/TraceContextFilter mints/propagates a trace id into the MDC
+  # for every inbound request, and trace/TraceHeaderWebhookInterceptor copies it onto the outbound webhook
+  # (x-trace-id). Rendering %X{traceId} here shows the SAME id the consumer sample logs when it receives the
+  # delivery — one trace spanning both services.
+  pattern:
+    level: "%5p [traceId=%X{traceId}]"

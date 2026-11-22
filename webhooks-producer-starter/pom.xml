@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.jinternals</groupId>
+        <artifactId>webhooks-parent</artifactId>
+        <version>0.0.1-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>webhooks-producer-starter</artifactId>
+    <name>webhooks-producer-starter</name>
+    <description>Starter for the Standard Webhooks producer: add this one dependency to sign and send webhooks via @WebhookClient.</description>
+
+    <!--
+      Thin starter (the canonical Spring Boot pattern): it carries no code of its own. Adding it to a
+      Spring Boot app pulls in the producer auto-configuration and every runtime dependency the sender
+      needs (Spring web/RestClient, the Standard Webhooks signer, Micrometer, …) transitively via
+      webhooks-producer-autoconfigure. A host app adds ONLY this dependency.
+    -->
+    <dependencies>
+        <dependency>
+            <groupId>com.jinternals</groupId>
+            <artifactId>webhooks-producer-autoconfigure</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+    </dependencies>
+</project>

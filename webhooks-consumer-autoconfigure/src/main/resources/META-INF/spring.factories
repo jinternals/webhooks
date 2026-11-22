@@ -1,0 +1,5 @@
+# Renders a webhook misconfiguration (a bad endpoint secret, or a v2a Ed25519 key / endpoint-id) as a clean
+# startup failure (description + action) rather than a raw stack trace. FailureAnalyzers are loaded before
+# the application context, so they are registered here via spring.factories (not AutoConfiguration.imports).
+org.springframework.boot.diagnostics.FailureAnalyzer=\
+com.jinternals.webhooks.consumer.config.WebhookConfigurationFailureAnalyzer

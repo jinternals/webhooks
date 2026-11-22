@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!--
+      Standalone producer sample. Inherits the sample parent (shared Boot parent, Java version,
+      webhooks.version, Lombok wiring). Depends on the PUBLISHED webhooks-producer-starter artifact, so
+      install the libraries first (from repo root):
+          mvn -pl webhooks-producer-starter -am install
+      Run:  mvn -pl producer-sample spring-boot:run   (from sample/)
+    -->
+    <parent>
+        <groupId>com.jinternals.webhooks.sample</groupId>
+        <artifactId>webhooks-sample</artifactId>
+        <version>0.0.1-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>producer-sample</artifactId>
+    <name>producer-sample</name>
+    <description>Standalone sample app that SENDS webhooks via the webhooks-producer library</description>
+
+    <dependencies>
+        <!-- The one dependency a sender needs: the producer starter pulls in the auto-configured
+             @WebhookClient publishing machinery and everything it requires (Spring web, the SW signer, …). -->
+        <dependency>
+            <groupId>com.jinternals</groupId>
+            <artifactId>webhooks-producer-starter</artifactId>
+        </dependency>
+
+        <!-- Observability: actuator + a Prometheus registry to expose the library's metrics. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- Lombok generates the event POJOs' accessors (@Data) — the @Type data classes. -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+</project>

@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.jinternals</groupId>
+        <artifactId>webhooks-parent</artifactId>
+        <version>0.0.1-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>webhooks-core</artifactId>
+    <name>webhooks-core</name>
+    <description>Standard Webhooks shared core — wire model, @Type/@Redact, redactor, type registry, secret SPI</description>
+
+    <dependencies>
+        <!-- Jackson for the Envelope's JsonNode data field (the wire model is Jackson-shaped). -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+
+        <!-- Spring's ReflectionUtils, used by WebhookRedactor and TypeRegistry scanning helpers. -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-core</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- ByteBuddy: synthesises a class with a genuine synthetic field for the redactor test. -->
+        <dependency>
+            <groupId>net.bytebuddy</groupId>
+            <artifactId>byte-buddy</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!--
+              JaCoCo line+branch 100% gate. Excluded from the ratio (reason per entry):
+                - model/*         immutable DTOs / wire model (accessors, no branch logic).
+                - annotations/*   annotation types (no executable code).
+              Everything with real branching (redact, registry) is covered.
+            -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <configuration>
+                    <excludes>
+                        <exclude>com/jinternals/webhooks/core/model/**</exclude>
+                        <exclude>com/jinternals/webhooks/core/annotations/**</exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+
+            <!-- PITest 100% mutation gate over the WHOLE module — nothing is excluded from mutation. -->
+            <plugin>
+                <groupId>org.pitest</groupId>
+                <artifactId>pitest-maven</artifactId>
+                <configuration>
+                    <targetClasses>
+                        <param>com.jinternals.webhooks.core.*</param>
+                    </targetClasses>
+                    <targetTests>
+                        <param>com.jinternals.webhooks.core.*</param>
+                    </targetTests>
+                    <outputFormats>
+                        <param>HTML</param>
+                        <param>XML</param>
+                    </outputFormats>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

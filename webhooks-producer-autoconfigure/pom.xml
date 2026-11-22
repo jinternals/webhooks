@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.jinternals</groupId>
+        <artifactId>webhooks-parent</artifactId>
+        <version>0.0.1-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>webhooks-producer-autoconfigure</artifactId>
+    <name>webhooks-producer-autoconfigure</name>
+    <description>Standard Webhooks producer auto-configuration — annotation-driven @WebhookClient publishing (no storage/retry). Add webhooks-producer-starter instead of depending on this directly.</description>
+
+    <dependencies>
+        <!-- Shared wire model, @Type, redactor, secret SPI. Explicit version (not inherited from the
+             reactor's dependencyManagement) so the INSTALLED pom is self-contained: external consumers
+             resolving this artifact still pull webhooks-core transitively. -->
+        <dependency>
+            <groupId>com.jinternals</groupId>
+            <artifactId>webhooks-core</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!-- RestClient (default transport) for @WebhookClient delivery. The producer is a client only:
+             it POSTs outbound, it never serves HTTP, so it needs spring-web (RestClient + the HTTP
+             client/message-converter infra) rather than the full spring-boot-starter-web (which drags in
+             spring-webmvc and an embedded Tomcat the producer never uses). A host that is itself a web app
+             already has those; a non-web host stays lean. -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-web</artifactId>
+        </dependency>
+
+        <!-- Auto-configuration + @ConfigurationProperties support. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-autoconfigure</artifactId>
+        </dependency>
+
+        <!-- Official Standard Webhooks library (signing). -->
+        <dependency>
+            <groupId>com.standardwebhooks</groupId>
+            <artifactId>standardwebhooks</artifactId>
+        </dependency>
+
+        <!-- Bean Validation (Hibernate Validator) so @Validated on WebhookProducerProperties rejects
+             invalid configuration (null timeouts, …) at bind time with a clear message (SPEC §19). -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+
+        <!-- Observability (see §13). The Micrometer Observation API backs @Observed on the publisher; the
+             host app's actuator auto-wires a real ObservationRegistry (metrics via its MeterRegistry,
+             traces if a tracer bridge is present). Without actuator this degrades to ObservationRegistry.NOOP. -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-observation</artifactId>
+        </dependency>
+
+        <!-- AOP so Micrometer's ObservedAspect can advise @Observed methods (brings aspectjweaver).
+             OPTIONAL: the ObservedAspect bean is guarded by @ConditionalOnClass(ProceedingJoinPoint),
+             so the publisher degrades gracefully without AOP (no @Observed publish timing). A host that
+             wants it adds spring-boot-starter-aop itself, so the starter does not force it downstream. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-aop</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- Generates configuration metadata for webhooks.producer.* properties. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-configuration-processor</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                        </path>
+                        <path>
+                            <groupId>org.springframework.boot</groupId>
+                            <artifactId>spring-boot-configuration-processor</artifactId>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+
+            <!--
+              JaCoCo line+branch 100% gate. Excluded from the ratio (reason per entry):
+                - annotations/*   annotation types (no executable code).
+              Everything else — including the auto-config wiring, the @Data properties, and the
+              @WebhookClient registrar/factory-bean/validation — is covered to 100% line+branch.
+            -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <configuration>
+                    <excludes>
+                        <exclude>com/jinternals/webhooks/producer/annotations/**</exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+
+            <!-- PITest 100% mutation gate over the WHOLE module — nothing is excluded from mutation. -->
+            <plugin>
+                <groupId>org.pitest</groupId>
+                <artifactId>pitest-maven</artifactId>
+                <configuration>
+                    <targetClasses>
+                        <param>com.jinternals.webhooks.producer.*</param>
+                    </targetClasses>
+                    <targetTests>
+                        <param>com.jinternals.webhooks.producer.*</param>
+                    </targetTests>
+                    <outputFormats>
+                        <param>HTML</param>
+                        <param>XML</param>
+                    </outputFormats>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

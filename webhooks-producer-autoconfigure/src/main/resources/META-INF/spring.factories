@@ -1,0 +1,8 @@
+# Render webhook misconfigurations as clean startup failures (description + action) rather than raw stack
+# traces. FailureAnalyzers are loaded before the application context, so they are registered here via
+# spring.factories (not the AutoConfiguration.imports mechanism).
+#   - WebhookClientFailureAnalyzer:        a malformed @WebhookClient interface/method.
+#   - WebhookConfigurationFailureAnalyzer: a bad destination URL/secret or a v2a (Ed25519) key/endpoint-id.
+org.springframework.boot.diagnostics.FailureAnalyzer=\
+com.jinternals.webhooks.producer.client.registrar.WebhookClientFailureAnalyzer,\
+com.jinternals.webhooks.producer.config.WebhookConfigurationFailureAnalyzer

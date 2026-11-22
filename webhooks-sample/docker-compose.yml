@@ -1,0 +1,42 @@
+# Runs both standalone sample apps and wires the producer to send to the consumer.
+#
+#   (from sample/)  docker compose up --build
+#
+# The producer exposes POST /publish/contact-created on :9090; triggering it signs and sends a
+# contact.created webhook to the consumer's /webhooks/crm on :9091. Both apps share the demo secret.
+#
+# Build context is the repository root (..), so each Dockerfile can install the webhooks-* libraries
+# from source before building the sample.
+services:
+  consumer:
+    build:
+      context: ..
+      dockerfile: /consumer-sample/Dockerfile
+    image: webhooks-consumer-sample
+    ports:
+      - "9091:9091"
+    environment:
+      CRM_WEBHOOK_SECRET: whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw
+      BILLING_WEBHOOK_SECRET: whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw
+    healthcheck:
+      # Wait until the consumer's actuator reports UP before the producer relies on it.
+      test: ["CMD", "sh", "-c", "wget -qO- http://localhost:9091/actuator/health | grep -q UP"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 20s
+
+  producer:
+    build:
+      context: ..
+      dockerfile: /producer-sample/Dockerfile
+    image: webhooks-producer-sample
+    ports:
+      - "9090:9090"
+    environment:
+      # Target the consumer service by its compose hostname, not localhost.
+      DEMO_WEBHOOK_URL: http://consumer:9091/webhooks/crm
+      DEMO_WEBHOOK_SECRET: whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw
+    depends_on:
+      consumer:
+        condition: service_healthy
