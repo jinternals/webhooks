@@ -85,6 +85,13 @@ public class DestinationValidator implements InitializingBean {
                             + "https://crm.example.com/webhooks.",
                     e);
         }
+        String scheme = uri.getScheme();
+        if (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme)) {
+            throw new WebhookConfigurationException(
+                    "Unsupported URL scheme for webhook destination '" + name + "' (expected http or https): "
+                            + SafeUrl.sanitize(url),
+                    "Set " + base + ".url to an http:// or https:// URL, e.g. " + "https://crm.example.com/webhooks.");
+        }
         if (uri.getHost() == null) {
             throw new WebhookConfigurationException(
                     "URL for webhook destination '" + name + "' has no host: " + SafeUrl.sanitize(url),

@@ -46,11 +46,35 @@ class DestinationValidatorTest {
     }
 
     @Test
-    void acceptsAWellFormedDestination() {
-        WebhookProducerProperties properties = propertiesWith("crm", "https://crm.example.com/webhooks", HMAC_SECRET);
+    void acceptsWellFormedHttpsAndHttpDestinations() {
+        WebhookProducerProperties httpsProps = propertiesWith("crm", "https://crm.example.com/webhooks", HMAC_SECRET);
+        WebhookProducerProperties httpProps = propertiesWith("crm", "http://localhost:8080/webhooks", HMAC_SECRET);
 
-        assertThatCode(() -> validator(properties, allowAll).afterPropertiesSet())
+        assertThatCode(() -> validator(httpsProps, allowAll).afterPropertiesSet())
                 .doesNotThrowAnyException();
+        assertThatCode(() -> validator(httpProps, allowAll).afterPropertiesSet())
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void rejectsADestinationWithUnsupportedOrMissingScheme() {
+        WebhookProducerProperties ftpProps =
+                propertiesWith("crm", "ftp://alice:s3cr3t@crm.example.com/webhooks?token=topsecret", HMAC_SECRET);
+
+        assertThatThrownBy(() -> validator(ftpProps, allowAll).afterPropertiesSet())
+                .isInstanceOf(WebhookConfigurationException.class)
+                .hasMessageContaining("Unsupported URL scheme")
+                .hasMessageContaining("crm")
+                .hasMessageNotContaining("s3cr3t")
+                .hasMessageNotContaining("topsecret")
+                .satisfies(e -> assertThat(((WebhookConfigurationException) e).getAction())
+                        .contains("webhooks.producer.destinations.crm.url"));
+
+        WebhookProducerProperties schemelessProps = propertiesWith("crm", "//crm.example.com/webhooks", HMAC_SECRET);
+
+        assertThatThrownBy(() -> validator(schemelessProps, allowAll).afterPropertiesSet())
+                .isInstanceOf(WebhookConfigurationException.class)
+                .hasMessageContaining("Unsupported URL scheme");
     }
 
     @Test
@@ -89,7 +113,7 @@ class DestinationValidatorTest {
     @Test
     void rejectsADestinationWhoseUrlHasNoHost() {
         // A URI with no authority/host (e.g. a bare path) cannot be delivered to.
-        WebhookProducerProperties properties = propertiesWith("crm", "file:///tmp/webhooks", HMAC_SECRET);
+        WebhookProducerProperties properties = propertiesWith("crm", "https:///tmp/webhooks", HMAC_SECRET);
 
         assertThatThrownBy(() -> validator(properties, allowAll).afterPropertiesSet())
                 .isInstanceOf(WebhookConfigurationException.class)

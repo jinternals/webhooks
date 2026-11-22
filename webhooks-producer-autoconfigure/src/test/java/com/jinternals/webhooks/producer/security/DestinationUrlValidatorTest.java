@@ -20,14 +20,30 @@ class DestinationUrlValidatorTest {
     }
 
     @Test
-    void allowListAcceptsAHostOnTheList() {
+    void allowListAcceptsHttpAndHttpsHostsOnTheList() {
         DestinationUrlValidator validator =
                 new AllowListDestinationUrlValidator(List.of("crm.example.com", "billing.example.com"));
 
         assertThatCode(() -> validator.validate("https://crm.example.com/webhooks"))
                 .doesNotThrowAnyException();
-        assertThatCode(() -> validator.validate("https://billing.example.com/webhooks"))
+        assertThatCode(() -> validator.validate("http://billing.example.com/webhooks"))
                 .doesNotThrowAnyException();
+        assertThatCode(() -> validator.validate("HTTP://crm.example.com/webhooks"))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void allowListRejectsUnsupportedOrMissingSchemeEvenForAllowedHost() {
+        DestinationUrlValidator validator = new AllowListDestinationUrlValidator(List.of("crm.example.com"));
+
+        assertThatThrownBy(() -> validator.validate("ftp://alice:s3cr3t@crm.example.com/file?token=secret"))
+                .isInstanceOf(WebhookDeliveryException.class)
+                .hasMessageContaining("Unsupported destination URL scheme")
+                .hasMessageNotContaining("s3cr3t")
+                .hasMessageNotContaining("secret");
+        assertThatThrownBy(() -> validator.validate("//crm.example.com/webhooks"))
+                .isInstanceOf(WebhookDeliveryException.class)
+                .hasMessageContaining("Unsupported destination URL scheme");
     }
 
     @Test
@@ -52,7 +68,7 @@ class DestinationUrlValidatorTest {
     void allowListRejectsAUrlWithNoHost() {
         DestinationUrlValidator validator = new AllowListDestinationUrlValidator(List.of("crm.example.com"));
 
-        assertThatThrownBy(() -> validator.validate("file:///etc/passwd"))
+        assertThatThrownBy(() -> validator.validate("https:///etc/passwd"))
                 .isInstanceOf(WebhookDeliveryException.class)
                 .hasMessageContaining("no host");
     }
