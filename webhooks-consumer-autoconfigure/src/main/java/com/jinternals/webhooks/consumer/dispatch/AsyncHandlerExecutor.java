@@ -1,19 +1,14 @@
 package com.jinternals.webhooks.consumer.dispatch;
 
-import java.time.Duration;
-import java.util.Map;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.Future;
-import java.util.concurrent.FutureTask;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.ScheduledThreadPoolExecutor;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
+
+import java.time.Duration;
+import java.util.Map;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * {@link HandlerExecutor} that runs handlers <strong>off the request thread</strong> on a bounded pool
@@ -81,7 +76,14 @@ public class AsyncHandlerExecutor implements HandlerExecutor, AutoCloseable {
                 TimeUnit.SECONDS,
                 new ArrayBlockingQueue<>(queueCapacity),
                 r -> namedDaemon(r, "webhook-handler-" + n.incrementAndGet()),
-                new ThreadPoolExecutor.CallerRunsPolicy()); // full queue -> run on caller (back-pressure)
+                (r, p) -> {
+                    if (p.isShutdown()) {
+                        // Unlike JDK CallerRunsPolicy (which silently discards tasks when shut down!), fail
+                        // fast BEFORE the HTTP 204 is returned so the sender retries on a healthy instance.
+                        throw new RejectedExecutionException("Async webhook executor is shut down");
+                    }
+                    r.run(); // full queue -> run on caller (back-pressure)
+                });
         this.timeoutScheduler = new ScheduledThreadPoolExecutor(1, r -> namedDaemon(r, "webhook-handler-timeout"));
         // When a fast handler finishes before its timeout we cancel the scheduled cancel (see execute()); this
         // makes that cancellation actually evict the task from the delay queue at once, so dead cancels for
@@ -109,9 +111,15 @@ public class AsyncHandlerExecutor implements HandlerExecutor, AutoCloseable {
         // the caller-runs execution of the very same task.
         NamedTask task =
                 new NamedTask(type, () -> runThenClearTimeout(submitterContext, type, handlerCall, scheduledCancel));
-        scheduledCancel.set(timeoutScheduler.schedule(
-                () -> cancelIfRunning(type, task), timeout.toMillis(), TimeUnit.MILLISECONDS));
-        pool.execute(task);
+        ScheduledFuture<?> cancelFuture =
+                timeoutScheduler.schedule(() -> cancelIfRunning(type, task), timeout.toMillis(), TimeUnit.MILLISECONDS);
+        scheduledCancel.set(cancelFuture);
+        try {
+            pool.execute(task);
+        } catch (RuntimeException e) {
+            cancelFuture.cancel(false);
+            throw e;
+        }
         // (#1) Interrupt hygiene on the CallerRunsPolicy path. When the queue was full the task ran
         // synchronously on THIS (request/servlet) thread; a timeout firing in that window calls
         // future.cancel(true), which interrupts THIS thread, and a well-behaved handler re-asserts the
@@ -262,7 +270,13 @@ public class AsyncHandlerExecutor implements HandlerExecutor, AutoCloseable {
 
     private void abortRemainingTasks() {
         for (Runnable unexecuted : pool.shutdownNow()) {
-            String droppedType = ((NamedTask) unexecuted).type;
+            NamedTask task = (NamedTask) unexecuted;
+            if (task.isCancelled()) {
+                // Already timed out in the queue and reported via cancelIfRunning -> onHandlerTimeout; skip so
+                // it is not reported a second time as a shutdown failure.
+                continue;
+            }
+            String droppedType = task.type;
             IllegalStateException dropped =
                     new IllegalStateException("Async webhook executor shut down before queued handler could run");
             log.error(

@@ -1,8 +1,9 @@
 package com.jinternals.webhooks.consumer.dispatch;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 import com.jinternals.webhooks.consumer.support.LogCapture;
+import org.junit.jupiter.api.Test;
+import org.slf4j.MDC;
+
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -13,8 +14,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import org.junit.jupiter.api.Test;
-import org.slf4j.MDC;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 class HandlerExecutorTest {
 
@@ -749,5 +750,84 @@ class HandlerExecutorTest {
         });
         watcher.setDaemon(true);
         watcher.start();
+    }
+
+    @Test
+    void rejectsSubmissionDuringShutdownAndEvictsScheduledTimeoutInsteadOfSilentlyDropping() throws Exception {
+        // JDK's CallerRunsPolicy silently ignores tasks when pool.isShutdown() is true. Our policy must
+        // instead throw RejectedExecutionException (so the controller returns 500 before 204 and the sender
+        // retries) AND cancel the scheduled timeout so dead cancel tasks do not linger in timeoutScheduler.
+        AsyncHandlerExecutor executor = new AsyncHandlerExecutor(1, 1, 10, Duration.ofSeconds(60));
+        CountDownLatch workerStarted = new CountDownLatch(1);
+        CountDownLatch releaseWorker = new CountDownLatch(1);
+
+        executor.execute("in.flight", () -> {
+            workerStarted.countDown();
+            try {
+                releaseWorker.await(5, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        });
+        assertThat(workerStarted.await(2, TimeUnit.SECONDS)).isTrue();
+
+        java.util.concurrent.ThreadPoolExecutor internalPool = (java.util.concurrent.ThreadPoolExecutor)
+                org.springframework.test.util.ReflectionTestUtils.getField(executor, "pool");
+        java.util.concurrent.CompletableFuture<Void> closing =
+                java.util.concurrent.CompletableFuture.runAsync(executor::close);
+        long deadline = System.currentTimeMillis() + 2_000;
+        while (!internalPool.isShutdown() && System.currentTimeMillis() < deadline) {
+            Thread.sleep(5);
+        }
+        assertThat(internalPool.isShutdown()).isTrue();
+
+        try {
+            int queueBefore = timeoutSchedulerOf(executor).getQueue().size();
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> executor.execute("late.event", () -> {}))
+                    .isInstanceOf(java.util.concurrent.RejectedExecutionException.class)
+                    .hasMessageContaining("shut down");
+            // The late task's scheduled timeout was cancelled immediately (removeOnCancelPolicy=true).
+            assertThat(timeoutSchedulerOf(executor).getQueue().size()).isEqualTo(queueBefore);
+        } finally {
+            releaseWorker.countDown();
+            closing.get(5, TimeUnit.SECONDS);
+        }
+    }
+
+    @Test
+    void closeDoesNotDoubleReportQueuedTasksThatAlreadyTimedOut() throws Exception {
+        RecordingFailureListener listener = new RecordingFailureListener();
+        java.util.concurrent.atomic.AtomicBoolean keepBusy = new java.util.concurrent.atomic.AtomicBoolean(true);
+        CountDownLatch workerStarted = new CountDownLatch(1);
+
+        AsyncHandlerExecutor executor = new AsyncHandlerExecutor(1, 1, 10, Duration.ofMillis(40), listener);
+        executor.execute("stuck.worker", () -> {
+            workerStarted.countDown();
+            // Ignore interruption briefly so the queued task stays in ArrayBlockingQueue until close().
+            while (keepBusy.get()) {
+                java.util.concurrent.locks.LockSupport.parkNanos(5_000_000L);
+            }
+        });
+        assertThat(workerStarted.await(2, TimeUnit.SECONDS)).isTrue();
+        executor.execute("queued.timeout", () -> {});
+
+        // Wait until BOTH stuck.worker and queued.timeout have fired their 40ms timeout.
+        long deadline = System.currentTimeMillis() + 2_000;
+        while (listener.timedOutTypes.size() < 2 && System.currentTimeMillis() < deadline) {
+            Thread.sleep(10);
+        }
+        assertThat(listener.timedOutTypes).contains("queued.timeout");
+
+        // Interrupt close() so awaitTermination aborts immediately and shutdownNow() drains queued.timeout.
+        Thread.currentThread().interrupt();
+        try {
+            executor.close();
+        } finally {
+            Thread.interrupted();
+            keepBusy.set(false);
+        }
+
+        // queued.timeout was already reported via onHandlerTimeout — must NOT also appear in failedTypes!
+        assertThat(listener.failedTypes).doesNotContain("queued.timeout");
     }
 }
