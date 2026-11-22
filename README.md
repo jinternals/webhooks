@@ -43,6 +43,7 @@ timestamp-based replay window. The replay window is **disabled by default** and 
 - [Running the samples](#running-the-samples)
 - [Quality gate](#quality-gate)
 - [Further reading](#further-reading)
+- [License](#license)
 
 ## Design scope
 
@@ -731,3 +732,12 @@ It fails the build on a high/critical finding (CVSS ≥ 7). See [SPEC §19e](./d
   [Reliability](./docs/guides/reliability.md) and [Observability](./docs/guides/observability.md) guides.
 - [`STANDARD_WEBHOOKS.md`](./docs/reference/STANDARD_WEBHOOKS.md) — the protocol reference (headers, signature scheme,
   payloads).
+
+## License
+
+Copyright 2026 Mradul Pandey.
+
+Licensed under the [Apache License, Version 2.0](./LICENSE). You may not use this project except in
+compliance with the License. Unless required by applicable law or agreed to in writing, software distributed
+under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+express or implied.
