@@ -186,10 +186,19 @@ public class RetryingWebhookTransport implements WebhookTransport {
         long backoff = backoffForAttempt(attempt);
         Optional<Duration> retryAfter = e.getRetryAfter();
         if (retryAfter.isPresent()) {
-            long requested = Math.min(retryAfter.get().toMillis(), maxBackoffMillis);
-            return Math.max(backoff, requested);
+            return Math.max(backoff, cappedRetryAfterMillis(retryAfter.get()));
         }
         return backoff;
+    }
+
+    private long cappedRetryAfterMillis(Duration retryAfter) {
+        try {
+            return Math.min(retryAfter.toMillis(), maxBackoffMillis);
+        } catch (ArithmeticException overflow) {
+            // A positive Retry-After whose seconds*1000 overflows long (e.g. Retry-After: 9999999999999999)
+            // is guaranteed above maxBackoffMillis; clamp to the ceiling instead of crashing the retry loop.
+            return maxBackoffMillis;
+        }
     }
 
     /** Exponential backoff (initial * 2^(attempt-1)), capped at maxBackoff, then jitter applied. */

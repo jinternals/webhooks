@@ -134,6 +134,20 @@ class RetryingWebhookTransportTest {
     }
 
     @Test
+    void clampsAnOverflowingRetryAfterToMaxBackoffWithoutThrowingArithmeticException() {
+        // Duration.ofSeconds(Long.MAX_VALUE).toMillis() throws ArithmeticException; cappedRetryAfterMillis
+        // must catch overflow and clamp to max-backoff (1000ms) rather than crashing out of send().
+        AtomicInteger calls = new AtomicInteger();
+        WebhookDeliveryException ex =
+                new WebhookDeliveryException("slow down", 503, Duration.ofSeconds(Long.MAX_VALUE));
+        WebhookTransport delegate = failing(1, ex, calls);
+
+        retrying(delegate, retry(2)).send(URL, HEADERS, BODY);
+
+        assertThat(sleeps).containsExactly(1000L);
+    }
+
+    @Test
     void doesNotRetryA4xxAndFailsImmediately() {
         AtomicInteger calls = new AtomicInteger();
         WebhookTransport delegate = failing(99, new WebhookDeliveryException("bad request", 400), calls);

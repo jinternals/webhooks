@@ -445,10 +445,85 @@ class HandlerExecutorTest {
     }
 
     @Test
-    void closeIsIdempotentAndStopsTheExecutor() {
-        AsyncHandlerExecutor executor = new AsyncHandlerExecutor(1, 1, 1, Duration.ofSeconds(1));
+    void closeIsIdempotentAndStopsTheExecutor() throws Exception {
+        AsyncHandlerExecutor executor = new AsyncHandlerExecutor(1, 1, 1, Duration.ofSeconds(5));
+        long start = System.nanoTime();
         executor.close();
+        long elapsedMs = (System.nanoTime() - start) / 1_000_000;
+        // Killing "remove pool.shutdown()": without shutdown(), awaitTermination(5s) would block for 5s on an
+        // idle pool instead of returning immediately.
+        assertThat(elapsedMs).isLessThan(1_000);
+        assertThat(timeoutSchedulerOf(executor).isShutdown()).isTrue();
         executor.close(); // second close must not throw
+    }
+
+    @Test
+    void closeDrainsInFlightAndQueuedHandlersBeforeReturning() throws Exception {
+        // Already-accepted (204) handlers must be allowed to finish during close() rather than immediately
+        // interrupted/discarded by shutdownNow(). Kills "remove pool.awaitTermination(...)".
+        RecordingFailureListener listener = new RecordingFailureListener();
+        AsyncHandlerExecutor executor = new AsyncHandlerExecutor(1, 1, 10, Duration.ofSeconds(5), listener);
+        CountDownLatch workerStarted = new CountDownLatch(1);
+        AtomicInteger completed = new AtomicInteger();
+
+        executor.execute("in.flight", () -> {
+            workerStarted.countDown();
+            try {
+                Thread.sleep(50);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+            completed.incrementAndGet();
+        });
+        assertThat(workerStarted.await(2, TimeUnit.SECONDS)).isTrue();
+        executor.execute("queued.event", completed::incrementAndGet); // sits in queue behind the busy worker
+
+        executor.close();
+
+        assertThat(completed.get()).isEqualTo(2);
+        assertThat(listener.failedTypes).isEmpty();
+        assertThat(listener.timedOutTypes).isEmpty();
+    }
+
+    @Test
+    void closeRestoresInterruptFlagAndReportsDroppedQueuedHandlersToFailureListener() throws Exception {
+        // When close() is interrupted (or the drain window expires) while tasks remain in the queue, those
+        // unexecuted tasks must be logged and reported to HandlerFailureListener rather than silently dropped,
+        // and the caller's interrupt flag must be restored.
+        RecordingFailureListener listener = new RecordingFailureListener();
+        CountDownLatch releaseWorker = new CountDownLatch(1);
+        CountDownLatch workerStarted = new CountDownLatch(1);
+        try (LogCapture logs = LogCapture.forClass(AsyncHandlerExecutor.class)) {
+            AsyncHandlerExecutor executor = new AsyncHandlerExecutor(1, 1, 10, Duration.ofSeconds(60), listener);
+            executor.execute("busy.event", () -> {
+                workerStarted.countDown();
+                try {
+                    releaseWorker.await(5, TimeUnit.SECONDS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            });
+            assertThat(workerStarted.await(2, TimeUnit.SECONDS)).isTrue();
+            executor.execute("dropped.event", () -> {}); // queued behind busy worker
+
+            Thread.currentThread().interrupt();
+            try {
+                executor.close();
+                assertThat(Thread.currentThread().isInterrupted()).isTrue();
+            } finally {
+                Thread.interrupted();
+                releaseWorker.countDown();
+            }
+
+            assertThat(listener.failedTypes).containsExactly("dropped.event");
+            assertThat(listener.causes).hasSize(1);
+            assertThat(listener.causes.get(0))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("shut down before queued handler could run");
+            assertThat(logs.formattedMessages())
+                    .anyMatch(m -> m.contains("dropped.event") && m.contains("dropped on shutdown"));
+        }
     }
 
     @Test

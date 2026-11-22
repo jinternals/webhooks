@@ -107,8 +107,8 @@ public class AsyncHandlerExecutor implements HandlerExecutor, AutoCloseable {
         // returned, a stuck caller-run handler would never reach that line and would never be interrupted.
         // Scheduling against the task reference first means the timeout is in effect for both the pooled and
         // the caller-runs execution of the very same task.
-        FutureTask<?> task =
-                new FutureTask<>(() -> runThenClearTimeout(submitterContext, type, handlerCall, scheduledCancel), null);
+        NamedTask task =
+                new NamedTask(type, () -> runThenClearTimeout(submitterContext, type, handlerCall, scheduledCancel));
         scheduledCancel.set(timeoutScheduler.schedule(
                 () -> cancelIfRunning(type, task), timeout.toMillis(), TimeUnit.MILLISECONDS));
         pool.execute(task);
@@ -241,9 +241,45 @@ public class AsyncHandlerExecutor implements HandlerExecutor, AutoCloseable {
         return t;
     }
 
+    /**
+     * Gracefully drain in-flight and queued handlers up to {@link #timeout}, since every submitted task was
+     * already acknowledged with {@code 204} and will not be retried by the sender. Any queued task that still
+     * could not run before the drain window expired (or before the closing thread was interrupted) is logged
+     * and routed to {@link #failureListener} so it is never silently dropped.
+     */
     @Override
     public void close() {
-        pool.shutdownNow();
-        timeoutScheduler.shutdownNow();
+        pool.shutdown();
+        try {
+            pool.awaitTermination(timeout.toMillis(), TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } finally {
+            abortRemainingTasks();
+            timeoutScheduler.shutdownNow();
+        }
+    }
+
+    private void abortRemainingTasks() {
+        for (Runnable unexecuted : pool.shutdownNow()) {
+            String droppedType = ((NamedTask) unexecuted).type;
+            IllegalStateException dropped =
+                    new IllegalStateException("Async webhook executor shut down before queued handler could run");
+            log.error(
+                    "Async webhook handler for type '{}' was dropped on shutdown; "
+                            + "the delivery was already acknowledged with 204",
+                    droppedType,
+                    dropped);
+            notifyFailed(droppedType, dropped);
+        }
+    }
+
+    private static final class NamedTask extends FutureTask<Void> {
+        final String type;
+
+        NamedTask(String type, Runnable runnable) {
+            super(runnable, null);
+            this.type = type;
+        }
     }
 }
