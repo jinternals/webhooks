@@ -70,4 +70,20 @@ class TimestampValidatorTest {
 
         assertThatCode(() -> window.validate(now)).doesNotThrowAnyException();
     }
+
+    @Test
+    void clockSkewDoesNotOverflowOnHugeToleranceOrExtremeClock() {
+        // Without saturating arithmetic, NOW + Long.MAX_VALUE wraps negative and rejects a fresh timestamp as
+        // "too new", and (-10) - Long.MAX_VALUE wraps positive and rejects a fresh timestamp as "too old".
+        ClockSkewTimestampValidator positiveClock =
+                new ClockSkewTimestampValidator(Duration.ofSeconds(Long.MAX_VALUE), FIXED);
+        assertThatCode(() -> positiveClock.validate(NOW)).doesNotThrowAnyException();
+        assertThatCode(() -> positiveClock.validate(Long.MAX_VALUE)).doesNotThrowAnyException();
+
+        Clock negativeClock = Clock.fixed(Instant.ofEpochSecond(-10L), ZoneOffset.UTC);
+        ClockSkewTimestampValidator negativeClockWindow =
+                new ClockSkewTimestampValidator(Duration.ofSeconds(Long.MAX_VALUE), negativeClock);
+        assertThatCode(() -> negativeClockWindow.validate(-10L)).doesNotThrowAnyException();
+        assertThatCode(() -> negativeClockWindow.validate(Long.MIN_VALUE)).doesNotThrowAnyException();
+    }
 }

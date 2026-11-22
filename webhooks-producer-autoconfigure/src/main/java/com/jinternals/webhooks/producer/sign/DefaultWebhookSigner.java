@@ -26,6 +26,11 @@ public class DefaultWebhookSigner implements WebhookSigner {
 
     @Override
     public String sign(String secret, String endpointId, String messageId, long timestamp, String payload) {
+        if (Ed25519Keys.isPublicKey(secret)) {
+            throw new IllegalArgumentException(
+                    "Destination is configured with an Ed25519 public key (whpk_); a producer must sign with the "
+                            + "private key (whsk_)");
+        }
         WebhookSigner delegate = Ed25519Keys.isPrivateKey(secret) ? ed25519 : hmac;
         return delegate.sign(secret, endpointId, messageId, timestamp, payload);
     }

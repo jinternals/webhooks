@@ -134,4 +134,47 @@ class DefaultWebhookVerifierTest {
                 .isInstanceOf(com.standardwebhooks.exceptions.WebhookVerificationException.class)
                 .hasMessageContaining("stale");
     }
+
+    @Test
+    void failsClosedWhenAV2aKeyIsUsedWithoutAnEndpointId() {
+        // Regression guard: DefaultWebhookVerifier calls ed25519.matches(...) per secret; if startup validation
+        // was disabled or a dynamic SecretProvider returned a whpk_ key with no endpoint-id, it must fail closed
+        // with NO_SECRET rather than verifying against "null.<msgId>...".
+        String id = "msg_no_ep";
+        String ts = Signing.now();
+        String body = "{\"a\":1}";
+        String forgedForLiteralNull = Signing.signAsymmetric(Signing.PRIVATE_KEY, "null", id, ts, body);
+
+        assertThatThrownBy(() ->
+                        verifier.verify(List.of(Signing.PUBLIC_KEY), null, body, headers(id, ts, forgedForLiteralNull)))
+                .isInstanceOf(WebhookVerificationFailure.class)
+                .hasMessageContaining("endpoint-id is required")
+                .satisfies(e -> assertThat(((WebhookVerificationFailure) e).reason())
+                        .isEqualTo(VerificationFailureReason.NO_SECRET));
+    }
+
+    @Test
+    void failsClosedWhenAV2aKeyIsUsedWithADottedEndpointId() {
+        String id = "msg_dot_ep";
+        String ts = Signing.now();
+        String body = "{\"a\":1}";
+        String sig = Signing.signAsymmetric(Signing.PRIVATE_KEY, "ep.bad", id, ts, body);
+
+        assertThatThrownBy(() -> verifier.verify(List.of(Signing.PUBLIC_KEY), "ep.bad", body, headers(id, ts, sig)))
+                .isInstanceOf(WebhookVerificationFailure.class)
+                .hasMessageContaining("must not contain '.'")
+                .satisfies(e -> assertThat(((WebhookVerificationFailure) e).reason())
+                        .isEqualTo(VerificationFailureReason.NO_SECRET));
+    }
+
+    @Test
+    void rejectsAProducerPrivateKeyConfiguredOnAConsumerEndpoint() {
+        String id = "msg_priv";
+        String ts = Signing.now();
+
+        assertThatThrownBy(() -> verifier.verify(
+                        List.of(Signing.PRIVATE_KEY), Signing.ENDPOINT_ID, "{}", headers(id, ts, "v2a,x")))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("private key (whsk_)");
+    }
 }

@@ -55,7 +55,13 @@ public class DefaultWebhookVerifier implements WebhookVerifier {
     }
 
     /** Route one secret to the scheme its prefix selects. */
-    private boolean matches(String secret, String endpointId, String rawBody, WebhookSignatureHeaders parsed) {
+    private boolean matches(String secret, String endpointId, String rawBody, WebhookSignatureHeaders parsed)
+            throws WebhookVerificationFailure {
+        if (Ed25519Keys.isPrivateKey(secret)) {
+            throw new IllegalStateException(
+                    "Endpoint is configured with an Ed25519 private key (whsk_); a consumer must verify with the "
+                            + "public key (whpk_)");
+        }
         if (Ed25519Keys.isPublicKey(secret)) {
             return ed25519.matches(secret, endpointId, rawBody, parsed);
         }

@@ -93,6 +93,21 @@ class HmacWebhookVerifierTest {
     }
 
     @Test
+    void rejectsATrailingCommaAppendedToAValidV1Signature() {
+        // split(",", 2) keeps ",extra" attached to parts[1], so constant-time comparison rejects the tampered
+        // token instead of ignoring everything after a second comma.
+        String id = "msg_trailing";
+        String ts = Signing.now();
+        String body = "{\"a\":1}";
+        String valid = Signing.sign(Signing.SECRET, id, ts, body);
+
+        assertThatThrownBy(
+                        () -> verifier.verify(List.of(Signing.SECRET), null, body, headers(id, ts, valid + ",extra")))
+                .isInstanceOf(WebhookVerificationException.class)
+                .hasMessageContaining("No matching signature");
+    }
+
+    @Test
     void rejectsAnOtherwiseValidSignatureCarryingTheWrongVersionPrefix() {
         // Take a signature whose base64 is genuinely correct for this payload, but relabel its version
         // as v2. A correct version check must reject it; this pins the "v1".equals guard (without it, the

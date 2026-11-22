@@ -191,6 +191,28 @@ class Ed25519WebhookVerifierTest {
     }
 
     @Test
+    void failsWhenEndpointIdContainsADot() {
+        assertThatThrownBy(
+                        () -> verifier.verify(List.of(Signing.PUBLIC_KEY), "ep.bad", "{}", headers("m", "1", "v2a,x")))
+                .isInstanceOf(WebhookVerificationFailure.class)
+                .hasMessageContaining("must not contain '.'");
+    }
+
+    @Test
+    void rejectsATrailingCommaAppendedToAValidV2aSignature() {
+        // split(",", 2) keeps ",extra" attached to parts[1], so Base64/signature verification rejects it instead
+        // of silently ignoring trailing segments after a second comma.
+        String id = "msg_trailing";
+        String ts = Signing.now();
+        String body = "{\"a\":1}";
+        String valid = Signing.signAsymmetric(Signing.PRIVATE_KEY, Signing.ENDPOINT_ID, id, ts, body);
+
+        assertThatThrownBy(() -> verifier.verify(
+                        List.of(Signing.PUBLIC_KEY), Signing.ENDPOINT_ID, body, headers(id, ts, valid + ",extra")))
+                .isInstanceOf(WebhookVerificationFailure.class);
+    }
+
+    @Test
     void failsWhenRequiredHeadersAreMissing() {
         assertThatThrownBy(() -> verifier.verify(List.of(Signing.PUBLIC_KEY), Signing.ENDPOINT_ID, "{}", Map.of()))
                 .isInstanceOf(WebhookVerificationFailure.class)

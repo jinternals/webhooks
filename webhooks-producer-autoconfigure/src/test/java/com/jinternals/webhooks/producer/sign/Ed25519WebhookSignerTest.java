@@ -83,6 +83,13 @@ class Ed25519WebhookSignerTest {
     }
 
     @Test
+    void rejectsAnEndpointIdContainingADot() {
+        assertThatThrownBy(() -> signer.sign(PRIVATE_KEY, "ep.bad", MSG_ID, TIMESTAMP, PAYLOAD))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("must not contain '.'");
+    }
+
+    @Test
     void rejectsAMalformedPrivateKey() {
         assertThatThrownBy(() -> signer.sign("whsk_not valid base64!!!", ENDPOINT_ID, MSG_ID, TIMESTAMP, PAYLOAD))
                 .isInstanceOf(IllegalArgumentException.class);

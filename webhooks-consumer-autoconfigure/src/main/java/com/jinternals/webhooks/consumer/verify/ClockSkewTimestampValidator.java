@@ -37,11 +37,27 @@ public class ClockSkewTimestampValidator implements TimestampValidator {
     @Override
     public void validate(long timestampSeconds) throws WebhookVerificationException {
         long now = clock.millis() / 1000L;
-        if (timestampSeconds < now - toleranceSeconds) {
+        if (timestampSeconds < saturatingSubtract(now, toleranceSeconds)) {
             throw new WebhookVerificationFailure(VerificationFailureReason.TIMESTAMP, "Message timestamp too old");
         }
-        if (timestampSeconds > now + toleranceSeconds) {
+        if (timestampSeconds > saturatingAdd(now, toleranceSeconds)) {
             throw new WebhookVerificationFailure(VerificationFailureReason.TIMESTAMP, "Message timestamp too new");
+        }
+    }
+
+    private static long saturatingSubtract(long a, long b) {
+        try {
+            return Math.subtractExact(a, b);
+        } catch (ArithmeticException overflow) {
+            return Long.MIN_VALUE;
+        }
+    }
+
+    private static long saturatingAdd(long a, long b) {
+        try {
+            return Math.addExact(a, b);
+        } catch (ArithmeticException overflow) {
+            return Long.MAX_VALUE;
         }
     }
 }

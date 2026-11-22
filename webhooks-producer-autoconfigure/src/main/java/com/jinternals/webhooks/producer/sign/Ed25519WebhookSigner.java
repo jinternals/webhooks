@@ -28,6 +28,9 @@ public class Ed25519WebhookSigner implements WebhookSigner {
             throw new IllegalArgumentException(
                     "endpoint-id is required for a v2a (whsk_) signing key but was not configured for this destination");
         }
+        if (endpointId.contains(".")) {
+            throw new IllegalArgumentException("endpoint-id must not contain '.' — it is the signed-content delimiter");
+        }
         PrivateKey privateKey = Ed25519Keys.decodePrivateKey(secret);
         String signature = Ed25519Signatures.sign(privateKey, endpointId, messageId, timestamp, payload);
         return Ed25519Signatures.VERSION + "," + signature;

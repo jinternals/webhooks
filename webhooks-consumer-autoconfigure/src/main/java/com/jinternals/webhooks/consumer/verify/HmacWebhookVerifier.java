@@ -3,6 +3,7 @@ package com.jinternals.webhooks.consumer.verify;
 import com.standardwebhooks.Webhook;
 import com.standardwebhooks.exceptions.WebhookSigningException;
 import com.standardwebhooks.exceptions.WebhookVerificationException;
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.List;
 import java.util.Map;
@@ -70,11 +71,12 @@ public class HmacWebhookVerifier implements WebhookVerifier {
     boolean matches(String secret, String rawBody, WebhookSignatureHeaders parsed) {
         String expected = expectedSignature(secret, parsed.msgId, parsed.timestamp, rawBody);
         for (String versioned : parsed.signature.split(" ")) {
-            String[] parts = versioned.split(",");
+            String[] parts = versioned.split(",", 2);
             if (parts.length < 2 || !"v1".equals(parts[0])) {
                 continue;
             }
-            if (MessageDigest.isEqual(parts[1].getBytes(), expected.getBytes())) {
+            if (MessageDigest.isEqual(
+                    parts[1].getBytes(StandardCharsets.UTF_8), expected.getBytes(StandardCharsets.UTF_8))) {
                 return true;
             }
         }

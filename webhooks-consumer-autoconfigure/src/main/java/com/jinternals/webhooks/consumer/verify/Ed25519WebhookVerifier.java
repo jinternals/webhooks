@@ -40,7 +40,6 @@ public class Ed25519WebhookVerifier implements WebhookVerifier {
             throw new WebhookVerificationFailure(
                     VerificationFailureReason.NO_SECRET, "No webhook secret configured for this endpoint");
         }
-        requireEndpointId(endpointId);
 
         WebhookSignatureHeaders parsed = WebhookSignatureHeaders.from(headers);
         timestampValidator.validate(parsed.timestamp);
@@ -56,12 +55,14 @@ public class Ed25519WebhookVerifier implements WebhookVerifier {
     /**
      * Whether this {@code whpk_} public key verifies any {@code v2a} signature in the header for the content.
      * Package-private so {@link DefaultWebhookVerifier} can reuse it per-secret without re-running the shared
-     * header/timestamp skeleton.
+     * header/timestamp skeleton, while still enforcing {@link #requireValidEndpointId(String)}.
      */
-    boolean matches(String secret, String endpointId, String rawBody, WebhookSignatureHeaders parsed) {
+    boolean matches(String secret, String endpointId, String rawBody, WebhookSignatureHeaders parsed)
+            throws WebhookVerificationFailure {
+        requireValidEndpointId(endpointId);
         PublicKey publicKey = Ed25519Keys.decodePublicKey(secret);
         for (String versioned : parsed.signature.split(" ")) {
-            String[] parts = versioned.split(",");
+            String[] parts = versioned.split(",", 2);
             if (parts.length < 2 || !Ed25519Signatures.VERSION.equals(parts[0])) {
                 continue;
             }
@@ -72,13 +73,21 @@ public class Ed25519WebhookVerifier implements WebhookVerifier {
         return false;
     }
 
-    /** A {@code v2a} verification cannot proceed without the endpoint id that is part of the signed content. */
-    private static void requireEndpointId(String endpointId) throws WebhookVerificationFailure {
+    /**
+     * A {@code v2a} verification cannot proceed without a valid, dot-free endpoint id that is part of the
+     * signed content.
+     */
+    private static void requireValidEndpointId(String endpointId) throws WebhookVerificationFailure {
         if (endpointId == null || endpointId.isBlank()) {
             throw new WebhookVerificationFailure(
                     VerificationFailureReason.NO_SECRET,
                     "endpoint-id is required to verify a v2a (whpk_) signature but was not configured for this "
                             + "endpoint");
+        }
+        if (endpointId.contains(".")) {
+            throw new WebhookVerificationFailure(
+                    VerificationFailureReason.NO_SECRET,
+                    "endpoint-id must not contain '.' — it is the signed-content delimiter");
         }
     }
 }

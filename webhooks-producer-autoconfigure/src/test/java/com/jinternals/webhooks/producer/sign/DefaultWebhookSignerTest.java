@@ -54,4 +54,13 @@ class DefaultWebhookSignerTest {
     void reportsSigningEnabled() {
         assertThat(signer.isEnabled()).isTrue();
     }
+
+    @Test
+    void rejectsAConsumerPublicKeyConfiguredOnAProducerDestination() {
+        String publicKey = "whpk_uWKK13PfwqyOgrqT0OrWKcS2uVD7e89+oUKnkoPjx7w=";
+
+        assertThatThrownBy(() -> signer.sign(publicKey, ENDPOINT_ID, "msg_1", 1700000000L, "{}"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("public key (whpk_)");
+    }
 }
