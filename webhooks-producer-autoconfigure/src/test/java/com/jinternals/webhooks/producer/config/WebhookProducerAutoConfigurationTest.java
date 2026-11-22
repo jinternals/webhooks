@@ -161,6 +161,11 @@ class WebhookProducerAutoConfigurationTest {
         assertThatCode(() -> listener.onDeliveryFailed(failure)).doesNotThrowAnyException();
     }
 
+    private static org.springframework.beans.factory.ObjectProvider<java.time.Clock> emptyClockProvider() {
+        return new org.springframework.beans.factory.support.DefaultListableBeanFactory()
+                .getBeanProvider(java.time.Clock.class);
+    }
+
     @Test
     void transportEnforcesTheUrlValidatorBeforeSending() {
         // The produced transport must be the retrying wrapper wired with the URL validator: delivering to a
@@ -172,7 +177,12 @@ class WebhookProducerAutoConfigurationTest {
         DestinationUrlValidator denyAll = new AllowListDestinationUrlValidator(List.of("only.example.com"));
 
         WebhookTransport transport = autoConfig.webhookTransport(
-                restClient, denyAll, new NoOpWebhookDeliveryListener(), new WebhookProducerProperties(), List.of());
+                restClient,
+                denyAll,
+                new NoOpWebhookDeliveryListener(),
+                new WebhookProducerProperties(),
+                List.of(),
+                emptyClockProvider());
 
         assertThatThrownBy(() -> transport.send("https://evil.example.com/webhooks", Map.of(), "{}"))
                 .isInstanceOf(WebhookDeliveryException.class);
@@ -211,7 +221,8 @@ class WebhookProducerAutoConfigurationTest {
                     new AllowAllDestinationUrlValidator(),
                     new NoOpWebhookDeliveryListener(),
                     properties(),
-                    List.of(addBearer));
+                    List.of(addBearer),
+                    emptyClockProvider());
 
             transport.send("http://127.0.0.1:" + port + "/webhooks", Map.of("webhook-id", List.of("msg_1")), "{}");
 
@@ -271,11 +282,70 @@ class WebhookProducerAutoConfigurationTest {
                 new DefaultWebhookSigner(),
                 mock(WebhookTransport.class),
                 secretProvider,
-                new WebhookProducerProperties());
+                new WebhookProducerProperties(),
+                emptyClockProvider());
 
         assertThatThrownBy(() -> publisher.publish("not-configured", new Object()))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Unknown webhook destination");
+    }
+
+    @com.jinternals.webhooks.core.annotations.WebhookType("contact.created")
+    static class SampleEvent {
+        public String id = "1";
+    }
+
+    @Test
+    void publisherAndTransportDefaultClockFallbacksWorkEndToEnd() {
+        // Exercises BOTH Clock::systemUTC fallbacks:
+        // 1) publisher stamps envelope + headers with the fallback clock;
+        // 2) transport parses an HTTP-date Retry-After header against the fallback clock.
+        WebhookProducerProperties props = properties();
+        Destination crm = new Destination();
+        crm.setUrl("https://crm.example.com/webhooks");
+        crm.setSecret("whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw");
+        props.getDestinations().put("crm", crm);
+
+        WebhookTransport recordingTransport = mock(WebhookTransport.class);
+        WebhookPublisher publisher = autoConfig.webhookPublisher(
+                new ObjectMapper(),
+                new DefaultWebhookSigner(),
+                recordingTransport,
+                autoConfig.destinationSecretProvider(),
+                props,
+                emptyClockProvider());
+        publisher.publish("crm", new SampleEvent());
+        org.mockito.Mockito.verify(recordingTransport)
+                .send(
+                        org.mockito.ArgumentMatchers.eq("https://crm.example.com/webhooks"),
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.anyString());
+
+        // Exercise transport's Clock::systemUTC fallback via an HTTP-date Retry-After response.
+        WebhookProducerProperties oneAttempt = properties();
+        oneAttempt.getRetry().setMaxAttempts(1);
+        RestClient dateFailingClient = RestClient.builder()
+                .requestFactory(
+                        (uri, method) -> new org.springframework.mock.http.client.MockClientHttpRequest(method, uri) {
+                            @Override
+                            protected org.springframework.http.client.ClientHttpResponse executeInternal() {
+                                org.springframework.mock.http.client.MockClientHttpResponse resp =
+                                        new org.springframework.mock.http.client.MockClientHttpResponse(
+                                                new byte[0], org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE);
+                                resp.getHeaders().set("Retry-After", "Wed, 21 Oct 2015 07:28:00 GMT");
+                                return resp;
+                            }
+                        })
+                .build();
+        WebhookTransport transport = autoConfig.webhookTransport(
+                dateFailingClient,
+                new AllowAllDestinationUrlValidator(),
+                new NoOpWebhookDeliveryListener(),
+                oneAttempt,
+                List.of(),
+                emptyClockProvider());
+        assertThatThrownBy(() -> transport.send("https://crm.example.com/webhooks", Map.of(), "{}"))
+                .isInstanceOf(WebhookDeliveryException.class);
     }
 
     @Test

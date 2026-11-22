@@ -21,7 +21,9 @@ import com.jinternals.webhooks.producer.transport.WebhookTransport;
 import io.micrometer.observation.ObservationRegistry;
 import io.micrometer.observation.aop.ObservedAspect;
 import java.net.http.HttpClient;
+import java.time.Clock;
 import java.util.List;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -121,8 +123,10 @@ public class WebhookProducerAutoConfiguration {
             DestinationUrlValidator urlValidator,
             WebhookDeliveryListener deliveryListener,
             WebhookProducerProperties properties,
-            List<WebhookRequestInterceptor> interceptors) {
-        RestClientWebhookTransport base = new RestClientWebhookTransport(webhookProducerRestClient, urlValidator);
+            List<WebhookRequestInterceptor> interceptors,
+            ObjectProvider<Clock> clockProvider) {
+        RestClientWebhookTransport base = new RestClientWebhookTransport(
+                webhookProducerRestClient, urlValidator, clockProvider.getIfAvailable(Clock::systemUTC));
         InterceptingWebhookTransport intercepting = new InterceptingWebhookTransport(base, interceptors);
         return new RetryingWebhookTransport(intercepting, urlValidator, deliveryListener, properties.getRetry());
     }
@@ -180,8 +184,15 @@ public class WebhookProducerAutoConfiguration {
             WebhookSigner signer,
             WebhookTransport transport,
             @Qualifier("destinationSecretProvider") SecretProvider<Destination> destinationSecretProvider,
-            WebhookProducerProperties properties) {
-        return new WebhookPublisher(objectMapper, signer, transport, destinationSecretProvider, properties);
+            WebhookProducerProperties properties,
+            ObjectProvider<Clock> clockProvider) {
+        return new WebhookPublisher(
+                objectMapper,
+                signer,
+                transport,
+                destinationSecretProvider,
+                properties,
+                clockProvider.getIfAvailable(Clock::systemUTC));
     }
 
     /**

@@ -1,6 +1,7 @@
 package com.jinternals.webhooks.producer.transport;
 
 import com.jinternals.webhooks.producer.security.DestinationUrlValidator;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
@@ -28,10 +29,16 @@ public class RestClientWebhookTransport implements WebhookTransport {
 
     private final RestClient restClient;
     private final DestinationUrlValidator urlValidator;
+    private final Clock clock;
 
     public RestClientWebhookTransport(RestClient restClient, DestinationUrlValidator urlValidator) {
+        this(restClient, urlValidator, Clock.systemUTC());
+    }
+
+    public RestClientWebhookTransport(RestClient restClient, DestinationUrlValidator urlValidator, Clock clock) {
         this.restClient = restClient;
         this.urlValidator = urlValidator;
+        this.clock = clock;
     }
 
     @Override
@@ -50,7 +57,7 @@ public class RestClientWebhookTransport implements WebhookTransport {
                         throw new WebhookDeliveryException(
                                 "Webhook delivery to " + SafeUrl.sanitize(url) + " failed with status " + status,
                                 status,
-                                parseRetryAfter(response.getHeaders()));
+                                parseRetryAfter(response.getHeaders(), clock));
                     })
                     .toBodilessEntity();
         } catch (WebhookDeliveryException e) {
@@ -80,6 +87,10 @@ public class RestClientWebhookTransport implements WebhookTransport {
      * absent or unparseable, and clamps a past HTTP-date to {@link Duration#ZERO} rather than negative.
      */
     static Duration parseRetryAfter(HttpHeaders responseHeaders) {
+        return parseRetryAfter(responseHeaders, Clock.systemUTC());
+    }
+
+    static Duration parseRetryAfter(HttpHeaders responseHeaders, Clock clock) {
         String value = responseHeaders.getFirst(HttpHeaders.RETRY_AFTER);
         if (value == null) {
             return null;
@@ -93,14 +104,14 @@ public class RestClientWebhookTransport implements WebhookTransport {
             // than a boundary conditional keeps the intent explicit and leaves no equivalent branch.
             return Duration.ofSeconds(Math.max(0L, seconds));
         } catch (NumberFormatException notDeltaSeconds) {
-            return parseHttpDate(trimmed);
+            return parseHttpDate(trimmed, clock);
         }
     }
 
-    private static Duration parseHttpDate(String value) {
+    private static Duration parseHttpDate(String value, Clock clock) {
         try {
             ZonedDateTime when = ZonedDateTime.parse(value, DateTimeFormatter.RFC_1123_DATE_TIME);
-            Duration delay = Duration.between(ZonedDateTime.now(when.getZone()), when);
+            Duration delay = Duration.between(clock.instant(), when.toInstant());
             return delay.isNegative() ? Duration.ZERO : delay;
         } catch (DateTimeParseException notAnHttpDate) {
             return null;

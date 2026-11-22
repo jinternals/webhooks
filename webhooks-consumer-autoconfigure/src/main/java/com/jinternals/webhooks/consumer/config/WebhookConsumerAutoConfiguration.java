@@ -32,6 +32,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.observation.ObservationRegistry;
 import io.micrometer.observation.aop.ObservedAspect;
 import jakarta.validation.Validator;
+import java.time.Clock;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -108,10 +109,12 @@ public class WebhookConsumerAutoConfiguration {
      */
     @Bean
     @ConditionalOnMissingBean
-    public TimestampValidator webhookTimestampValidator(WebhookProperties properties) {
+    public TimestampValidator webhookTimestampValidator(
+            WebhookProperties properties, ObjectProvider<Clock> clockProvider) {
         WebhookProperties.Consumer consumer = properties.getConsumer();
         return consumer.isReplayWindowEnabled()
-                ? new ClockSkewTimestampValidator(consumer.getReplayTolerance())
+                ? new ClockSkewTimestampValidator(
+                        consumer.getReplayTolerance(), clockProvider.getIfAvailable(Clock::systemUTC))
                 : new NoOpTimestampValidator();
     }
 
@@ -163,9 +166,11 @@ public class WebhookConsumerAutoConfiguration {
     /** No-op by default; in-memory best-effort when {@code webhooks.consumer.in-memory-idempotency} is true. */
     @Bean
     @ConditionalOnMissingBean
-    public IdempotencyGuard idempotencyGuard(WebhookProperties properties) {
+    public IdempotencyGuard idempotencyGuard(WebhookProperties properties, ObjectProvider<Clock> clockProvider) {
         return properties.getConsumer().isInMemoryIdempotency()
-                ? new InMemoryIdempotencyGuard(properties.getConsumer().getInMemoryIdempotencyMaxSize())
+                ? new InMemoryIdempotencyGuard(
+                        properties.getConsumer().getInMemoryIdempotencyMaxSize(),
+                        clockProvider.getIfAvailable(Clock::systemUTC))
                 : new NoOpIdempotencyGuard();
     }
 

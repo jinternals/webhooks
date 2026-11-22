@@ -197,6 +197,12 @@ class RestClientWebhookTransportTest {
         assertThat(RestClientWebhookTransport.parseRetryAfter(retryAfter(future)))
                 .isBetween(Duration.ofSeconds(290), Duration.ofSeconds(300));
 
+        // Deterministic fixed-clock overload: exact 300s delay.
+        java.time.Clock fixed =
+                java.time.Clock.fixed(java.time.Instant.parse("2026-01-01T00:00:00Z"), java.time.ZoneOffset.UTC);
+        assertThat(RestClientWebhookTransport.parseRetryAfter(retryAfter("Thu, 01 Jan 2026 00:05:00 GMT"), fixed))
+                .isEqualTo(Duration.ofSeconds(300));
+
         // An HTTP-date in the past clamps to ZERO rather than going negative.
         String past =
                 ZonedDateTime.now(java.time.ZoneOffset.UTC).minusHours(1).format(DateTimeFormatter.RFC_1123_DATE_TIME);

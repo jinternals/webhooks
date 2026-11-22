@@ -76,6 +76,17 @@ class WebhookConsumerAutoConfigurationTest {
         }
     }
 
+    private static ObjectProvider<java.time.Clock> emptyClockProvider() {
+        return new org.springframework.beans.factory.support.DefaultListableBeanFactory()
+                .getBeanProvider(java.time.Clock.class);
+    }
+
+    private static ObjectProvider<java.time.Clock> clockProviderOf(java.time.Clock clock) {
+        var bf = new org.springframework.beans.factory.support.DefaultListableBeanFactory();
+        bf.registerSingleton("clock", clock);
+        return bf.getBeanProvider(java.time.Clock.class);
+    }
+
     @Test
     void timestampValidatorAcceptsAnyAgeWhenReplayWindowDisabled() {
         // Replay window explicitly off: the selected validator must accept even an ancient timestamp — the
@@ -83,7 +94,7 @@ class WebhookConsumerAutoConfigurationTest {
         WebhookProperties properties = new WebhookProperties();
         properties.getConsumer().setReplayWindowEnabled(false);
 
-        TimestampValidator validator = autoConfig.webhookTimestampValidator(properties);
+        TimestampValidator validator = autoConfig.webhookTimestampValidator(properties, emptyClockProvider());
 
         long ancient = Instant.now().minus(Duration.ofDays(3650)).getEpochSecond();
         assertThatCode(() -> validator.validate(ancient)).doesNotThrowAnyException();
@@ -96,12 +107,23 @@ class WebhookConsumerAutoConfigurationTest {
         // reject a stale timestamp. This pins both the branch and the default field value = true.
         WebhookProperties properties = new WebhookProperties();
 
-        TimestampValidator validator = autoConfig.webhookTimestampValidator(properties);
+        TimestampValidator validator = autoConfig.webhookTimestampValidator(properties, emptyClockProvider());
 
         long tooOld = Instant.now().minus(Duration.ofHours(1)).getEpochSecond();
         assertThatThrownBy(() -> validator.validate(tooOld)).isInstanceOf(WebhookVerificationException.class);
         // And a fresh one is accepted, so it is a real window, not a reject-everything stub.
         assertThatCode(() -> validator.validate(Instant.now().getEpochSecond())).doesNotThrowAnyException();
+    }
+
+    @Test
+    void timestampValidatorUsesProvidedClockBeanWhenPresent() {
+        WebhookProperties properties = new WebhookProperties();
+        java.time.Clock fixed = java.time.Clock.fixed(Instant.ofEpochSecond(1_700_000_000L), java.time.ZoneOffset.UTC);
+
+        TimestampValidator validator = autoConfig.webhookTimestampValidator(properties, clockProviderOf(fixed));
+
+        assertThatCode(() -> validator.validate(1_700_000_000L)).doesNotThrowAnyException();
+        assertThatThrownBy(() -> validator.validate(1_700_000_301L)).isInstanceOf(WebhookVerificationException.class);
     }
 
     @Test
@@ -243,7 +265,7 @@ class WebhookConsumerAutoConfigurationTest {
         WebhookProperties properties = new WebhookProperties();
         properties.getConsumer().setInMemoryIdempotency(false);
 
-        IdempotencyGuard guard = autoConfig.idempotencyGuard(properties);
+        IdempotencyGuard guard = autoConfig.idempotencyGuard(properties, emptyClockProvider());
 
         assertThat(guard.tryBegin("dup-1")).isTrue();
         guard.markProcessed("dup-1");
@@ -257,7 +279,7 @@ class WebhookConsumerAutoConfigurationTest {
         WebhookProperties properties = new WebhookProperties();
         properties.getConsumer().setInMemoryIdempotency(true);
 
-        IdempotencyGuard guard = autoConfig.idempotencyGuard(properties);
+        IdempotencyGuard guard = autoConfig.idempotencyGuard(properties, emptyClockProvider());
 
         assertThat(guard.tryBegin("dup-1")).isTrue();
         guard.markProcessed("dup-1");

@@ -170,4 +170,64 @@ class IdempotencyGuardTest {
         // that never evicts, the map would hold 3 and "a" would be skipped as a duplicate here.
         assertThat(guard.tryBegin("a")).isTrue();
     }
+
+    @Test
+    void inMemoryUnlocksReentrantLockAcrossAllOperationsForOtherThreads() throws Exception {
+        // Kills VoidMethodCallMutator removing lock.unlock() immediately (without waiting for a timeout):
+        // on the same thread ReentrantLock is reentrant, so another thread must verify the lock is free.
+        InMemoryIdempotencyGuard guard = new InMemoryIdempotencyGuard();
+
+        guard.tryBegin("id-lock");
+        assertUnlockedOnAnotherThread(guard);
+
+        guard.markProcessed("id-lock");
+        assertUnlockedOnAnotherThread(guard);
+
+        guard.release("id-lock");
+        assertUnlockedOnAnotherThread(guard);
+    }
+
+    private static void assertUnlockedOnAnotherThread(InMemoryIdempotencyGuard guard) throws Exception {
+        boolean acquired = java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+                    if (!guard.lock.tryLock()) {
+                        return false;
+                    }
+                    guard.lock.unlock();
+                    return true;
+                })
+                .get(2, java.util.concurrent.TimeUnit.SECONDS);
+        assertThat(acquired).isTrue();
+    }
+
+    @Test
+    void inMemoryHonoursInjectedClockForTtlExpiryAndCommitRefresh() {
+        java.util.concurrent.atomic.AtomicLong seconds = new java.util.concurrent.atomic.AtomicLong(1_700_000_000L);
+        java.time.Clock clock = new java.time.Clock() {
+            @Override
+            public java.time.ZoneId getZone() {
+                return java.time.ZoneOffset.UTC;
+            }
+
+            @Override
+            public java.time.Clock withZone(java.time.ZoneId zone) {
+                return this;
+            }
+
+            @Override
+            public Instant instant() {
+                return Instant.ofEpochSecond(seconds.get());
+            }
+        };
+        InMemoryIdempotencyGuard guard = new InMemoryIdempotencyGuard(10, clock);
+
+        assertThat(guard.tryBegin("id-ttl")).isTrue();
+        seconds.addAndGet(540L); // +9m: slow handler finishes near end of initial 10m reservation
+        guard.markProcessed("id-ttl"); // refreshes TTL to +10m from completion (1_700_001_140)
+
+        seconds.addAndGet(120L); // +11m from start, +2m after commit -> still deduplicated (and slides TTL to +10m)
+        assertThat(guard.tryBegin("id-ttl")).isFalse();
+
+        seconds.addAndGet(600L); // exact 10m boundary from last sight (now == expiry -> !isAfter(now) -> expired)
+        assertThat(guard.tryBegin("id-ttl")).isTrue();
+    }
 }

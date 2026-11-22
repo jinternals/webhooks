@@ -1,9 +1,11 @@
 package com.jinternals.webhooks.consumer.idempotency;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * Best-effort, in-memory dedupe on {@code webhook-id} (see SPEC.md §11). Enabled with
@@ -29,8 +31,8 @@ import java.util.Map;
  *       the TTL is treated as new, so stale entries never cause a false "duplicate".</li>
  * </ul>
  *
- * <p>The map is not thread-safe, so all access is guarded by an intrinsic lock. The critical section is
- * a couple of hash operations, which is cheap relative to verification and dispatch.
+ * <p>Guarded by a {@link ReentrantLock} rather than {@code synchronized} so virtual threads
+ * ({@code spring.threads.virtual.enabled=true}) never pin carrier threads under contention on Java 21.
  */
 public class InMemoryIdempotencyGuard implements IdempotencyGuard {
 
@@ -40,16 +42,23 @@ public class InMemoryIdempotencyGuard implements IdempotencyGuard {
     /** Default upper bound on retained ids; override via the constructor. */
     static final int DEFAULT_MAX_SIZE = 100_000;
 
+    final ReentrantLock lock = new ReentrantLock();
     private final Map<String, Instant> seen;
+    private final Clock clock;
 
     public InMemoryIdempotencyGuard() {
-        this(DEFAULT_MAX_SIZE);
+        this(DEFAULT_MAX_SIZE, Clock.systemUTC());
     }
 
     public InMemoryIdempotencyGuard(int maxSize) {
+        this(maxSize, Clock.systemUTC());
+    }
+
+    public InMemoryIdempotencyGuard(int maxSize, Clock clock) {
         if (maxSize < 1) {
             throw new IllegalArgumentException("idempotency maxSize must be >= 1, was " + maxSize);
         }
+        this.clock = clock;
         this.seen = new LinkedHashMap<>(16, 0.75f, true) {
             @Override
             protected boolean removeEldestEntry(Map.Entry<String, Instant> eldest) {
@@ -59,30 +68,48 @@ public class InMemoryIdempotencyGuard implements IdempotencyGuard {
     }
 
     @Override
-    public synchronized boolean tryBegin(String webhookId) {
+    public boolean tryBegin(String webhookId) {
         if (webhookId == null || webhookId.isBlank()) {
             return true;
         }
-        Instant now = Instant.now();
-        Instant previousExpiry = seen.put(webhookId, now.plus(TTL));
+        Instant now = clock.instant();
+        Instant nextExpiry = now.plus(TTL);
+        Instant previousExpiry;
+        lock.lock();
+        try {
+            previousExpiry = seen.put(webhookId, nextExpiry);
+        } finally {
+            lock.unlock();
+        }
         // New id, or a prior entry that has already expired (outside the replay window) -> proceed.
         return previousExpiry == null || !previousExpiry.isAfter(now);
     }
 
     @Override
-    public synchronized void markProcessed(String webhookId) {
+    public void markProcessed(String webhookId) {
         if (webhookId == null || webhookId.isBlank()) {
             return;
         }
         // Refresh the TTL from completion time so a slow handler can't let the entry expire mid-flight.
-        seen.put(webhookId, Instant.now().plus(TTL));
+        Instant expiry = clock.instant().plus(TTL);
+        lock.lock();
+        try {
+            seen.put(webhookId, expiry);
+        } finally {
+            lock.unlock();
+        }
     }
 
     @Override
-    public synchronized void release(String webhookId) {
+    public void release(String webhookId) {
         if (webhookId == null || webhookId.isBlank()) {
             return;
         }
-        seen.remove(webhookId);
+        lock.lock();
+        try {
+            seen.remove(webhookId);
+        } finally {
+            lock.unlock();
+        }
     }
 }

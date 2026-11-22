@@ -20,6 +20,8 @@ import com.jinternals.webhooks.consumer.web.receive.TimedHandlerDispatcher;
 import com.jinternals.webhooks.consumer.web.receive.WebhookBodyVerifier;
 import com.jinternals.webhooks.core.registry.WebhookTypeRegistry;
 import com.jinternals.webhooks.core.secret.SecretProvider;
+import java.time.Clock;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -72,11 +74,13 @@ public class WebhookConsumerWebAutoConfiguration {
             MetadataFactory metadataFactory,
             HandlerExecutor handlerExecutor,
             WebhookDispatcher dispatcher,
-            WebhookMetrics metrics) {
+            WebhookMetrics metrics,
+            ObjectProvider<Clock> clockProvider) {
         WebhookBodyVerifier bodyVerifier = new WebhookBodyVerifier(verifier, secretProvider, metrics);
         EventResolver eventResolver =
                 new EventResolver(webhookTypeRegistry, payloadValidator, objectMapper, properties);
-        ReceiveObservabilityRecorder observabilityRecorder = new ReceiveObservabilityRecorder(metrics);
+        ReceiveObservabilityRecorder observabilityRecorder =
+                new ReceiveObservabilityRecorder(metrics, clockProvider.getIfAvailable(Clock::systemUTC));
         TimedHandlerDispatcher eventDispatcher = new TimedHandlerDispatcher(handlerExecutor, dispatcher, metrics);
         return new WebhookReceivePipeline(
                 bodyVerifier,

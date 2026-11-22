@@ -56,6 +56,16 @@ class WebhookMetadataTest {
     }
 
     @Test
+    void lagCalculationsAcceptExplicitClockDeterministically() {
+        Instant now = Instant.ofEpochSecond(1_700_000_100L);
+        java.time.Clock fixed = java.time.Clock.fixed(now, java.time.ZoneOffset.UTC);
+        WebhookMetadata m = meta(now.minusSeconds(7), now.minusSeconds(25), new Object());
+
+        assertThat(m.deliveryLag(fixed)).contains(java.time.Duration.ofSeconds(7));
+        assertThat(m.eventLag(fixed)).contains(java.time.Duration.ofSeconds(25));
+    }
+
+    @Test
     void headerLookupIsCaseInsensitive() {
         WebhookMetadata m = meta(Instant.now(), null, new Object());
         assertThat(m.header("WEBHOOK-ID")).contains("id");

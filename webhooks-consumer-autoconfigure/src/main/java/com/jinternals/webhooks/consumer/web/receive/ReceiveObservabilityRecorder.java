@@ -2,6 +2,7 @@ package com.jinternals.webhooks.consumer.web.receive;
 
 import com.jinternals.webhooks.consumer.metrics.WebhookMetrics;
 import com.jinternals.webhooks.consumer.model.WebhookMetadata;
+import java.time.Clock;
 import java.time.Duration;
 import java.util.Optional;
 import org.slf4j.Logger;
@@ -22,14 +23,20 @@ public class ReceiveObservabilityRecorder {
     private static final Logger log = LoggerFactory.getLogger(ReceiveObservabilityRecorder.class);
 
     private final WebhookMetrics metrics;
+    private final Clock clock;
 
     public ReceiveObservabilityRecorder(WebhookMetrics metrics) {
+        this(metrics, Clock.systemUTC());
+    }
+
+    public ReceiveObservabilityRecorder(WebhookMetrics metrics, Clock clock) {
         this.metrics = metrics;
+        this.clock = clock;
     }
 
     public void record(String type, WebhookMetadata metadata) {
-        Optional<Duration> deliveryLag = metadata.deliveryLag();
-        Optional<Duration> eventLag = metadata.eventLag();
+        Optional<Duration> deliveryLag = metadata.deliveryLag(clock);
+        Optional<Duration> eventLag = metadata.eventLag(clock);
         metrics.received(type);
         deliveryLag.ifPresent(metrics::deliveryLag);
         eventLag.ifPresent(metrics::eventLag);

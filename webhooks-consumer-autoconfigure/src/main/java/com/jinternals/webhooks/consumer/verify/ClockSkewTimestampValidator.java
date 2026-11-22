@@ -26,9 +26,10 @@ public class ClockSkewTimestampValidator implements TimestampValidator {
     }
 
     /**
-     * Package-visible constructor taking an explicit {@link Clock} so tests can pin "now" deterministically.
+     * @param tolerance allowed clock skew in either direction
+     * @param clock     time source used to evaluate freshness
      */
-    ClockSkewTimestampValidator(Duration tolerance, Clock clock) {
+    public ClockSkewTimestampValidator(Duration tolerance, Clock clock) {
         this.toleranceSeconds = tolerance.getSeconds();
         this.clock = clock;
     }

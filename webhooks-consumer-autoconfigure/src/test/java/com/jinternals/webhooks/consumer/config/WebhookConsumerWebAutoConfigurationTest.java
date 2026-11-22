@@ -50,6 +50,8 @@ class WebhookConsumerWebAutoConfigurationTest {
 
     @SuppressWarnings("unchecked")
     private WebhookReceivePipeline pipeline() {
+        var clockProvider = new org.springframework.beans.factory.support.DefaultListableBeanFactory()
+                .getBeanProvider(java.time.Clock.class);
         return autoConfig.webhookReceivePipeline(
                 mock(WebhookVerifier.class),
                 mock(SecretProvider.class),
@@ -61,20 +63,59 @@ class WebhookConsumerWebAutoConfigurationTest {
                 mock(MetadataFactory.class),
                 mock(HandlerExecutor.class),
                 mock(WebhookDispatcher.class),
-                mock(WebhookMetrics.class));
+                mock(WebhookMetrics.class),
+                clockProvider);
     }
 
     private WebhookReceiveController controller() {
         return autoConfig.webhookReceiveController(pipeline());
     }
 
+    @com.jinternals.webhooks.core.annotations.WebhookType("contact.created")
+    static class SampleEvent {
+        public String id;
+    }
+
     @Test
     void receivePipelineIsProducedAndWired() {
-        // The pipeline orchestrator is composed from its collaborator seams. Its full receive behaviour
-        // (verify -> dedupe -> route -> deserialize -> dispatch) is exercised end-to-end by
-        // WebhookReceiveControllerTest; here the honest assertion is that the factory actually builds it
-        // from the injected seams (kills the null-return mutant on the single-expression factory).
-        assertThat(pipeline()).isNotNull();
+        // Drive a real accepted delivery through the auto-configured pipeline so the default Clock::systemUTC
+        // fallback inside ReceiveObservabilityRecorder is actually evaluated (killing a null-clock mutant).
+        WebhookMetrics metrics = mock(WebhookMetrics.class);
+        IdempotencyGuard idempotency = new com.jinternals.webhooks.consumer.idempotency.NoOpIdempotencyGuard();
+        WebhookTypeRegistry typeRegistry = new WebhookTypeRegistry(Map.of("contact.created", SampleEvent.class));
+        MetadataFactory metadataFactory = new MetadataFactory(List.of());
+        HandlerExecutor sync = new com.jinternals.webhooks.consumer.dispatch.SyncHandlerExecutor();
+        WebhookDispatcher dispatcher = mock(WebhookDispatcher.class);
+        var clockProvider = new org.springframework.beans.factory.support.DefaultListableBeanFactory()
+                .getBeanProvider(java.time.Clock.class);
+
+        @SuppressWarnings("unchecked")
+        WebhookReceivePipeline p = autoConfig.webhookReceivePipeline(
+                mock(WebhookVerifier.class),
+                mock(SecretProvider.class),
+                typeRegistry,
+                mock(PayloadValidator.class),
+                new ObjectMapper(),
+                new WebhookProperties(),
+                idempotency,
+                metadataFactory,
+                sync,
+                dispatcher,
+                metrics,
+                clockProvider);
+
+        org.springframework.mock.web.MockHttpServletRequest req =
+                new org.springframework.mock.web.MockHttpServletRequest();
+        Endpoint ep = endpoint("/webhooks/crm");
+        p.process(
+                req,
+                ep,
+                "{\"type\":\"contact.created\",\"timestamp\":\"2023-11-14T22:13:20Z\",\"data\":{\"id\":\"1\"}}",
+                Map.of("webhook-id", List.of("msg_1"), "webhook-timestamp", List.of("1700000000")));
+
+        verify(metrics).received("contact.created");
+        verify(metrics).deliveryLag(any());
+        verify(metrics).eventLag(any());
     }
 
     @Test

@@ -47,4 +47,33 @@ class ReceiveObservabilityRecorderTest {
         assertThat(ReceiveObservabilityRecorder.saturatingMillis(Duration.ofSeconds(Long.MIN_VALUE)))
                 .isEqualTo(Long.MIN_VALUE);
     }
+
+    @Test
+    void recordsExactLagsAgainstInjectedClock() {
+        WebhookMetrics metrics = mock(WebhookMetrics.class);
+        java.time.Instant now = java.time.Instant.ofEpochSecond(1_700_000_100L);
+        java.time.Clock fixed = java.time.Clock.fixed(now, java.time.ZoneOffset.UTC);
+        ReceiveObservabilityRecorder recorder = new ReceiveObservabilityRecorder(metrics, fixed);
+        WebhookMetadata meta = new WebhookMetadata(
+                "contact.created",
+                "msg_1",
+                now.minusMillis(350),
+                now.minusMillis(1200),
+                "/webhooks/crm",
+                "127.0.0.1",
+                new Object(),
+                Map.of(),
+                Map.of());
+
+        try (LogCapture logs = LogCapture.forClass(ReceiveObservabilityRecorder.class)) {
+            recorder.record("contact.created", meta);
+
+            verify(metrics).received("contact.created");
+            verify(metrics).deliveryLag(Duration.ofMillis(350));
+            verify(metrics).eventLag(Duration.ofMillis(1200));
+            assertThat(logs.lastFormattedMessage())
+                    .contains("deliveryLag=350ms")
+                    .contains("eventLag=1200ms");
+        }
+    }
 }

@@ -1,6 +1,7 @@
 package com.jinternals.webhooks.consumer.model;
 
 import com.jinternals.webhooks.core.redact.WebhookRedactor;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collections;
@@ -60,12 +61,22 @@ public record WebhookMetadata(
      * {@code webhook-timestamp} header was present (e.g. when signature verification is disabled).
      */
     public Optional<Duration> deliveryLag() {
-        return Optional.ofNullable(attemptTimestamp).map(t -> Duration.between(t, Instant.now()));
+        return deliveryLag(Clock.systemUTC());
+    }
+
+    /** Lag between {@code clock.instant()} and the delivery attempt. */
+    public Optional<Duration> deliveryLag(Clock clock) {
+        return Optional.ofNullable(attemptTimestamp).map(t -> Duration.between(t, clock.instant()));
     }
 
     /** Lag between now and the actual event time. Empty if the body had no timestamp. */
     public Optional<Duration> eventLag() {
-        return Optional.ofNullable(eventTimestamp).map(t -> Duration.between(t, Instant.now()));
+        return eventLag(Clock.systemUTC());
+    }
+
+    /** Lag between {@code clock.instant()} and the actual event time. */
+    public Optional<Duration> eventLag(Clock clock) {
+        return Optional.ofNullable(eventTimestamp).map(t -> Duration.between(t, clock.instant()));
     }
 
     /** Case-insensitive header lookup (signature and auth headers are redacted). */
