@@ -20,7 +20,13 @@ contain breaking changes; they will always be called out under **Changed** or **
   - `webhooks-producer-autoconfigure` / `webhooks-producer-starter` — declarative `@WebhookClient`
     interfaces, envelope building, `v1`/`v2a` signing with dual-signing for rotation, in-process retry with
     backoff, HTTP timeouts, destination URL allow-list (SSRF guard).
-  - Standalone producer and consumer sample apps with Docker Compose and integration tests.
+  - Standalone sample apps under `webhooks-sample/` with Docker Compose and integration tests:
+    - `producer-sample` & `consumer-sample` — quickstart `v1` HMAC + `v2a` Ed25519 + `x-trace-id` correlation.
+    - `producer-nats-sample` & `consumer-nats-sample` — zero-webhook-loss NATS JetStream queueing, fresh
+      per-attempt signing, NATS KV CAS idempotency with crash lease recovery, and DLQs.
+    - `producer-auth-sample` & `consumer-auth-sample` — OAuth2/JWT bearer transport auth (`401`) layered in
+      front of Standard Webhooks signature verification (`400`).
+    - `spi-sample` — single-app producer+consumer coexistence and custom SPI bean overrides.
 - Apache License 2.0, contribution guidelines, security policy, and code of conduct.
 - GitHub Actions CI (quality gate, samples, release-artifact check), weekly OWASP dependency scan, Dependabot.
 - Maven Central publishing setup (`release` profile).

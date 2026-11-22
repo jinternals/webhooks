@@ -728,9 +728,10 @@ the gate is described in [SPEC §16](./docs/reference/SPEC.md#16-quality-gate--c
 The authoritative, always-current counts are the JaCoCo and PITest reports produced by
 `mvn clean verify -Pmutation` under each module's `target/`.
 
-The standalone sample apps under `webhooks-sample/` (`producer-sample`, `consumer-sample`) are not part of the
-gated library reactor, so the 100% gate is not enforced on them; their cross-library behaviour is
-exercised instead by the Docker-based `webhooks-sample/integration-test.sh`.
+The standalone sample apps under `webhooks-sample/` are not part of the gated library reactor, so the 100%
+mutation gate is not enforced on them; their behaviour is exercised by each sample's `@SpringBootTest` suite
+(`mvn -f webhooks-sample/pom.xml verify`) and the Docker end-to-end scripts (`integration-test.sh` and
+`integration-test-nats.sh`).
 
 Beyond coverage and mutation, the build can scan dependencies for known CVEs with
 [OWASP dependency-check](https://owasp.org/www-project-dependency-check/), run via the opt-in

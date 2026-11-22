@@ -42,7 +42,7 @@ replaceable bean, every annotation); Operations covers running it in production.
 - **[Architecture](./architecture.md)** — the two libraries, the wire format, and the no-storage design, with diagrams.
 
 ### Guides (by topic)
-- **[Consumer guide](./guides/consumer.md)** — the receive pipeline: endpoints, `@WebhookType` events, `@WebhookHandler`, schema validation, unknown-type policy.
+- **[Consumer guide](./guides/consumer.md)** — the receive pipeline: endpoints, `@WebhookType` events, `@WebhookHandler`, Bean Validation, unknown-type policy.
 - **[Producer guide](./guides/producer.md)** — the send pipeline: `@WebhookClient`, named destinations, envelope building and signing.
 - **[Verification & security](./guides/verification-and-security.md)** — HMAC & Ed25519 verification, the replay window, secret rotation, SSRF guard, redaction-safe logging.
 - **[Transport authentication](./guides/transport-authentication.md)** — adding an OAuth2 `Authorization: Bearer` token on both sides, alongside the webhook signature (runnable in `producer-auth-sample` / `consumer-auth-sample`).
@@ -71,7 +71,7 @@ replaceable bean, every annotation); Operations covers running it in production.
 | | Consumer | Producer |
 | --- | --- | --- |
 | **You write** | a `@WebhookType` event class + a `@WebhookHandler` method | a `@WebhookClient` interface |
-| **Library does** | verify → deserialize → (schema) → dispatch | build envelope → sign → deliver (retry) |
+| **Library does** | verify → strict deserialize → Bean Validation → dispatch | build envelope → sign → deliver (retry) |
 | **Config root** | `webhooks.consumer.*` | `webhooks.producer.*` |
 | **Stores** | nothing | nothing |
 

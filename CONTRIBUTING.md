@@ -29,8 +29,8 @@ filed as public issues — see [SECURITY.md](SECURITY.md).
 # Build + tests + 100% coverage gate (~1 min)
 mvn clean verify
 
-# Full gate as CI runs it: also 100% PITest mutation score (~5 min)
-mvn clean verify -Pmutation
+# Full gate as CI runs it: Spotless + 100% JaCoCo + 100% PITest mutation score (parallelized)
+mvn -T 1C clean verify -Pmutation,format
 
 # Fast inner loop: compile and run tests only
 mvn test

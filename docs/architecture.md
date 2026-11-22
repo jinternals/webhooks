@@ -19,7 +19,7 @@ flowchart TD
     consumerStarter["webhooks-consumer-starter<br/>thin starter"]
     producerAuto["webhooks-producer-autoconfigure<br/>send: build → sign → deliver"]
     producerStarter["webhooks-producer-starter<br/>thin starter"]
-    samples["webhooks-sample/producer-sample + webhooks-sample/consumer-sample<br/>standalone demo apps"]
+    samples["webhooks-sample/*<br/>standalone demo apps (quickstart, NATS, auth, SPI)"]
 
     core --> consumerAuto
     core --> producerAuto
@@ -32,7 +32,7 @@ flowchart TD
 | Module | Responsibility |
 | --- | --- |
 | `webhooks-core` | The shared wire model (`Envelope`, `WebhookHeaders`), the `@WebhookType`/`@Redact` annotations, the `WebhookRedactor`, the `WebhookTypeRegistry`, and the generic `SecretProvider<T>` SPI. Depended on by both sides. |
-| `webhooks-consumer-autoconfigure` | The receiver auto-configuration: verification, routing, deserialization, schema validation, dispatch. Added via `webhooks-consumer-starter`. |
+| `webhooks-consumer-autoconfigure` | The receiver auto-configuration: verification, routing, strict deserialization, Bean Validation, dispatch. Added via `webhooks-consumer-starter`. |
 | `webhooks-consumer-starter` | Thin Spring Boot starter — the dependency downstream receiver apps add; transitively brings in `webhooks-consumer-autoconfigure` and its runtime deps. |
 | `webhooks-producer-autoconfigure` | The annotation-driven sender (`@WebhookClient`) auto-configuration: envelope building, signing, delivery with in-process retry. Added via `webhooks-producer-starter`. |
 | `webhooks-producer-starter` | Thin Spring Boot starter — the dependency downstream sender apps add; transitively brings in `webhooks-producer-autoconfigure` and its runtime deps. |
@@ -84,7 +84,7 @@ flowchart TD
     Route -- no --> Policy{"unknown-type<br/>policy"}
     Policy -- ack-and-ignore --> Ack204b["204"]
     Policy -- reject --> E400T["400"]
-    Route -- yes --> Schema{"schema valid?<br/>(if configured)"}
+    Route -- yes --> Schema{"strict deserialize +<br/>Bean Validation OK?"}
     Schema -- no --> E400S["400"]
     Schema -- yes --> Lag["log lags + emit metrics"]
     Lag --> Exec["HandlerExecutor<br/>(sync inline / async pool)"]
@@ -93,11 +93,11 @@ flowchart TD
 ```
 
 **Text summary.** The controller resolves the matched endpoint, then
-verifies the signature (and optional replay window), optionally de-duplicates, checks the type is known and
-accepted, optionally validates the JSON schema, records lags and metrics, then dispatches to your handler
-via the configured executor (inline for `sync`, off-thread for `async`). Each failure point returns the
-right HTTP status for the sender to act on. See the [Consumer guide](./guides/consumer.md) and
-[HTTP status codes](./reference/http-status-codes.md).
+verifies the signature and `5m` replay window (enabled by default), optionally de-duplicates, checks the type
+is known and accepted, strictly deserializes and validates the `@WebhookType` payload (Bean Validation),
+records lags and metrics, then dispatches to your handler via the configured executor (inline for `sync`,
+off-thread for `async`). Each failure point returns the right HTTP status for the sender to act on. See the
+[Consumer guide](./guides/consumer.md) and [HTTP status codes](./reference/http-status-codes.md).
 
 ---
 
@@ -108,7 +108,7 @@ A `@WebhookClient` method call becomes a signed POST, wrapped in in-process retr
 ```mermaid
 flowchart TD
     Call["client.send(event)"] --> Pub["WebhookPublisher<br/>build envelope from @WebhookType"]
-    Pub --> Sign["WebhookSigner<br/>HMAC-SHA256 (dual-sign on rotation)"]
+    Pub --> Sign["WebhookSigner<br/>v1 HMAC / v2a Ed25519 (per attempt)"]
     Sign --> Retry["RetryingWebhookTransport"]
     Retry --> Guard{"destination URL<br/>allowed? (SSRF)"}
     Guard -- no --> Fatal["fatal: WebhookDeliveryException"]
@@ -179,6 +179,8 @@ These apply to both sides and have their own guides:
 | Concern | Guide |
 | --- | --- |
 | Signature verification, replay window, secret rotation, SSRF guard, redaction | [Verification & security](./guides/verification-and-security.md) |
+| Transport authentication (OAuth2 / JWT bearer tokens) | [Transport authentication](./guides/transport-authentication.md) |
 | Retry, `Retry-After`, sync vs async, dead-letter hooks | [Reliability](./guides/reliability.md) |
+| Durable zero-webhook-loss queueing (NATS JetStream) | [Zero-webhook-loss queueing](./guides/zero-loss-queueing.md) |
 | Correlation, lag logging, metrics, tracing | [Observability](./guides/observability.md) |
 | Replaceable beans / SPIs | [Beans & extension points](./reference/beans-and-spis.md) |

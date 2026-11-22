@@ -35,9 +35,9 @@ thrown `sync` handler returns `500`.
 | Status | When | Sender should | Source |
 | --- | --- | --- | --- |
 | **204 No Content** | Verified and processed (`sync`) or accepted (`async`); **or** a duplicate `webhook-id` ignored; **or** an unknown type under `ack-and-ignore`. | treat as success — stop retrying | controller |
-| **400 Bad Request** | Verification failed (missing headers, no secret, bad timestamp, bad signature); **or** payload validation failed (incl. unknown JSON fields); **or** unknown type under `reject`. | **not** retry — the request is malformed/unauthentic | `WebhookVerificationException`, `PayloadValidationException`, `UnknownTypeException` |
+| **400 Bad Request** | Verification failed (missing headers, no secret, bad timestamp, bad signature); **or** malformed JSON / unknown JSON field / Bean Validation failure; **or** unknown type under `reject`. | **not** retry — the request is malformed/unauthentic | `WebhookVerificationException`, `InvalidPayloadException`, `PayloadValidationException`, `UnknownTypeException` |
 | **413 Payload Too Large** | Body exceeds `max-body-size` (checked before verification). | not retry unless it shrinks the payload | `PayloadTooLargeException` |
-| **500 Internal Server Error** | Endpoint not configured (a deployment/config error); **or** a `sync` handler threw; **or** any unexpected error. | **retry** — it's a server-side problem that may resolve | `EndpointNotConfiguredException`, handler exception, `Exception` |
+| **500 Internal Server Error** | Endpoint not configured; **or** a modelled `@WebhookType` has no `@WebhookHandler`; **or** a `sync` handler threw; **or** any unexpected error. | **retry** — it's a server-side problem that may resolve | `EndpointNotConfiguredException`, `NoWebhookHandlerException`, handler exception, `Exception` |
 
 ---
 
