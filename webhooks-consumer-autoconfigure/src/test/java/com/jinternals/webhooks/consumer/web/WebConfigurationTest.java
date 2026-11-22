@@ -32,4 +32,24 @@ class WebConfigurationTest {
         WebConfiguration config = new WebConfiguration(new WebhookProperties());
         assertThat(config.interceptorPathPatterns()).isEmpty();
     }
+
+    @Test
+    void addInterceptorsSkipsRegistrationWhenEndpointsEmptyAndScopesWhenPresent() {
+        class ExposingInterceptorRegistry
+                extends org.springframework.web.servlet.config.annotation.InterceptorRegistry {
+            List<Object> exposed() {
+                return super.getInterceptors();
+            }
+        }
+
+        ExposingInterceptorRegistry emptyRegistry = new ExposingInterceptorRegistry();
+        new WebConfiguration(new WebhookProperties()).addInterceptors(emptyRegistry);
+        assertThat(emptyRegistry.exposed()).isEmpty();
+
+        WebhookProperties withEndpoint = new WebhookProperties();
+        withEndpoint.getConsumer().setEndpoints(List.of(endpoint("/webhooks/crm")));
+        ExposingInterceptorRegistry activeRegistry = new ExposingInterceptorRegistry();
+        new WebConfiguration(withEndpoint).addInterceptors(activeRegistry);
+        assertThat(activeRegistry.exposed()).hasSize(1);
+    }
 }

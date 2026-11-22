@@ -12,8 +12,9 @@ import java.util.List;
  * entries are dropped, and an all-blank destination yields an empty list so signing fails fast rather
  * than producing an unsigned delivery.
  *
- * <p>Override with a {@code @Bean SecretProvider<Destination>} to pull the secret from a secrets
- * manager instead (it is {@code @ConditionalOnMissingBean}).
+ * <p>Override with a {@code @Bean("destinationSecretProvider") SecretProvider<Destination>} to pull the
+ * secret from a secrets manager instead (keyed by bean name so it never collides with the consumer's
+ * {@code SecretProvider<Endpoint>}).
  */
 public class ConfigDestinationSecretProvider implements SecretProvider<Destination> {
 

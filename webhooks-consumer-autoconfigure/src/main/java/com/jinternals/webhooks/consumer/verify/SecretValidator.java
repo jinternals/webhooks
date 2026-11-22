@@ -57,7 +57,7 @@ public class SecretValidator implements InitializingBean {
     private void validateEndpoint(Endpoint endpoint) {
         List<String> secrets = secretProvider.secretsFor(endpoint);
         String path = endpoint.getPath();
-        if (secrets.isEmpty()) {
+        if (secrets == null || secrets.isEmpty()) {
             throw new WebhookConfigurationException(
                     "No webhook secret configured for endpoint " + path,
                     "Set the secret for this endpoint to a whsec_ HMAC secret (v1) or a whpk_ Ed25519 public "

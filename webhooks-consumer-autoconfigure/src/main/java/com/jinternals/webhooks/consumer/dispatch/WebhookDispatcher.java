@@ -14,6 +14,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.aop.support.AopUtils;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.context.ApplicationContext;
+import org.springframework.core.MethodIntrospector;
 import org.springframework.util.ReflectionUtils;
 
 /**
@@ -39,6 +40,8 @@ import org.springframework.util.ReflectionUtils;
 public class WebhookDispatcher implements InitializingBean {
 
     private static final Logger log = LoggerFactory.getLogger(WebhookDispatcher.class);
+    private static final ReflectionUtils.MethodFilter HANDLER_METHODS =
+            method -> method.isAnnotationPresent(WebhookHandler.class);
 
     private final ApplicationContext applicationContext;
     private final Map<Class<?>, WebhookHandlerMethod> handlers = new HashMap<>();
@@ -65,10 +68,9 @@ public class WebhookDispatcher implements InitializingBean {
             }
             Object bean = applicationContext.getBean(name);
             Class<?> targetClass = AopUtils.getTargetClass(bean);
-            ReflectionUtils.doWithMethods(
-                    targetClass,
-                    method -> register(bean, method),
-                    method -> method.isAnnotationPresent(WebhookHandler.class));
+            for (Method method : MethodIntrospector.selectMethods(targetClass, HANDLER_METHODS)) {
+                register(bean, method);
+            }
         }
         log.info("Registered {} webhook handler(s): {}", handlers.size(), handlers.values());
     }
@@ -97,10 +99,7 @@ public class WebhookDispatcher implements InitializingBean {
 
     /** True if {@code type} (or a supertype) declares at least one {@code @WebhookHandler} method. */
     private static boolean hasHandlerMethod(Class<?> type) {
-        boolean[] found = {false};
-        ReflectionUtils.doWithMethods(
-                type, method -> found[0] = true, method -> method.isAnnotationPresent(WebhookHandler.class));
-        return found[0];
+        return !MethodIntrospector.selectMethods(type, HANDLER_METHODS).isEmpty();
     }
 
     private void register(Object bean, Method method) {
@@ -169,6 +168,19 @@ public class WebhookDispatcher implements InitializingBean {
      * optionally a tracer bridge) on the classpath this emits a {@code webhook.receive} timer and a
      * tracing span. Disable via the standard {@code management.observations.enable.webhook.receive=false}.
      */
+    /**
+     * Eagerly verify on the request thread that a {@code @WebhookHandler} is registered for {@code event}
+     * before submitting to an asynchronous {@link HandlerExecutor}, so a missing handler surfaces as an
+     * HTTP {@code 500} (allowing sender retry) in both {@code sync} and {@code async} modes rather than
+     * returning {@code 204} first.
+     */
+    public void requireHandler(Object event, WebhookMetadata metadata) {
+        if (!handlers.containsKey(event.getClass())) {
+            throw new NoWebhookHandlerException(
+                    metadata.type(), event.getClass().getName());
+        }
+    }
+
     @Observed(name = "webhook.receive", contextualName = "webhook receive")
     public void dispatch(Object event, WebhookMetadata metadata) {
         WebhookHandlerMethod handler = handlers.get(event.getClass());

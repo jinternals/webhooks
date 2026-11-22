@@ -227,4 +227,22 @@ class WebhookPropertiesValidationTest {
         assertThat(validator.validate(properties))
                 .anySatisfy(v -> assertThat(v.getPropertyPath().toString()).contains("endpointPathsUnique"));
     }
+
+    @Test
+    void rejectsSubMillisecondHandlerTimeoutAcceptsOneMillisecondBoundaryAndHandlesNullEndpoints() {
+        WebhookProperties subMs = new WebhookProperties();
+        subMs.getConsumer().getHandler().setTimeout(Duration.ofNanos(999_999));
+        assertThat(validator.validate(subMs))
+                .anySatisfy(v -> assertThat(v.getPropertyPath().toString()).contains("timeoutPositive"));
+
+        WebhookProperties oneMs = new WebhookProperties();
+        oneMs.getConsumer().getHandler().setTimeout(Duration.ofMillis(1));
+        assertThat(validator.validate(oneMs)).isEmpty();
+
+        WebhookProperties nullEndpoints = new WebhookProperties();
+        nullEndpoints.getConsumer().setEndpoints(null);
+        assertThat(nullEndpoints.getConsumer().isEndpointPathsUnique()).isTrue();
+        assertThat(validator.validate(nullEndpoints))
+                .anySatisfy(v -> assertThat(v.getPropertyPath().toString()).contains("endpoints"));
+    }
 }

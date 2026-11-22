@@ -281,4 +281,15 @@ class DestinationValidatorTest {
                     .anyMatch(m -> m.contains("endpoint-id is set") && m.contains("will be ignored"));
         }
     }
+
+    @Test
+    void rejectsDestinationWhenSecretProviderReturnsNull() {
+        WebhookProducerProperties properties =
+                propertiesWith("crm", "https://crm.example.com/webhooks", HMAC_SECRET, null);
+        DestinationValidator nullReturningValidator = new DestinationValidator(properties, allowAll, d -> null);
+
+        assertThatThrownBy(nullReturningValidator::afterPropertiesSet)
+                .isInstanceOf(WebhookConfigurationException.class)
+                .hasMessageContaining("No signing secret configured");
+    }
 }

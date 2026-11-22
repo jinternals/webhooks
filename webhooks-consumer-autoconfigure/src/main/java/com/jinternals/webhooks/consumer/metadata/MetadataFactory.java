@@ -9,6 +9,7 @@ import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -74,7 +75,7 @@ public class MetadataFactory {
     private Map<String, String> flattenAndRedact(Map<String, List<String>> rawHeaders) {
         Map<String, String> headers = new LinkedHashMap<>();
         for (Map.Entry<String, List<String>> entry : rawHeaders.entrySet()) {
-            String name = entry.getKey();
+            String name = entry.getKey().toLowerCase(Locale.ROOT);
             List<String> values = entry.getValue();
             String value = REDACTED_HEADERS.contains(name)
                     ? REDACTED

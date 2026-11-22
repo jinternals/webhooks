@@ -66,14 +66,20 @@ class WebhookProducerAutoConfigurationTest {
         server.start();
         try {
             int port = server.getAddress().getPort();
-            RestClient restClient = autoConfig.webhookProducerRestClient(RestClient.builder(), properties());
-            RestClientWebhookTransport transport =
-                    new RestClientWebhookTransport(restClient, new AllowAllDestinationUrlValidator());
+            WebhookProducerProperties props = properties();
+            java.net.http.HttpClient httpClient = autoConfig.webhookProducerHttpClient(props);
+            try {
+                RestClient restClient = autoConfig.webhookProducerRestClient(emptyBuilderProvider(), httpClient, props);
+                RestClientWebhookTransport transport =
+                        new RestClientWebhookTransport(restClient, new AllowAllDestinationUrlValidator());
 
-            assertThatThrownBy(() -> transport.send("http://127.0.0.1:" + port + "/webhooks", Map.of(), "{}"))
-                    .isInstanceOf(WebhookDeliveryException.class)
-                    .hasMessageContaining("failed with status 302");
-            assertThat(redirectTargetHits).hasValue(0);
+                assertThatThrownBy(() -> transport.send("http://127.0.0.1:" + port + "/webhooks", Map.of(), "{}"))
+                        .isInstanceOf(WebhookDeliveryException.class)
+                        .hasMessageContaining("failed with status 302");
+                assertThat(redirectTargetHits).hasValue(0);
+            } finally {
+                httpClient.close();
+            }
         } finally {
             server.stop(0);
         }
@@ -100,15 +106,21 @@ class WebhookProducerAutoConfigurationTest {
             int port = server.getAddress().getPort();
             WebhookProducerProperties properties = properties();
             properties.getHttp().setReadTimeout(Duration.ofMillis(250));
-            RestClient restClient = autoConfig.webhookProducerRestClient(RestClient.builder(), properties);
-            RestClientWebhookTransport transport =
-                    new RestClientWebhookTransport(restClient, new AllowAllDestinationUrlValidator());
+            java.net.http.HttpClient httpClient = autoConfig.webhookProducerHttpClient(properties);
+            try {
+                RestClient restClient =
+                        autoConfig.webhookProducerRestClient(emptyBuilderProvider(), httpClient, properties);
+                RestClientWebhookTransport transport =
+                        new RestClientWebhookTransport(restClient, new AllowAllDestinationUrlValidator());
 
-            long start = System.nanoTime();
-            assertThatThrownBy(() -> transport.send("http://127.0.0.1:" + port + "/webhooks", Map.of(), "{}"))
-                    .isInstanceOf(WebhookDeliveryException.class);
-            long elapsedMs = (System.nanoTime() - start) / 1_000_000;
-            assertThat(elapsedMs).isLessThan(4_000);
+                long start = System.nanoTime();
+                assertThatThrownBy(() -> transport.send("http://127.0.0.1:" + port + "/webhooks", Map.of(), "{}"))
+                        .isInstanceOf(WebhookDeliveryException.class);
+                long elapsedMs = (System.nanoTime() - start) / 1_000_000;
+                assertThat(elapsedMs).isLessThan(4_000);
+            } finally {
+                httpClient.close();
+            }
         } finally {
             server.stop(0);
         }
@@ -166,6 +178,11 @@ class WebhookProducerAutoConfigurationTest {
                 .getBeanProvider(java.time.Clock.class);
     }
 
+    private static org.springframework.beans.factory.ObjectProvider<RestClient.Builder> emptyBuilderProvider() {
+        return new org.springframework.beans.factory.support.DefaultListableBeanFactory()
+                .getBeanProvider(RestClient.Builder.class);
+    }
+
     @Test
     void transportEnforcesTheUrlValidatorBeforeSending() {
         // The produced transport must be the retrying wrapper wired with the URL validator: delivering to a
@@ -209,25 +226,31 @@ class WebhookProducerAutoConfigurationTest {
         server.start();
         try {
             int port = server.getAddress().getPort();
-            RestClient restClient = autoConfig.webhookProducerRestClient(RestClient.builder(), properties());
-            WebhookRequestInterceptor addBearer = (url, headers, body) -> {
-                var out = new java.util.LinkedHashMap<>(headers);
-                out.put("Authorization", List.of("Bearer token-123"));
-                return out;
-            };
+            WebhookProducerProperties props = properties();
+            java.net.http.HttpClient httpClient = autoConfig.webhookProducerHttpClient(props);
+            try {
+                RestClient restClient = autoConfig.webhookProducerRestClient(emptyBuilderProvider(), httpClient, props);
+                WebhookRequestInterceptor addBearer = (url, headers, body) -> {
+                    var out = new java.util.LinkedHashMap<>(headers);
+                    out.put("Authorization", List.of("Bearer token-123"));
+                    return out;
+                };
 
-            WebhookTransport transport = autoConfig.webhookTransport(
-                    restClient,
-                    new AllowAllDestinationUrlValidator(),
-                    new NoOpWebhookDeliveryListener(),
-                    properties(),
-                    List.of(addBearer),
-                    emptyClockProvider());
+                WebhookTransport transport = autoConfig.webhookTransport(
+                        restClient,
+                        new AllowAllDestinationUrlValidator(),
+                        new NoOpWebhookDeliveryListener(),
+                        properties(),
+                        List.of(addBearer),
+                        emptyClockProvider());
 
-            transport.send("http://127.0.0.1:" + port + "/webhooks", Map.of("webhook-id", List.of("msg_1")), "{}");
+                transport.send("http://127.0.0.1:" + port + "/webhooks", Map.of("webhook-id", List.of("msg_1")), "{}");
 
-            assertThat(seenAuth.get()).isEqualTo("Bearer token-123");
-            assertThat(seenSigned.get()).isEqualTo("msg_1"); // the signed header survives interception
+                assertThat(seenAuth.get()).isEqualTo("Bearer token-123");
+                assertThat(seenSigned.get()).isEqualTo("msg_1"); // the signed header survives interception
+            } finally {
+                httpClient.close();
+            }
         } finally {
             server.stop(0);
         }
@@ -399,6 +422,50 @@ class WebhookProducerAutoConfigurationTest {
                                     .timer())
                             .isNotNull();
                 });
+    }
+
+    @org.springframework.context.annotation.Configuration(proxyBeanMethods = false)
+    static class HostRestClientConfig {
+        @org.springframework.context.annotation.Bean
+        RestClient hostStripeRestClient() {
+            return RestClient.builder()
+                    .defaultHeader("Authorization", "Bearer SECRET_HOST_TOKEN")
+                    .build();
+        }
+    }
+
+    @Test
+    void doesNotCollideWithHostRestClientOrGetHijackedByItAndWorksWithoutRestClientAutoConfiguration()
+            throws Exception {
+        java.util.concurrent.atomic.AtomicReference<String> leakedAuth =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/webhooks", exchange -> {
+            leakedAuth.set(exchange.getRequestHeaders().getFirst("Authorization"));
+            exchange.sendResponseHeaders(204, -1);
+            exchange.close();
+        });
+        server.start();
+        try {
+            int port = server.getAddress().getPort();
+            // Intentionally omit RestClientAutoConfiguration (simulating WebFlux/custom host) AND register an
+            // unqualified host RestClient carrying a secret default Authorization header.
+            new org.springframework.boot.test.context.runner.ApplicationContextRunner()
+                    .withConfiguration(org.springframework.boot.autoconfigure.AutoConfigurations.of(
+                            WebhookProducerAutoConfiguration.class,
+                            org.springframework.boot.autoconfigure.jackson.JacksonAutoConfiguration.class))
+                    .withUserConfiguration(HostRestClientConfig.class)
+                    .run(ctx -> {
+                        // 1) Unqualified ctx.getBean(RestClient.class) resolves uniquely to hostStripeRestClient!
+                        assertThat(ctx.getBean(RestClient.class)).isSameAs(ctx.getBean("hostStripeRestClient"));
+                        // 2) webhookTransport uses @Qualifier("webhookProducerRestClient"), NOT hostStripeRestClient!
+                        ctx.getBean(WebhookTransport.class)
+                                .send("http://127.0.0.1:" + port + "/webhooks", Map.of(), "{}");
+                        assertThat(leakedAuth.get()).isNull();
+                    });
+        } finally {
+            server.stop(0);
+        }
     }
 
     @Test

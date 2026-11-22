@@ -36,8 +36,11 @@ public class WebConfiguration implements WebMvcConfigurer {
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
-        registry.addInterceptor(new EndpointResolvingInterceptor(properties))
-                .addPathPatterns(interceptorPathPatterns()); // scope to webhook paths; never host requests
+        List<String> patterns = interceptorPathPatterns();
+        if (!patterns.isEmpty()) {
+            registry.addInterceptor(new EndpointResolvingInterceptor(properties))
+                    .addPathPatterns(patterns); // scope to webhook paths; never host requests
+        }
     }
 
     /**

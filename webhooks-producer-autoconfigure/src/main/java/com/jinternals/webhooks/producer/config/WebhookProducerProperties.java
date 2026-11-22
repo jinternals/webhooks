@@ -1,6 +1,7 @@
 package com.jinternals.webhooks.producer.config;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotNull;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -37,6 +38,7 @@ import org.springframework.validation.annotation.Validated;
 public class WebhookProducerProperties {
 
     /** Named destinations keyed by the name used in {@code @WebhookClient(destination = "...")}. */
+    @NotNull
     private Map<String, Destination> destinations = new LinkedHashMap<>();
 
     /**
@@ -65,14 +67,17 @@ public class WebhookProducerProperties {
     private boolean signingEnabled = true;
 
     /** Outbound HTTP connect/read timeouts for the default transport (see SPEC.md §19c). */
+    @NotNull
     @Valid
     private Http http = new Http();
 
     /** In-process (no-persistence) retry/backoff policy for the default transport (see SPEC.md §19b). */
+    @NotNull
     @Valid
     private Retry retry = new Retry();
 
     /** Outbound destination URL guard (SSRF protection; see SPEC.md §19d). */
+    @NotNull
     @Valid
     private Security security = new Security();
 
@@ -112,6 +117,7 @@ public class WebhookProducerProperties {
          * to receivers before the old one is retired (and vice versa). Empty in the common
          * (non-rotating) case.
          */
+        @NotNull
         private List<String> additionalSecrets = new ArrayList<>();
     }
 
@@ -131,6 +137,16 @@ public class WebhookProducerProperties {
         /** Maximum time to wait for the response once connected. Default 10 seconds. */
         @NotNull
         private Duration readTimeout = Duration.ofSeconds(10);
+
+        @AssertTrue(message = "webhooks.producer.http.connect-timeout must be >= 1ms")
+        public boolean isConnectTimeoutPositive() {
+            return connectTimeout == null || connectTimeout.compareTo(Duration.ofMillis(1)) >= 0;
+        }
+
+        @AssertTrue(message = "webhooks.producer.http.read-timeout must be >= 1ms")
+        public boolean isReadTimeoutPositive() {
+            return readTimeout == null || readTimeout.compareTo(Duration.ofMillis(1)) >= 0;
+        }
     }
 
     /**
@@ -178,6 +194,7 @@ public class WebhookProducerProperties {
          * Allow-list of destination hostnames (exact, case-insensitive match). Empty (the default) means
          * <strong>no restriction</strong>. When non-empty, only these hosts may be delivered to.
          */
+        @NotNull
         private List<String> allowedHosts = new ArrayList<>();
     }
 }

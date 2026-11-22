@@ -29,6 +29,7 @@ public class TimedHandlerDispatcher {
     }
 
     public void dispatch(String type, Object event, WebhookMetadata metadata) {
+        dispatcher.requireHandler(event, metadata);
         handlerExecutor.execute(type, () -> {
             long startNanos = System.nanoTime();
             try {

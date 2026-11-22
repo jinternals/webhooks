@@ -230,4 +230,49 @@ class IdempotencyGuardTest {
         seconds.addAndGet(600L); // exact 10m boundary from last sight (now == expiry -> !isAfter(now) -> expired)
         assertThat(guard.tryBegin("id-ttl")).isTrue();
     }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void inMemoryReleaseNeverDeletesCommittedStateAndBoundsCommittedSet() {
+        java.util.concurrent.atomic.AtomicLong seconds = new java.util.concurrent.atomic.AtomicLong(1_700_000_000L);
+        java.time.Clock clock = new java.time.Clock() {
+            @Override
+            public java.time.ZoneId getZone() {
+                return java.time.ZoneOffset.UTC;
+            }
+
+            @Override
+            public java.time.Clock withZone(java.time.ZoneId zone) {
+                return this;
+            }
+
+            @Override
+            public Instant instant() {
+                return Instant.ofEpochSecond(seconds.get());
+            }
+        };
+        InMemoryIdempotencyGuard guard = new InMemoryIdempotencyGuard(2, clock);
+        java.util.Set<String> committed = (java.util.Set<String>) ReflectionTestUtils.getField(guard, "committed");
+
+        // 1) Late release() from an evicted/stalled caller MUST NOT remove a sibling caller's committed entry —
+        //    even after a duplicate tryBegin() returned false!
+        assertThat(guard.tryBegin("id-race")).isTrue();
+        guard.markProcessed("id-race");
+        guard.release("id-race");
+        assertThat(guard.tryBegin("id-race")).isFalse();
+        guard.release("id-race");
+        assertThat(guard.tryBegin("id-race")).isFalse();
+
+        // 2) Once TTL expires, a new tryBegin clears the old committed marker so a subsequent release() works!
+        seconds.addAndGet(601L);
+        assertThat(guard.tryBegin("id-race")).isTrue();
+        guard.release("id-race");
+        assertThat(guard.tryBegin("id-race")).isTrue();
+        guard.markProcessed("id-race");
+
+        // 3) Evicting eldest entries keeps committed set bounded to maxSize (2)!
+        guard.markProcessed("id-2");
+        guard.markProcessed("id-3");
+        assertThat(committed).hasSize(2).containsExactlyInAnyOrder("id-2", "id-3");
+    }
 }

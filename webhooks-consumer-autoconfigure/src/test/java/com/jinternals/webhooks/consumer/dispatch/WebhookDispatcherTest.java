@@ -415,4 +415,54 @@ class WebhookDispatcherTest {
         @WebhookHandler
         void bad(BlankTypeEvent e) {}
     }
+
+    interface GenericEventConsumer<E> {
+        void accept(E event);
+    }
+
+    static class BridgeHandler implements GenericEventConsumer<EventA> {
+        String seen;
+
+        @Override
+        @WebhookHandler
+        public void accept(EventA event) {
+            this.seen = "bridged";
+        }
+    }
+
+    static class BaseOverridableHandler {
+        @WebhookHandler
+        public void handle(EventA event) {}
+    }
+
+    static class ChildOverriddenHandler extends BaseOverridableHandler {
+        String seen;
+
+        @Override
+        @WebhookHandler
+        public void handle(EventA event) {
+            this.seen = "child";
+        }
+    }
+
+    @Test
+    void supportsGenericInterfaceBridgeMethodsOverriddenSubclassHandlersAndEagerRequireHandler() {
+        AnnotationConfigApplicationContext bridgeCtx = new AnnotationConfigApplicationContext();
+        bridgeCtx.register(DispatcherBeanConfig.class, BridgeHandler.class);
+        bridgeCtx.refresh();
+        WebhookDispatcher bridgeDispatcher = bridgeCtx.getBean(WebhookDispatcher.class);
+        bridgeDispatcher.requireHandler(new EventA(), meta("a"));
+        bridgeDispatcher.dispatch(new EventA(), meta("a"));
+        assertThat(bridgeCtx.getBean(BridgeHandler.class).seen).isEqualTo("bridged");
+        assertThatThrownBy(() -> bridgeDispatcher.requireHandler(new EventB(), meta("b")))
+                .isInstanceOf(NoWebhookHandlerException.class);
+        bridgeCtx.close();
+
+        AnnotationConfigApplicationContext overrideCtx = new AnnotationConfigApplicationContext();
+        overrideCtx.register(DispatcherBeanConfig.class, ChildOverriddenHandler.class);
+        overrideCtx.refresh();
+        overrideCtx.getBean(WebhookDispatcher.class).dispatch(new EventA(), meta("a"));
+        assertThat(overrideCtx.getBean(ChildOverriddenHandler.class).seen).isEqualTo("child");
+        overrideCtx.close();
+    }
 }

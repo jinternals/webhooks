@@ -102,14 +102,16 @@ public class AsyncHandlerExecutor implements HandlerExecutor, AutoCloseable {
         // the dead cancel would linger in the delay queue for the full timeout. Cancelling it in the task's
         // finally block, with removeOnCancelPolicy(true), evicts it immediately regardless of which thread ran.
         AtomicReference<ScheduledFuture<?>> scheduledCancel = new AtomicReference<>();
+        AtomicReference<NamedTask> taskRef = new AtomicReference<>();
         // A FutureTask lets us arm the timeout cancel BEFORE running the task. This matters on the
         // CallerRunsPolicy path: when the queue is full the rejected task runs synchronously inside
         // pool.execute(...) on the request thread, so if we scheduled the cancel only after execute()
         // returned, a stuck caller-run handler would never reach that line and would never be interrupted.
         // Scheduling against the task reference first means the timeout is in effect for both the pooled and
         // the caller-runs execution of the very same task.
-        NamedTask task =
-                new NamedTask(type, () -> runThenClearTimeout(submitterContext, type, handlerCall, scheduledCancel));
+        NamedTask task = new NamedTask(
+                type, () -> runThenClearTimeout(submitterContext, type, taskRef.get(), handlerCall, scheduledCancel));
+        taskRef.set(task);
         ScheduledFuture<?> cancelFuture =
                 timeoutScheduler.schedule(() -> cancelIfRunning(type, task), timeout.toMillis(), TimeUnit.MILLISECONDS);
         scheduledCancel.set(cancelFuture);
@@ -143,10 +145,11 @@ public class AsyncHandlerExecutor implements HandlerExecutor, AutoCloseable {
     private void runThenClearTimeout(
             Map<String, String> submitterContext,
             String type,
+            NamedTask task,
             Runnable handlerCall,
             AtomicReference<ScheduledFuture<?>> scheduledCancel) {
         try {
-            runWithContext(submitterContext, type, handlerCall);
+            runWithContext(submitterContext, type, task, handlerCall);
         } finally {
             // mayInterruptIfRunning=false: never interrupt the scheduler thread if the cancel is already
             // executing (i.e. the timeout fired). cancel() on an already-run/cancelled task is a harmless no-op.
@@ -160,11 +163,12 @@ public class AsyncHandlerExecutor implements HandlerExecutor, AutoCloseable {
      * reused pool threads. {@code getCopyOfContextMap()} may be {@code null} (empty context); both the
      * install and the restore treat {@code null} as "clear".
      */
-    private void runWithContext(Map<String, String> submitterContext, String type, Runnable handlerCall) {
+    private void runWithContext(
+            Map<String, String> submitterContext, String type, NamedTask task, Runnable handlerCall) {
         Map<String, String> previous = MDC.getCopyOfContextMap();
         setContext(submitterContext);
         try {
-            runGuarded(type, handlerCall);
+            runGuarded(type, task, handlerCall);
         } finally {
             setContext(previous);
         }
@@ -180,16 +184,18 @@ public class AsyncHandlerExecutor implements HandlerExecutor, AutoCloseable {
     }
 
     /**
-     * Run the handler so a thrown exception is never swallowed: an {@link InterruptedException}-driven cancel
-     * is reported as a timeout (handled by {@link #cancelIfRunning}, so skipped here to avoid double-report),
-     * any other exception is logged and routed to the failure listener.
+     * Run the handler so a thrown exception is never swallowed: a timeout-cancelled task
+     * ({@code task.isCancelled() == true}) is reported by {@link #cancelIfRunning} and skipped here to avoid
+     * double-reporting (even if the handler cleared its interrupt flag), whereas any non-timed-out failure —
+     * including an in-flight handler interrupted by {@code shutdownNow()} or a handler that set its own
+     * interrupt flag before throwing — is logged and routed to the failure listener.
      */
-    private void runGuarded(String type, Runnable handlerCall) {
+    private void runGuarded(String type, NamedTask task, Runnable handlerCall) {
         try {
             handlerCall.run();
         } catch (RuntimeException | Error e) {
-            if (Thread.currentThread().isInterrupted()) {
-                // Interrupted => this is the timeout path; cancelIfRunning reports it. Swallow here only.
+            if (task.isCancelled()) {
+                // Cancelled by cancelIfRunning => timeout path; cancelIfRunning reports onHandlerTimeout.
                 return;
             }
             log.error(
@@ -262,17 +268,17 @@ public class AsyncHandlerExecutor implements HandlerExecutor, AutoCloseable {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         } finally {
-            abortRemainingTasks();
             timeoutScheduler.shutdownNow();
+            abortRemainingTasks();
         }
     }
 
     private void abortRemainingTasks() {
         for (Runnable unexecuted : pool.shutdownNow()) {
             NamedTask task = (NamedTask) unexecuted;
-            if (task.isCancelled()) {
-                // Already timed out in the queue and reported via cancelIfRunning -> onHandlerTimeout; skip so
-                // it is not reported a second time as a shutdown failure.
+            if (!task.cancel(false)) {
+                // Atomically transition NEW -> CANCELLED; false means cancelIfRunning already timed it out
+                // and reported onHandlerTimeout, so skip to avoid double-reporting.
                 continue;
             }
             String droppedType = task.type;

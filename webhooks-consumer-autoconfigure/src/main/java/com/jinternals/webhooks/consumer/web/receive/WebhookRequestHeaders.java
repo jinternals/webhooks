@@ -1,6 +1,7 @@
 package com.jinternals.webhooks.consumer.web.receive;
 
 import jakarta.servlet.http.HttpServletRequest;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.LinkedHashMap;
@@ -30,18 +31,30 @@ public final class WebhookRequestHeaders {
         Enumeration<String> names = request.getHeaderNames();
         while (names != null && names.hasMoreElements()) {
             String name = names.nextElement();
-            headers.put(name.toLowerCase(Locale.ROOT), Collections.list(request.getHeaders(name)));
+            String lower = name.toLowerCase(Locale.ROOT);
+            List<String> incoming = Collections.list(request.getHeaders(name));
+            headers.merge(lower, incoming, (existing, extra) -> {
+                List<String> merged = new ArrayList<>(existing);
+                merged.addAll(extra);
+                return merged;
+            });
         }
         return headers;
     }
 
     /**
-     * The first value of a header previously collected by {@link #collect(HttpServletRequest)}, or
-     * {@code null} when absent or empty. The lookup name is lower-cased with {@link Locale#ROOT} so
-     * callers can pass canonical header constants regardless of case.
+     * The first value of a header (matched case-insensitively with {@link Locale#ROOT}), or {@code null} when
+     * absent or empty. Fast-paths exact lower-cased keys collected by {@link #collect(HttpServletRequest)} and
+     * falls back to a case-insensitive scan when callers supply a mixed-case map directly.
      */
     public static String first(Map<String, List<String>> headers, String name) {
-        List<String> values = headers.get(name.toLowerCase(Locale.ROOT));
-        return (values == null || values.isEmpty()) ? null : values.get(0);
+        String lower = name.toLowerCase(Locale.ROOT);
+        for (Map.Entry<String, List<String>> entry : headers.entrySet()) {
+            if (lower.equals(entry.getKey().toLowerCase(Locale.ROOT))) {
+                List<String> values = entry.getValue();
+                return (values == null || values.isEmpty()) ? null : values.get(0);
+            }
+        }
+        return null;
     }
 }

@@ -60,17 +60,28 @@ public class WebhookProducerAutoConfiguration {
      * also bypass the destination URL allow-list). The host can supply its own {@code webhookProducerRestClient}
      * bean for further HTTP tuning.
      */
-    @Bean
-    @ConditionalOnMissingBean(name = "webhookProducerRestClient")
-    public RestClient webhookProducerRestClient(RestClient.Builder builder, WebhookProducerProperties properties) {
-        WebhookProducerProperties.Http http = properties.getHttp();
-        HttpClient httpClient = HttpClient.newBuilder()
+    @Bean(name = "webhookProducerHttpClient", defaultCandidate = false, destroyMethod = "close")
+    @ConditionalOnMissingBean(name = {"webhookProducerRestClient", "webhookProducerHttpClient"})
+    public HttpClient webhookProducerHttpClient(WebhookProducerProperties properties) {
+        return HttpClient.newBuilder()
                 .followRedirects(HttpClient.Redirect.NEVER)
-                .connectTimeout(http.getConnectTimeout())
+                .connectTimeout(properties.getHttp().getConnectTimeout())
                 .build();
-        JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
-        requestFactory.setReadTimeout(http.getReadTimeout());
-        return builder.requestFactory(requestFactory).build();
+    }
+
+    @Bean(name = "webhookProducerRestClient", defaultCandidate = false)
+    @ConditionalOnMissingBean(name = "webhookProducerRestClient")
+    public RestClient webhookProducerRestClient(
+            ObjectProvider<RestClient.Builder> builderProvider,
+            @Qualifier("webhookProducerHttpClient") HttpClient webhookProducerHttpClient,
+            WebhookProducerProperties properties) {
+        JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(webhookProducerHttpClient);
+        requestFactory.setReadTimeout(properties.getHttp().getReadTimeout());
+        return builderProvider
+                .getIfAvailable(RestClient::builder)
+                .clone()
+                .requestFactory(requestFactory)
+                .build();
     }
 
     /**
@@ -119,7 +130,7 @@ public class WebhookProducerAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public WebhookTransport webhookTransport(
-            RestClient webhookProducerRestClient,
+            @Qualifier("webhookProducerRestClient") RestClient webhookProducerRestClient,
             DestinationUrlValidator urlValidator,
             WebhookDeliveryListener deliveryListener,
             WebhookProducerProperties properties,

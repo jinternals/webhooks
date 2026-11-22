@@ -607,4 +607,38 @@ class WebhookReceiveControllerTest {
         // Present-but-empty header value list resolves to null (not ""), same as absent.
         verify(idempotency).tryBegin(isNull());
     }
+
+    @Test
+    void rejectsJsonNullLiteralWithInvalidPayload400ReleasesOnErrorAndFailsEagerlyBeforeAsyncSubmit() {
+        Endpoint endpoint = endpoint("/webhooks/crm", List.of());
+        MockHttpServletRequest nullBodyReq = request(endpoint, "msg_null", "1700000000");
+
+        assertThatThrownBy(() -> controller.handle(nullBodyReq, "null"))
+                .isInstanceOf(InvalidPayloadException.class)
+                .hasMessageContaining("JSON object");
+        verify(idempotency).release("msg_null");
+
+        // Error (e.g. AssertionError) thrown during dispatch MUST also release idempotency reservation!
+        MockHttpServletRequest errReq = request(endpoint, "msg_err", "1700000000");
+        when(typeRegistry.classOf("contact.created")).thenReturn((Class) ContactCreated.class);
+        when(metadataFactory.build(any(), any(), any(), any(), anyString())).thenReturn(meta());
+        doThrow(new AssertionError("simulated linkage/assertion error"))
+                .when(dispatcher)
+                .dispatch(any(), any());
+        assertThatThrownBy(() -> controller.handle(errReq, "{\"type\":\"contact.created\",\"data\":{\"id\":\"c-1\"}}"))
+                .isInstanceOf(AssertionError.class);
+        verify(idempotency).release("msg_err");
+
+        // Missing @WebhookHandler fails eagerly via requireHandler BEFORE HandlerExecutor.execute runs!
+        com.jinternals.webhooks.consumer.dispatch.HandlerExecutor neverExecuted =
+                mock(com.jinternals.webhooks.consumer.dispatch.HandlerExecutor.class);
+        WebhookDispatcher missingDispatcher = mock(WebhookDispatcher.class);
+        doThrow(new NoWebhookHandlerException("contact.created", ContactCreated.class.getName()))
+                .when(missingDispatcher)
+                .requireHandler(any(), any());
+        TimedHandlerDispatcher timed = new TimedHandlerDispatcher(neverExecuted, missingDispatcher, metrics);
+        assertThatThrownBy(() -> timed.dispatch("contact.created", new ContactCreated(), meta()))
+                .isInstanceOf(NoWebhookHandlerException.class);
+        verify(neverExecuted, never()).execute(anyString(), any());
+    }
 }

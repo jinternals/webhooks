@@ -33,6 +33,7 @@ import org.springframework.validation.annotation.Validated;
 @ConfigurationProperties("webhooks")
 public class WebhookProperties {
 
+    @NotNull
     @Valid
     private Consumer consumer = new Consumer();
 
@@ -111,10 +112,12 @@ public class WebhookProperties {
         private Duration replayTolerance = Duration.ofMinutes(5);
 
         /** How {@code @WebhookHandler} methods are executed (see SPEC.md §15, §18). */
+        @NotNull
         @Valid
         @NestedConfigurationProperty
         private Handler handler = new Handler();
 
+        @NotNull
         @Valid
         @NestedConfigurationProperty
         private List<Endpoint> endpoints = new ArrayList<>();
@@ -146,6 +149,9 @@ public class WebhookProperties {
          */
         @AssertTrue(message = "webhooks.consumer.endpoints must not contain duplicate paths")
         public boolean isEndpointPathsUnique() {
+            if (endpoints == null) {
+                return true;
+            }
             Set<String> paths = new HashSet<>();
             for (Endpoint endpoint : endpoints) {
                 if (!paths.add(endpoint.getPath())) {
@@ -211,7 +217,7 @@ public class WebhookProperties {
          */
         @AssertTrue(message = "webhooks.consumer.handler.timeout must be positive")
         public boolean isTimeoutPositive() {
-            return timeout != null && !timeout.isNegative() && !timeout.isZero();
+            return timeout != null && timeout.compareTo(Duration.ofMillis(1)) >= 0;
         }
     }
 
@@ -237,6 +243,7 @@ public class WebhookProperties {
          * Empty in the common (non-rotating) case. For {@code v2a} this is the spec's <em>trust list</em>
          * of public keys — the verifier accepts the webhook if any configured key verifies any signature.
          */
+        @NotNull
         private List<String> additionalSecrets = new ArrayList<>();
 
         /**
@@ -265,6 +272,7 @@ public class WebhookProperties {
          * A type outside this list is treated as an unknown type for this endpoint and handled by
          * {@link Consumer#getUnknownTypePolicy()}.
          */
+        @NotNull
         private List<String> types = new ArrayList<>();
 
         /** True when this endpoint accepts the given event type (empty list = accept all). */

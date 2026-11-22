@@ -220,4 +220,21 @@ class MetadataFactoryTest {
         assertThat(meta.headers()).isEmpty();
         assertThat(meta.sourceIp()).isEqualTo("10.0.0.5");
     }
+
+    @Test
+    void redactsMixedCaseSensitiveHeadersSuppliedDirectlyToBuild() {
+        MetadataFactory factory = new MetadataFactory(List.of());
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        Map<String, List<String>> mixedCase = Map.of(
+                "Authorization", List.of("Bearer secret-jwt"),
+                "Webhook-Signature", List.of("v1,secret-sig"),
+                "Cookie", List.of("sid=secret"),
+                "Webhook-Id", List.of("msg_mixed"));
+
+        WebhookMetadata meta = factory.build(request, envelope("t", null), new Object(), mixedCase, "/p");
+        assertThat(meta.webhookId()).isEqualTo("msg_mixed");
+        assertThat(meta.headers().get("authorization")).isEqualTo("***REDACTED***");
+        assertThat(meta.headers().get("webhook-signature")).isEqualTo("***REDACTED***");
+        assertThat(meta.headers().get("cookie")).isEqualTo("***REDACTED***");
+    }
 }

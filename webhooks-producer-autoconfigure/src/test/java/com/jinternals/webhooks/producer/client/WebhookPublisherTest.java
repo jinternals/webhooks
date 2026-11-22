@@ -380,4 +380,24 @@ class WebhookPublisherTest {
         assertThat(attemptHeaders.get(1).get(WebhookHeaders.TIMESTAMP)).containsExactly("1700000060");
         assertThat(attemptHeaders.get(1)).doesNotContainKey(WebhookHeaders.SIGNATURE);
     }
+
+    @Test
+    void rejectsNullSecretsListFromProviderAndWrapsValueToTreeIllegalArgumentException() {
+        when(secretProvider.secretsFor(crm)).thenReturn(null);
+        assertThatThrownBy(() -> publisher.publish("crm", new ContactCreated()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("No signing secret configured");
+
+        com.fasterxml.jackson.databind.ObjectMapper brokenMapper =
+                mock(com.fasterxml.jackson.databind.ObjectMapper.class);
+        when(brokenMapper.createObjectNode())
+                .thenReturn(new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode());
+        when(brokenMapper.valueToTree(org.mockito.ArgumentMatchers.any()))
+                .thenThrow(new IllegalArgumentException("unserializable cycle"));
+        WebhookPublisher brokenPublisher =
+                new WebhookPublisher(brokenMapper, signer, transport, secretProvider, properties);
+        assertThatThrownBy(() -> brokenPublisher.publish("crm", new ContactCreated()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Failed to serialize webhook payload");
+    }
 }

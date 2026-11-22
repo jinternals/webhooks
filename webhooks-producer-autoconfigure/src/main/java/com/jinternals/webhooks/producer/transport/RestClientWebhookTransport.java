@@ -1,6 +1,7 @@
 package com.jinternals.webhooks.producer.transport;
 
 import com.jinternals.webhooks.producer.security.DestinationUrlValidator;
+import java.net.URI;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.ZonedDateTime;
@@ -48,7 +49,7 @@ public class RestClientWebhookTransport implements WebhookTransport {
         try {
             restClient
                     .post()
-                    .uri(url)
+                    .uri(URI.create(url))
                     .contentType(MediaType.APPLICATION_JSON)
                     .headers(h -> headers.forEach(h::addAll))
                     .body(body)

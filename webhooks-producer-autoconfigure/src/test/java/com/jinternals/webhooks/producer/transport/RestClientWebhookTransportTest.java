@@ -235,6 +235,20 @@ class RestClientWebhookTransportTest {
     }
 
     @Test
+    void preservesPercentEncodedQueryParametersWithoutDoubleEncoding() {
+        String presignedUrl = "https://crm.example.com/webhooks?sp=%2Ftriggers%2Fmanual&sig=a%2Bb%3D";
+        server.expect(
+                        org.springframework.test.web.client.ExpectedCount.once(),
+                        org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo(
+                                java.net.URI.create(presignedUrl)))
+                .andRespond(org.springframework.test.web.client.response.MockRestResponseCreators.withNoContent());
+
+        transport.send(presignedUrl, HEADERS, "{\"a\":1}");
+
+        server.verify();
+    }
+
+    @Test
     void throwsDeliveryExceptionOnTransportError() {
         // No server set up on this builder -> connection/transport error surfaces as RestClientException.
         RestClient bareClient = RestClient.builder().build();

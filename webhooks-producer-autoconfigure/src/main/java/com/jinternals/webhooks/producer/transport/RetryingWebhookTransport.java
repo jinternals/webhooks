@@ -89,12 +89,12 @@ public class RetryingWebhookTransport implements AttemptAwareWebhookTransport {
         // Clamp backoffs to a sane floor: a negative configured Duration would otherwise yield a negative
         // sleep (IllegalArgumentException from Thread.sleep). initial is floored at 0, max at the
         // (already-floored) initial so max >= initial always holds and the cap can never invert.
-        this.initialBackoffMillis = Math.max(0L, retry.getInitialBackoff().toMillis());
-        this.maxBackoffMillis =
-                Math.max(initialBackoffMillis, retry.getMaxBackoff().toMillis());
-        // Clamp jitter into [0, 1]: out-of-range config (e.g. 2.0) would make the jitter factor negative
-        // and produce a negative backoff. 0 disables jitter, 1 is full jitter.
-        this.jitter = Math.min(1.0, Math.max(0.0, retry.getJitter()));
+        this.initialBackoffMillis = Math.max(0L, saturatedMillis(retry.getInitialBackoff()));
+        this.maxBackoffMillis = Math.max(initialBackoffMillis, saturatedMillis(retry.getMaxBackoff()));
+        // Clamp jitter into [0, 1] (and treat NaN as 0.0): out-of-range config (e.g. 2.0) would make the
+        // jitter factor negative and produce a negative backoff. 0 disables jitter, 1 is full jitter.
+        double rawJitter = retry.getJitter();
+        this.jitter = Double.isNaN(rawJitter) ? 0.0 : Math.min(1.0, Math.max(0.0, rawJitter));
         this.random = random;
         this.sleeper = sleeper;
     }
@@ -136,7 +136,7 @@ public class RetryingWebhookTransport implements AttemptAwareWebhookTransport {
                         statusText(e),
                         backoff,
                         SafeUrl.redactMessage(e.getMessage(), url));
-                sleep(backoff);
+                sleepOrAbandon(url, headers, body, attempt, backoff, e);
             }
         }
     }
@@ -199,12 +199,14 @@ public class RetryingWebhookTransport implements AttemptAwareWebhookTransport {
     }
 
     private long cappedRetryAfterMillis(Duration retryAfter) {
+        return Math.min(saturatedMillis(retryAfter), maxBackoffMillis);
+    }
+
+    private static long saturatedMillis(Duration duration) {
         try {
-            return Math.min(retryAfter.toMillis(), maxBackoffMillis);
+            return duration.toMillis();
         } catch (ArithmeticException overflow) {
-            // A positive Retry-After whose seconds*1000 overflows long (e.g. Retry-After: 9999999999999999)
-            // is guaranteed above maxBackoffMillis; clamp to the ceiling instead of crashing the retry loop.
-            return maxBackoffMillis;
+            return duration.isNegative() ? Long.MIN_VALUE : Long.MAX_VALUE;
         }
     }
 
@@ -212,20 +214,29 @@ public class RetryingWebhookTransport implements AttemptAwareWebhookTransport {
     private long backoffForAttempt(int attempt) {
         long exponential = initialBackoffMillis;
         for (int i = 1; i < attempt; i++) {
-            exponential = Math.min(exponential * 2, maxBackoffMillis);
+            exponential = Math.min(maxBackoffMillis, exponential + Math.min(exponential, Long.MAX_VALUE - exponential));
         }
-        long capped = Math.min(exponential, maxBackoffMillis);
-        // Jitter: sample from [capped*(1-jitter), capped].
+        // Jitter: sample from [exponential*(1-jitter), exponential].
         double factor = 1.0 - (jitter * random.getAsDouble());
-        return (long) (capped * factor);
+        return (long) (exponential * factor);
     }
 
-    private void sleep(long millis) {
+    private void sleepOrAbandon(
+            String url,
+            Map<String, List<String>> headers,
+            String body,
+            int attempt,
+            long millis,
+            WebhookDeliveryException previousFailure) {
         try {
             sleeper.sleep(millis);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new WebhookDeliveryException("Webhook delivery retry interrupted", e);
+            WebhookDeliveryException interrupted =
+                    new WebhookDeliveryException("Webhook delivery retry interrupted", e);
+            interrupted.addSuppressed(previousFailure);
+            abandon(url, headers, body, attempt, interrupted);
+            throw interrupted;
         }
     }
 

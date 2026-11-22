@@ -237,4 +237,25 @@ class Ed25519WebhookVerifierTest {
                 .isInstanceOf(WebhookVerificationException.class)
                 .hasMessageContaining("stale");
     }
+
+    @Test
+    void boundsMaximumInspectedV2aSignaturesPerHeader() {
+        String id = "msg_cap";
+        String ts = Signing.now();
+        String body = "{\"a\":1}";
+        String valid = Signing.signAsymmetric(Signing.PRIVATE_KEY, Signing.ENDPOINT_ID, id, ts, body);
+        String bogus = "v2a,AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==";
+
+        // 15 bogus + 1 valid (16th == MAX_V2A_SIGNATURES) -> accepted!
+        String sixteen = String.join(" ", java.util.Collections.nCopies(15, bogus)) + " " + valid;
+        assertThatCode(() -> verifier.verify(
+                        List.of(Signing.PUBLIC_KEY), Signing.ENDPOINT_ID, body, headers(id, ts, sixteen)))
+                .doesNotThrowAnyException();
+
+        // 16 bogus + 1 valid (17th > MAX_V2A_SIGNATURES) -> capped at 16, rejected!
+        String seventeen = String.join(" ", java.util.Collections.nCopies(16, bogus)) + " " + valid;
+        assertThatThrownBy(() -> verifier.verify(
+                        List.of(Signing.PUBLIC_KEY), Signing.ENDPOINT_ID, body, headers(id, ts, seventeen)))
+                .isInstanceOf(WebhookVerificationFailure.class);
+    }
 }

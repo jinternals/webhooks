@@ -153,4 +153,12 @@ class SecretValidatorTest {
             assertThat(logs.formattedMessages()).noneMatch(m -> m.contains("will be ignored"));
         }
     }
+
+    @Test
+    void failsWhenSecretProviderReturnsNull() {
+        WebhookProperties props = propsWith(endpoint("/w", Signing.SECRET, null));
+        assertThatThrownBy(() -> new SecretValidator(props, ep -> null).afterPropertiesSet())
+                .isInstanceOf(WebhookConfigurationException.class)
+                .hasMessageContaining("No webhook secret configured");
+    }
 }

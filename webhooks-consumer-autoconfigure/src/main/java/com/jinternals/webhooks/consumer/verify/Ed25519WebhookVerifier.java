@@ -3,6 +3,7 @@ package com.jinternals.webhooks.consumer.verify;
 import com.jinternals.webhooks.core.sign.Ed25519Keys;
 import com.jinternals.webhooks.core.sign.Ed25519Signatures;
 import java.security.PublicKey;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentMap;
@@ -61,20 +62,25 @@ public class Ed25519WebhookVerifier implements WebhookVerifier {
      * Package-private so {@link DefaultWebhookVerifier} can reuse it per-secret without re-running the shared
      * header/timestamp skeleton, while still enforcing {@link #requireValidEndpointId(String)}.
      */
+    /** Upper bound on {@code v2a} signature tokens checked per request to bound CPU against hostile headers. */
+    static final int MAX_V2A_SIGNATURES = 16;
+
     boolean matches(String secret, @Nullable String endpointId, String rawBody, WebhookSignatureHeaders parsed)
             throws WebhookVerificationFailure {
         requireValidEndpointId(endpointId);
         PublicKey publicKey = publicKeys.computeIfAbsent(secret, Ed25519Keys::decodePublicKey);
+        List<String> candidates = new ArrayList<>();
         for (String versioned : parsed.signature.split(" ")) {
             String[] parts = versioned.split(",", 2);
             if (parts.length < 2 || !Ed25519Signatures.VERSION.equals(parts[0])) {
                 continue;
             }
-            if (Ed25519Signatures.verify(publicKey, endpointId, parsed.msgId, parsed.timestamp, rawBody, parts[1])) {
-                return true;
+            candidates.add(parts[1]);
+            if (candidates.size() == MAX_V2A_SIGNATURES) {
+                break;
             }
         }
-        return false;
+        return Ed25519Signatures.verifyAny(publicKey, endpointId, parsed.msgId, parsed.timestamp, rawBody, candidates);
     }
 
     /**

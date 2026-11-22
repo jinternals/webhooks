@@ -557,4 +557,75 @@ class RetryingWebhookTransportTest {
 
         assertThat(observedTimestamps).containsExactly("1000", "1005", "1010");
     }
+
+    @Test
+    void handlesNanJitterOverflowDurationsOddBoundaryAndNotifiesDeadLetterOnInterrupt() {
+        // 1) NaN jitter clamps to 0.0; odd maxBackoff (1001ms) with initial=500ms yields 1000ms on attempt 2 (not
+        // 1001ms!)
+        AtomicInteger calls = new AtomicInteger();
+        WebhookTransport delegate = failing(2, new WebhookDeliveryException("down", 503), calls);
+        Retry oddRetry = retry(3);
+        oddRetry.setInitialBackoff(Duration.ofMillis(500));
+        oddRetry.setMaxBackoff(Duration.ofMillis(1001));
+        oddRetry.setJitter(Double.NaN);
+        new RetryingWebhookTransport(delegate, allowAll, recording, oddRetry, () -> 0.9, sleeps::add)
+                .send(URL, HEADERS, BODY);
+        assertThat(sleeps).containsExactly(500L, 1000L);
+        sleeps.clear();
+
+        // 2) Extreme Duration overflow (Duration.ofSeconds(Long.MAX_VALUE) and negative overflow) + doubling near
+        // Long.MAX_VALUE
+        AtomicInteger bigCalls = new AtomicInteger();
+        WebhookTransport bigDelegate = failing(2, new WebhookDeliveryException("down", 503), bigCalls);
+        Retry bigRetry = retry(3);
+        bigRetry.setInitialBackoff(Duration.ofMillis(1L << 62));
+        bigRetry.setMaxBackoff(Duration.ofSeconds(Long.MAX_VALUE));
+        bigRetry.setJitter(0.0);
+        new RetryingWebhookTransport(bigDelegate, allowAll, recording, bigRetry, () -> 0.0, sleeps::add)
+                .send(URL, HEADERS, BODY);
+        assertThat(sleeps).containsExactly(1L << 62, Long.MAX_VALUE);
+        sleeps.clear();
+
+        Retry negOverflowRetry = retry(2);
+        negOverflowRetry.setInitialBackoff(Duration.ofSeconds(Long.MIN_VALUE));
+        negOverflowRetry.setMaxBackoff(Duration.ofSeconds(Long.MIN_VALUE));
+        negOverflowRetry.setJitter(0.0);
+        AtomicInteger negCalls = new AtomicInteger();
+        new RetryingWebhookTransport(
+                        failing(1, new WebhookDeliveryException("down", 503), negCalls),
+                        allowAll,
+                        recording,
+                        negOverflowRetry,
+                        () -> 0.0,
+                        sleeps::add)
+                .send(URL, HEADERS, BODY);
+        assertThat(sleeps).containsExactly(0L);
+
+        // 3) Interrupted retry sleep notifies WebhookDeliveryListener with previous failure attached as suppressed!
+        deadLetters.clear();
+        WebhookDeliveryException firstErr = new WebhookDeliveryException("503 before interrupt", 503);
+        RetryingWebhookTransport interruptible = new RetryingWebhookTransport(
+                (u, h, b) -> {
+                    throw firstErr;
+                },
+                allowAll,
+                recording,
+                retry(3),
+                () -> 0.0,
+                ms -> {
+                    throw new InterruptedException("shutting down");
+                });
+        try {
+            assertThatThrownBy(() -> interruptible.send(URL, HEADERS, BODY))
+                    .isInstanceOf(WebhookDeliveryException.class)
+                    .hasMessageContaining("interrupted")
+                    .satisfies(ex -> assertThat(ex.getSuppressed()).containsExactly(firstErr));
+            assertThat(Thread.currentThread().isInterrupted()).isTrue();
+            assertThat(deadLetters).hasSize(1);
+            assertThat(deadLetters.get(0).attempts()).isEqualTo(1);
+            assertThat(deadLetters.get(0).reason()).isEqualTo(DeliveryFailure.Reason.EXHAUSTED);
+        } finally {
+            Thread.interrupted();
+        }
+    }
 }

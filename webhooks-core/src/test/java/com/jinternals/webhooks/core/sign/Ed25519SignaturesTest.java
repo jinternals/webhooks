@@ -147,6 +147,44 @@ class Ed25519SignaturesTest {
     }
 
     @Test
+    void verifyAnyHandlesEmptyMalformedWrongLengthAndUnusablePublicKey() {
+        PublicKey publicKey = Ed25519Keys.decodePublicKey(PUBLIC_KEY);
+        // Empty candidate list short-circuits before hashing payload (proven by null payload not NPE-ing).
+        assertThat(Ed25519Signatures.verifyAny(publicKey, ENDPOINT_ID, MSG_ID, TIMESTAMP, null, java.util.List.of()))
+                .isFalse();
+
+        String shortSig = Base64.getEncoder().encodeToString(new byte[] {1, 2, 3});
+        assertThat(Ed25519Signatures.verifyAny(
+                        publicKey,
+                        ENDPOINT_ID,
+                        MSG_ID,
+                        TIMESTAMP,
+                        PAYLOAD,
+                        java.util.List.of("not base64!!!", shortSig, SPEC_SIGNATURE)))
+                .isTrue();
+
+        PublicKey notEd25519 = new PublicKey() {
+            @Override
+            public String getAlgorithm() {
+                return "RSA";
+            }
+
+            @Override
+            public String getFormat() {
+                return "X.509";
+            }
+
+            @Override
+            public byte[] getEncoded() {
+                return new byte[0];
+            }
+        };
+        assertThat(Ed25519Signatures.verifyAny(
+                        notEd25519, ENDPOINT_ID, MSG_ID, TIMESTAMP, PAYLOAD, java.util.List.of(SPEC_SIGNATURE)))
+                .isFalse();
+    }
+
+    @Test
     void utilityClassIsNotInstantiable() throws Exception {
         var ctor = Ed25519Signatures.class.getDeclaredConstructor();
         assertThat(java.lang.reflect.Modifier.isPrivate(ctor.getModifiers())).isTrue();

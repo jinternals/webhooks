@@ -81,4 +81,29 @@ class DestinationUrlValidatorTest {
                 .isInstanceOf(WebhookDeliveryException.class)
                 .hasMessageContaining("Invalid destination URL");
     }
+
+    @Test
+    void allowListTrimsIgnoresNullOrBlankAndNormalizesBracketedIpv6Hosts() {
+        List<String> rawAllowed = new java.util.ArrayList<>();
+        rawAllowed.add(null);
+        rawAllowed.add("   ");
+        rawAllowed.add("  crm.example.com  ");
+        rawAllowed.add("::1");
+        rawAllowed.add("[2001:db8::1]");
+        rawAllowed.add("[");
+        rawAllowed.add("]");
+        rawAllowed.add("[evil.example.comx");
+        rawAllowed.add("xevil.example.com]");
+        DestinationUrlValidator validator = new AllowListDestinationUrlValidator(rawAllowed);
+
+        assertThatCode(() -> validator.validate("https://crm.example.com/webhooks"))
+                .doesNotThrowAnyException();
+        assertThatCode(() -> validator.validate("http://[::1]:8080/webhooks")).doesNotThrowAnyException();
+        assertThatCode(() -> validator.validate("http://[2001:db8::1]:8080/webhooks"))
+                .doesNotThrowAnyException();
+        assertThatThrownBy(() -> validator.validate("https://evil.example.com/webhooks"))
+                .isInstanceOf(WebhookDeliveryException.class);
+        assertThatThrownBy(() -> validator.validate("http://[2001:db8::2]:8080/webhooks"))
+                .isInstanceOf(WebhookDeliveryException.class);
+    }
 }

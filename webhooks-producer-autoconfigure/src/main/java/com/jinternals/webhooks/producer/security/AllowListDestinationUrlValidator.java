@@ -27,7 +27,9 @@ public class AllowListDestinationUrlValidator implements DestinationUrlValidator
     public AllowListDestinationUrlValidator(List<String> allowedHosts) {
         this.allowedHosts = new HashSet<>();
         for (String host : allowedHosts) {
-            this.allowedHosts.add(host.toLowerCase(Locale.ROOT));
+            if (host != null) {
+                this.allowedHosts.add(normalizeHost(host));
+            }
         }
     }
 
@@ -47,10 +49,18 @@ public class AllowListDestinationUrlValidator implements DestinationUrlValidator
         if (host == null) {
             throw new WebhookDeliveryException("Destination URL has no host: " + SafeUrl.sanitize(url));
         }
-        if (!allowedHosts.contains(host.toLowerCase(Locale.ROOT))) {
+        if (!allowedHosts.contains(normalizeHost(host))) {
             throw new WebhookDeliveryException(
                     "Destination host not allowed: " + host + " (not in webhooks.producer.security.allowed-hosts)");
         }
+    }
+
+    private static String normalizeHost(String host) {
+        String normalized = host.trim().toLowerCase(Locale.ROOT);
+        if (normalized.startsWith("[") && normalized.endsWith("]")) {
+            return normalized.substring(1, normalized.length() - 1);
+        }
+        return normalized;
     }
 
     private static boolean isHttpScheme(@Nullable String scheme) {

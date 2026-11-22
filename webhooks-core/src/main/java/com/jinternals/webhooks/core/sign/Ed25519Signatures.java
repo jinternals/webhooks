@@ -7,7 +7,9 @@ import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.Signature;
+import java.security.SignatureException;
 import java.util.Base64;
+import java.util.List;
 
 /**
  * The Standard Webhooks asymmetric ({@code v2a}) signature primitive (see SPEC.md §8e / §19i), computed with
@@ -55,9 +57,8 @@ public final class Ed25519Signatures {
      */
     public static String sign(
             PrivateKey privateKey, String endpointId, String messageId, long timestamp, String payload) {
-        String content = signedContent(endpointId, messageId, timestamp, payload);
         try {
-            byte[] hash = sha256(content);
+            byte[] hash = sha256(endpointId, messageId, timestamp, payload);
             Signature ed = Signature.getInstance("Ed25519");
             ed.initSign(privateKey);
             ed.update(hash);
@@ -80,31 +81,69 @@ public final class Ed25519Signatures {
             long timestamp,
             String payload,
             String signatureBase64) {
-        String content = signedContent(endpointId, messageId, timestamp, payload);
-        byte[] signatureBytes;
-        try {
-            signatureBytes = Base64.getDecoder().decode(signatureBase64);
-        } catch (IllegalArgumentException e) {
-            // A malformed signature on the wire is simply a non-match, never an error.
+        return verifyAny(publicKey, endpointId, messageId, timestamp, payload, List.of(signatureBase64));
+    }
+
+    /**
+     * Verify whether <em>any</em> bare (unversioned) Base64 {@code v2a} signature in {@code signaturesBase64}
+     * matches the content, hashing the payload with SHA-256 <strong>at most once</strong> so multi-signature
+     * headers cannot amplify payload allocation or digest work.
+     *
+     * @param signaturesBase64 candidate Base64 signatures (each after {@code v2a,})
+     * @return {@code true} if any candidate signature is valid for this public key, endpoint id, and content
+     */
+    public static boolean verifyAny(
+            PublicKey publicKey,
+            String endpointId,
+            String messageId,
+            long timestamp,
+            String payload,
+            List<String> signaturesBase64) {
+        if (signaturesBase64.isEmpty()) {
             return false;
         }
         try {
-            byte[] hash = sha256(content);
+            byte[] hash = sha256(endpointId, messageId, timestamp, payload);
             Signature ed = Signature.getInstance("Ed25519");
-            ed.initVerify(publicKey);
-            ed.update(hash);
-            return ed.verify(signatureBytes);
+            for (String signatureBase64 : signaturesBase64) {
+                byte[] signatureBytes;
+                try {
+                    signatureBytes = Base64.getDecoder().decode(signatureBase64);
+                } catch (IllegalArgumentException malformedBase64) {
+                    continue;
+                }
+                try {
+                    ed.initVerify(publicKey);
+                    ed.update(hash);
+                    if (ed.verify(signatureBytes)) {
+                        return true;
+                    }
+                } catch (SignatureException invalidSignature) {
+                    // Wrong-length or structurally invalid candidate signature; continue checking remaining ones.
+                }
+            }
+            return false;
         } catch (GeneralSecurityException e) {
-            // A structurally invalid signature byte-sequence (or key) verifies as false, not as an error.
+            // An unusable PublicKey verifies as false, not as an uncaught error.
             return false;
         }
     }
 
     /**
-     * SHA-256 of the UTF-8 content. SHA-256 is a mandatory JDK algorithm, so {@code getInstance} never fails;
+     * Incremental SHA-256 of {@code endpoint_id.msg_id.timestamp.payload} in UTF-8 without concatenating a
+     * copy of the payload string. SHA-256 is a mandatory JDK algorithm, so {@code getInstance} never fails;
      * the declared {@link NoSuchAlgorithmException} is handled by each caller's existing catch.
      */
-    private static byte[] sha256(String content) throws NoSuchAlgorithmException {
-        return MessageDigest.getInstance("SHA-256").digest(content.getBytes(StandardCharsets.UTF_8));
+    private static byte[] sha256(String endpointId, String messageId, long timestamp, String payload)
+            throws NoSuchAlgorithmException {
+        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+        byte dot = (byte) '.';
+        digest.update(endpointId.getBytes(StandardCharsets.UTF_8));
+        digest.update(dot);
+        digest.update(messageId.getBytes(StandardCharsets.UTF_8));
+        digest.update(dot);
+        digest.update(Long.toString(timestamp).getBytes(StandardCharsets.UTF_8));
+        digest.update(dot);
+        return digest.digest(payload.getBytes(StandardCharsets.UTF_8));
     }
 }

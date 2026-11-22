@@ -67,49 +67,48 @@ public final class SafeUrl {
      * the useful prefix while ensuring the two secret-bearing components cannot survive.
      */
     private static String bestEffortStrip(String url) {
-        return stripUserInfo(stripQuery(url));
+        return stripUserInfo(stripQueryAndFragment(url));
     }
 
-    private static String stripQuery(String url) {
-        int q = url.indexOf('?');
-        return q >= 0 ? url.substring(0, q) : url;
+    /** Matches a query ({@code ?…}) or fragment ({@code #…}) suffix to the end of the string. */
+    private static final java.util.regex.Pattern QUERY_OR_FRAGMENT = java.util.regex.Pattern.compile("[?#].*");
+
+    private static String stripQueryAndFragment(String url) {
+        return QUERY_OR_FRAGMENT.matcher(url).replaceFirst("");
     }
 
     /**
      * Pattern matching a userinfo ({@code user:password@}) segment at the start of a double-slash authority.
      * Group 1 captures the scheme-and-authority-start prefix up to and including the double slash (so it works
-     * for both an absolute {@code https:} URL and a scheme-relative one); the userinfo that follows is the run
-     * of characters up to the first at-sign that does not cross a path slash — so an at-sign appearing later in
-     * the path is never mistaken for a userinfo delimiter. Replacing the whole match with group 1 drops only
-     * the userinfo; a value without a double-slash authority (e.g. {@code mailto:…}, {@code /path}) does not
-     * match and is returned unchanged.
+     * for both an absolute {@code https:} URL and a scheme-relative one); the userinfo that follows is the
+     * greedy run of non-slash characters up to the <em>last</em> {@code '@'} before a path slash — so a
+     * password that itself contains {@code '@'} is stripped in full while an {@code '@'} appearing later in the
+     * path is never mistaken for a userinfo delimiter.
      */
-    private static final java.util.regex.Pattern USERINFO = java.util.regex.Pattern.compile("(^[^/]*//)[^/@]*@");
+    private static final java.util.regex.Pattern USERINFO = java.util.regex.Pattern.compile("(^[^/]*//)[^/]*@");
 
     /**
-     * Remove a {@code user:password@} userinfo segment from a {@code scheme://authority…} value, leaving a
-     * {@code '@'} that appears later in the path intact. Values without a {@code "//"} authority are returned
-     * unchanged. A regex is used deliberately (rather than index arithmetic) so there are no off-by-one
-     * boundary conditions to get wrong — or to leave as surviving mutants.
+     * Matches any {@code scheme://userinfo@} token embedded inside an HTTP client exception message (for
+     * example when Spring's {@code RestClient} strips {@code ?query}/{@code #fragment} or re-encodes
+     * {@code %}-escapes before formatting {@code ResourceAccessException}, so the echoed URL no longer matches
+     * {@code url} byte-for-byte).
      */
+    private static final java.util.regex.Pattern EMBEDDED_USERINFO =
+            java.util.regex.Pattern.compile("([a-zA-Z][a-zA-Z0-9+.-]*://)[^/\\s\"']+@");
+
     private static String stripUserInfo(String url) {
         return USERINFO.matcher(url).replaceFirst("$1");
     }
 
     /**
      * Redact a secret-bearing {@code url} wherever it appears inside a human-readable {@code message} —
-     * replacing every literal occurrence of the raw URL with its {@link #sanitize(String) sanitized} form.
-     *
-     * <p>This exists because the underlying HTTP client echoes the full request URL into its exception
-     * messages (e.g. {@code I/O error on POST request for "https://user:token@host/…": …}). Those messages
-     * are chained into our {@code WebhookDeliveryException} and then logged, so a message that embeds the raw
-     * URL would leak userinfo/query secrets to a log sink even though every URL we format ourselves is already
-     * sanitized. Redacting the exact raw URL string covers that echo without mangling the rest of the
-     * diagnostic.
+     * replacing every literal occurrence of the raw URL with its {@link #sanitize(String) sanitized} form, and
+     * scrubbing any remaining {@code scheme://userinfo@} credentials that the HTTP client echoed after
+     * stripping query/fragment components or re-encoding escapes.
      *
      * @param message the exception/log message (may be {@code null})
      * @param url     the raw destination URL that may be embedded in {@code message} (may be {@code null})
-     * @return the message with every occurrence of {@code url} replaced by its sanitized form; {@code null} in,
+     * @return the message with {@code url} and embedded {@code userinfo} redacted; {@code null} in,
      *     {@code null} out
      */
     @Nullable
@@ -117,8 +116,8 @@ public final class SafeUrl {
         if (message == null || url == null) {
             return message;
         }
-        // An empty url needs no explicit guard: String.replace("", sanitize("")) is replace("", "") — a no-op
-        // that returns the message unchanged — so a dedicated isEmpty() branch would be an equivalent mutant.
-        return message.replace(url, sanitize(url));
+        // An empty url needs no explicit guard: String.replace("", sanitize("")) is replace("", "") — a no-op.
+        String replaced = message.replace(url, sanitize(url));
+        return EMBEDDED_USERINFO.matcher(replaced).replaceAll("$1");
     }
 }

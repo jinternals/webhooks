@@ -84,10 +84,10 @@ public class WebhookReceivePipeline {
         }
         try {
             return processReserved(request, endpoint, rawBody, headers, webhookId);
-        } catch (RuntimeException e) {
-            // Processing failed: drop the reservation so the sender's retry of this id is allowed to run.
+        } catch (Throwable t) {
+            // Processing failed (exception or Error): drop the reservation so the sender's retry is allowed to run.
             idempotency.release(webhookId);
-            throw e;
+            throw t;
         }
     }
 
@@ -133,7 +133,11 @@ public class WebhookReceivePipeline {
     /** Parse the verified raw body into an {@link Envelope}, mapping a malformed body to a 400. */
     private Envelope parse(String rawBody) {
         try {
-            return objectMapper.readValue(rawBody, Envelope.class);
+            Envelope envelope = objectMapper.readValue(rawBody, Envelope.class);
+            if (envelope == null) {
+                throw new InvalidPayloadException("Webhook payload must be a JSON object", null);
+            }
+            return envelope;
         } catch (JacksonException e) {
             throw new InvalidPayloadException(e.getOriginalMessage(), e);
         }

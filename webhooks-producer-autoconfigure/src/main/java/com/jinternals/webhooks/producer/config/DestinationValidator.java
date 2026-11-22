@@ -115,7 +115,7 @@ public class DestinationValidator implements InitializingBean {
     private void validateSecrets(String name, Destination destination) {
         String base = "webhooks.producer.destinations." + name;
         List<String> secrets = secretProvider.secretsFor(destination);
-        if (secrets.isEmpty()) {
+        if (secrets == null || secrets.isEmpty()) {
             throw new WebhookConfigurationException(
                     "No signing secret configured for webhook destination '" + name + "'",
                     "Set " + base + ".secret to a whsec_ HMAC secret (v1) or a whsk_ Ed25519 private key "

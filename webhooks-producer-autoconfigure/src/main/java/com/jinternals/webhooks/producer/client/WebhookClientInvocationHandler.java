@@ -1,5 +1,6 @@
 package com.jinternals.webhooks.producer.client;
 
+import java.lang.invoke.MethodHandles;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 
@@ -30,8 +31,14 @@ public class WebhookClientInvocationHandler implements InvocationHandler {
             return invokeObjectMethod(proxy, method, args);
         }
         if (method.isDefault()) {
-            // A default helper method on the interface runs its own body, not a publish.
-            return InvocationHandler.invokeDefault(proxy, method, args);
+            // A default helper method on the interface runs its own body, not a publish. privateLookupIn
+            // supports package-private @WebhookClient interfaces in the host app's package (where
+            // InvocationHandler.invokeDefault would fail with IllegalAccessException).
+            Class<?> declaringClass = method.getDeclaringClass();
+            return MethodHandles.privateLookupIn(declaringClass, MethodHandles.lookup())
+                    .unreflectSpecial(method, declaringClass)
+                    .bindTo(proxy)
+                    .invokeWithArguments(args);
         }
         // Signature (one @WebhookType event arg, void return) was validated at startup by WebhookClientRegistrar.
         publisher.publish(destination, args[0]);

@@ -190,4 +190,24 @@ class SafeUrlTest {
         assertThat(SafeUrl.redactMessage("msg", null)).isEqualTo("msg");
         assertThat(SafeUrl.redactMessage("msg", "")).isEqualTo("msg");
     }
+
+    @Test
+    void stripsFragmentsAndAtInPasswordsAndQueryStrippedClientEchoes() {
+        assertThat(SafeUrl.sanitize("https://user:p@ssw0rd@host/bad path#frag_secret"))
+                .isEqualTo("https://host/bad path")
+                .doesNotContain("p@ssw0rd")
+                .doesNotContain("ssw0rd")
+                .doesNotContain("frag_secret");
+
+        // Spring 6 RestClient strips ?query before building ResourceAccessException messages, so raw url
+        // replacement does not match — EMBEDDED_USERINFO must still scrub admin:s3cr3t@!
+        String raw = "https://admin:s3cr3t@crm.example.com:8443/webhooks?env=prod#frag";
+        String springRestClientEcho =
+                "I/O error on POST request for \"https://admin:s3cr3t@crm.example.com:8443/webhooks\": Connection refused";
+        assertThat(SafeUrl.redactMessage(springRestClientEcho, raw))
+                .isEqualTo(
+                        "I/O error on POST request for \"https://crm.example.com:8443/webhooks\": Connection refused")
+                .doesNotContain("s3cr3t")
+                .doesNotContain("admin");
+    }
 }

@@ -116,7 +116,7 @@ public class WebhookPublisher {
 
     private List<String> resolveSecrets(String destinationName, Destination destination) {
         List<String> secrets = secretProvider.secretsFor(destination);
-        if (secrets.isEmpty()) {
+        if (secrets == null || secrets.isEmpty()) {
             throw new IllegalStateException("No signing secret configured for webhook destination: " + destinationName);
         }
         for (String secret : secrets) {
@@ -187,7 +187,7 @@ public class WebhookPublisher {
             JsonNode data = objectMapper.valueToTree(event);
             envelope.set("data", data);
             return objectMapper.writeValueAsString(envelope);
-        } catch (JsonProcessingException e) {
+        } catch (JsonProcessingException | IllegalArgumentException e) {
             throw new IllegalStateException("Failed to serialize webhook payload: " + e.getMessage(), e);
         }
     }

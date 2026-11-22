@@ -829,4 +829,49 @@ class HandlerExecutorTest {
         // queued.timeout was already reported via onHandlerTimeout — must NOT also appear in failedTypes!
         assertThat(listener.failedTypes).doesNotContain("queued.timeout");
     }
+
+    @Test
+    void reportsSelfInterruptedFailuresAndDoesNotDoubleReportTimedOutHandlersThatClearInterrupt() throws Exception {
+        RecordingFailureListener listener = new RecordingFailureListener();
+        try (AsyncHandlerExecutor executor = new AsyncHandlerExecutor(1, 1, 10, Duration.ofMillis(50), listener)) {
+            // 1) A non-timed-out handler that sets its own interrupt flag and throws MUST be reported via
+            // onHandlerFailed!
+            CountDownLatch failDone = new CountDownLatch(1);
+            executor.execute("self.interrupted", () -> {
+                Thread.currentThread().interrupt();
+                failDone.countDown();
+                throw new IllegalStateException("self-interrupted failure");
+            });
+            assertThat(failDone.await(2, TimeUnit.SECONDS)).isTrue();
+            long deadline = System.currentTimeMillis() + 2_000;
+            while (listener.failedTypes.isEmpty() && System.currentTimeMillis() < deadline) {
+                Thread.sleep(10);
+            }
+            assertThat(listener.failedTypes).containsExactly("self.interrupted");
+
+            // 2) A timed-out handler that catches InterruptedException WITHOUT re-asserting interrupt and throws
+            //    RuntimeException MUST only report onHandlerTimeout (never double-report onHandlerFailed)!
+            CountDownLatch started = new CountDownLatch(1);
+            CountDownLatch threw = new CountDownLatch(1);
+            executor.execute("swallowed.interrupt", () -> {
+                started.countDown();
+                try {
+                    Thread.sleep(5_000);
+                } catch (InterruptedException e) {
+                    // Deliberately do NOT call Thread.currentThread().interrupt()!
+                    threw.countDown();
+                    throw new RuntimeException("wrapped interrupt", e);
+                }
+            });
+            assertThat(started.await(2, TimeUnit.SECONDS)).isTrue();
+            assertThat(threw.await(2, TimeUnit.SECONDS)).isTrue();
+            long deadline2 = System.currentTimeMillis() + 2_000;
+            while (!listener.timedOutTypes.contains("swallowed.interrupt") && System.currentTimeMillis() < deadline2) {
+                Thread.sleep(10);
+            }
+            Thread.sleep(50);
+            assertThat(listener.timedOutTypes).containsExactly("swallowed.interrupt");
+            assertThat(listener.failedTypes).containsExactly("self.interrupted");
+        }
+    }
 }

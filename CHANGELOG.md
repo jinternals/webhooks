@@ -74,9 +74,20 @@ contain breaking changes; they will always be called out under **Changed** or **
 - `WebhookClientRegistrar` now uses `ClassUtils.getPackageName`, resolves classes via the thread context
   `ClassLoader` for Spring Boot DevTools compatibility, and deduplicates client bean definitions across
   multiple `@EnableWebhookClients` configurations.
-- Enforced `http`/`https` schemes in `DestinationValidator` and `AllowListDestinationUrlValidator`, rejected
-  duplicate consumer endpoint `path`s and blank `@WebhookType` values at startup, joined multi-line
-  `webhook-signature` headers per RFC 9110 §5.3, and added `@NotNull` bind-time validation on producer retry
-  backoff durations.
+- Enforced `http`/`https` schemes in `DestinationValidator` and `AllowListDestinationUrlValidator` (with
+  bracketed IPv6 host normalization), rejected duplicate consumer endpoint `path`s and blank `@WebhookType`
+  values at startup, joined multi-line `webhook-signature` headers per RFC 9110 §5.3, and validated positive
+  (`>= 1ms`) HTTP connect/read and async handler timeouts at bind time.
+- Redacted embedded `userinfo` credentials in `SafeUrl.redactMessage` even when `RestClient` strips query or
+  fragment components, passed `URI.create(url)` in `RestClientWebhookTransport` so percent-encoded query strings
+  are never double-encoded, isolated `webhookProducerRestClient` (`defaultCandidate = false` + `@Qualifier`) with
+  managed `HttpClient` shutdown and `ObjectProvider<RestClient.Builder>`, and notified `WebhookDeliveryListener`
+  when retry backoff is interrupted.
+- Rejected JSON literal `null` envelopes with `400 Bad Request` (`InvalidPayloadException`), released
+  `IdempotencyGuard` reservations on `Error` as well as `RuntimeException`, protected committed entries in
+  `InMemoryIdempotencyGuard` against late `release()`, failed eagerly with `500` on missing `@WebhookHandler`
+  before `async` submission, supported generic bridge and overridden `@WebhookHandler` methods plus
+  package-private `@WebhookClient` `default` methods, skipped registering `EndpointResolvingInterceptor` when
+  `endpoints` is empty, and pre-hashed `v2a` Ed25519 payloads once per verification with a signature count cap.
 
 [Unreleased]: https://github.com/jinternals/webhooks/commits/main

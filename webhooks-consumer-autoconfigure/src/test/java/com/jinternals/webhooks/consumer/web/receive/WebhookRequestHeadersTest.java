@@ -72,9 +72,27 @@ class WebhookRequestHeadersTest {
 
     @Test
     void firstReturnsNullForPresentButEmptyValueList() {
-        // A header name present with an empty value list resolves to null, exercising the isEmpty() guard.
+        // A header name present with an empty or null value list resolves to null.
         Map<String, List<String>> headers = Map.of("webhook-id", Collections.emptyList());
         assertThat(WebhookRequestHeaders.first(headers, "webhook-id")).isNull();
+        assertThat(WebhookRequestHeaders.first(Collections.singletonMap("webhook-id", null), "webhook-id"))
+                .isNull();
+    }
+
+    @Test
+    void collectMergesDuplicateHeaderNamesDifferingOnlyByCaseAndFirstScansMixedCaseMaps() {
+        var request = mock(jakarta.servlet.http.HttpServletRequest.class);
+        when(request.getHeaderNames())
+                .thenReturn(Collections.enumeration(List.of("Webhook-Signature", "webhook-signature")));
+        when(request.getHeaders("Webhook-Signature")).thenReturn(Collections.enumeration(List.of("v1,sig1")));
+        when(request.getHeaders("webhook-signature")).thenReturn(Collections.enumeration(List.of("v1,sig2")));
+
+        Map<String, List<String>> collected = WebhookRequestHeaders.collect(request);
+        assertThat(collected.get("webhook-signature")).containsExactly("v1,sig1", "v1,sig2");
+
+        Map<String, List<String>> uncollectedMixed = Map.of("Webhook-Id", List.of("msg_direct"));
+        assertThat(WebhookRequestHeaders.first(uncollectedMixed, "webhook-id")).isEqualTo("msg_direct");
+        assertThat(WebhookRequestHeaders.first(uncollectedMixed, "x-absent")).isNull();
     }
 
     @Test

@@ -82,4 +82,27 @@ class WebhookProducerPropertiesValidationTest {
         assertThat(validator.validate(properties))
                 .anySatisfy(v -> assertThat(v.getPropertyPath().toString()).contains("maxBackoff"));
     }
+
+    @Test
+    void rejectsSubMillisecondOrNonPositiveHttpTimeoutsAndAcceptsOneMillisecondBoundary() {
+        WebhookProducerProperties zeroConnect = new WebhookProducerProperties();
+        zeroConnect.getHttp().setConnectTimeout(Duration.ZERO);
+        assertThat(validator.validate(zeroConnect))
+                .anySatisfy(v -> assertThat(v.getPropertyPath().toString()).contains("connectTimeoutPositive"));
+
+        WebhookProducerProperties subMsConnect = new WebhookProducerProperties();
+        subMsConnect.getHttp().setConnectTimeout(Duration.ofNanos(999_999));
+        assertThat(validator.validate(subMsConnect))
+                .anySatisfy(v -> assertThat(v.getPropertyPath().toString()).contains("connectTimeoutPositive"));
+
+        WebhookProducerProperties subMsRead = new WebhookProducerProperties();
+        subMsRead.getHttp().setReadTimeout(Duration.ofNanos(999_999));
+        assertThat(validator.validate(subMsRead))
+                .anySatisfy(v -> assertThat(v.getPropertyPath().toString()).contains("readTimeoutPositive"));
+
+        WebhookProducerProperties exactOneMs = new WebhookProducerProperties();
+        exactOneMs.getHttp().setConnectTimeout(Duration.ofMillis(1));
+        exactOneMs.getHttp().setReadTimeout(Duration.ofMillis(1));
+        assertThat(validator.validate(exactOneMs)).isEmpty();
+    }
 }

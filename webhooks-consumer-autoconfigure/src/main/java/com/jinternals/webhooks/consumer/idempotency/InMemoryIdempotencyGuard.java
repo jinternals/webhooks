@@ -3,8 +3,10 @@ package com.jinternals.webhooks.consumer.idempotency;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.locks.ReentrantLock;
 import org.springframework.lang.Nullable;
 
@@ -45,6 +47,7 @@ public class InMemoryIdempotencyGuard implements IdempotencyGuard {
 
     final ReentrantLock lock = new ReentrantLock();
     private final Map<String, Instant> seen;
+    private final Set<String> committed = new HashSet<>();
     private final Clock clock;
 
     public InMemoryIdempotencyGuard() {
@@ -63,7 +66,11 @@ public class InMemoryIdempotencyGuard implements IdempotencyGuard {
         this.seen = new LinkedHashMap<>(16, 0.75f, true) {
             @Override
             protected boolean removeEldestEntry(Map.Entry<String, Instant> eldest) {
-                return size() > maxSize; // bounded: evict the least-recently-accessed id once full
+                if (size() > maxSize) {
+                    committed.remove(eldest.getKey());
+                    return true;
+                }
+                return false;
             }
         };
     }
@@ -75,15 +82,18 @@ public class InMemoryIdempotencyGuard implements IdempotencyGuard {
         }
         Instant now = clock.instant();
         Instant nextExpiry = now.plus(TTL);
-        Instant previousExpiry;
+        boolean accepted;
         lock.lock();
         try {
-            previousExpiry = seen.put(webhookId, nextExpiry);
+            Instant previousExpiry = seen.put(webhookId, nextExpiry);
+            accepted = previousExpiry == null || !previousExpiry.isAfter(now);
+            if (accepted) {
+                committed.remove(webhookId);
+            }
         } finally {
             lock.unlock();
         }
-        // New id, or a prior entry that has already expired (outside the replay window) -> proceed.
-        return previousExpiry == null || !previousExpiry.isAfter(now);
+        return accepted;
     }
 
     @Override
@@ -96,6 +106,7 @@ public class InMemoryIdempotencyGuard implements IdempotencyGuard {
         lock.lock();
         try {
             seen.put(webhookId, expiry);
+            committed.add(webhookId);
         } finally {
             lock.unlock();
         }
@@ -108,7 +119,9 @@ public class InMemoryIdempotencyGuard implements IdempotencyGuard {
         }
         lock.lock();
         try {
-            seen.remove(webhookId);
+            if (!committed.contains(webhookId)) {
+                seen.remove(webhookId);
+            }
         } finally {
             lock.unlock();
         }

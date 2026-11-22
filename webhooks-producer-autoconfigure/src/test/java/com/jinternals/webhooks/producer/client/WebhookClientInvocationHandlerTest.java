@@ -89,6 +89,21 @@ class WebhookClientInvocationHandlerTest {
     }
 
     @Test
+    void defaultMethodOnPackagePrivateInterfaceInDifferentPackageRunsWithoutIllegalAccess() throws Throwable {
+        Class<?> pkgPrivateIface =
+                com.jinternals.webhooks.producer.fixtures.defaultpkg.PackagePrivateDefaultClientFixture
+                        .clientInterface();
+        Object proxy =
+                Proxy.newProxyInstance(pkgPrivateIface.getClassLoader(), new Class<?>[] {pkgPrivateIface}, handler);
+        Method helper = pkgPrivateIface.getDeclaredMethod("helper", String.class);
+
+        Object result = handler.invoke(proxy, helper, new Object[] {"crm"});
+
+        assertThat(result).isEqualTo("crm:ok");
+        verifyNoInteractions(publisher);
+    }
+
+    @Test
     void rejectsUnexpectedObjectMethod() throws Exception {
         // A proxy only routes equals/hashCode/toString; invoking the handler with another Object
         // method (getClass) documents and covers the defensive default branch.
