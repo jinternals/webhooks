@@ -267,6 +267,8 @@
                     <configuration>
                         <!-- Fail the build on a high/critical finding (CVSS 7.0+). -->
                         <failBuildOnCVSS>7</failBuildOnCVSS>
+                        <!-- NVD API key read from the NVD_API_KEY env var (never pass it as -D: it leaks into logs). -->
+                        <nvdApiKeyEnvironmentVariable>NVD_API_KEY</nvdApiKeyEnvironmentVariable>
                         <!-- Scan only compile/runtime deps that actually ship. -->
                         <skipTestScope>true</skipTestScope>
                         <skipProvidedScope>true</skipProvidedScope>
@@ -289,7 +291,7 @@
         <!--
           Opt-in vulnerability scan: `mvn -Psecurity-scan verify`. Kept out of the default build so the
           100% coverage/mutation gate stays fast and offline; CI can run this profile on a schedule. An
-          NVD API key (`-Dnvd.api.key=...`) is recommended to avoid download throttling.
+          NVD API key (exported as the `NVD_API_KEY` environment variable) is recommended to avoid download throttling.
         -->
         <profile>
             <id>security-scan</id>

@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build & quality gate (JDK 21)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      # Full gate: unit tests + 100% JaCoCo line/branch coverage + 100% PIT mutation coverage.
+      - name: mvn verify
+        run: mvn -B -ntp verify
+
+      - name: Upload coverage & mutation reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-reports
+          path: |
+            **/target/site/jacoco/
+            **/target/pit-reports/
+            **/target/surefire-reports/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  samples:
+    name: Sample apps
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      # The samples consume the published starters, so install the libraries locally first
+      # (tests and the quality gate already run in the `build` job).
+      - name: Install libraries
+        run: mvn -B -ntp install -DskipTests
+
+      - name: Build & test samples
+        run: mvn -B -ntp -f webhooks-sample/pom.xml verify
+
+  javadoc:
+    name: Release artifacts (sources + javadoc)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      # Catches broken Javadoc (which would block a Maven Central release) on every PR.
+      - name: Package with release profile (unsigned)
+        run: mvn -B -ntp -Prelease -Dgpg.skip -DskipTests package
