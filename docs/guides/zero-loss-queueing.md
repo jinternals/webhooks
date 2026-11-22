@@ -152,6 +152,32 @@ concurrently** behind load balancers with zero race conditions or dropped delive
 
 ---
 
+## Is event ordering preserved?
+
+**No — strict FIFO ordering is not preserved by default**, for two reasons:
+
+1. **Parallel workers & pods:** `NatsOutboundRelayWorker` and `NatsInboundWorker` run multiple concurrent
+   virtual threads (`worker-concurrency: 4`) across multiple instances. If Event A (`contact.created`) and
+   Event B (`contact.updated`) are pulled by two workers simultaneously, Event B can finish first.
+2. **Per-message retry backoff (`nakWithDelay`):** If Event A hits a transient `503` or DB lock and is
+   delayed via `nakWithDelay(2s)` while Event B succeeds on its first attempt, Event B completes ahead of
+   Event A — matching standard HTTP webhook semantics (Standard Webhooks makes no ordering guarantee across
+   deliveries).
+
+### How to handle ordering when your domain needs it
+
+- **Recommended — make handlers order-tolerant:** Compare the envelope occurrence timestamp
+  (`metadata.eventTimestamp()`) or an entity `version` in your SQL update
+  (`UPDATE contacts SET … WHERE id = :id AND updated_at < :eventTimestamp`) so a delayed older event never
+  overwrites newer state.
+- **Strict per-entity ordering in NATS JetStream:** Partition subjects by entity key
+  (`webhooks.inbound.<shard>`, where `shard = Math.floorMod(entityId.hashCode(), shardCount)`) and bind one
+  durable consumer per shard with `maxAckPending = 1` (`worker-concurrency = 1` per shard). NATS JetStream
+  will then hold back event `N+1` for that shard until event `N` is `ack`ed (trading away availability for
+  that shard whenever a single message retries).
+
+---
+
 ## Running the zero-loss NATS stack
 
 ```bash
