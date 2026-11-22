@@ -1,5 +1,17 @@
 # Webhooks Toolkit for Spring Boot
 
+[![CI](https://github.com/jinternals/webhooks/actions/workflows/ci.yml/badge.svg)](https://github.com/jinternals/webhooks/actions/workflows/ci.yml)
+[![Maven Central](https://img.shields.io/maven-central/v/io.github.jinternals/webhooks-core?label=Maven%20Central)](https://central.sonatype.com/namespace/io.github.jinternals)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
+![Java 21](https://img.shields.io/badge/Java-21-orange)
+![Spring Boot 3.5](https://img.shields.io/badge/Spring_Boot-3.5-6DB33F)
+[![Standard Webhooks](https://img.shields.io/badge/Standard_Webhooks-compliant-8A2BE2)](https://www.standardwebhooks.com/)
+
+> [!NOTE]
+> **Status: pre-1.0.** The toolkit is feature-complete and fully tested, but until 1.0 the public API and
+> configuration properties may change between minor versions. Breaking changes are always called out in the
+> [CHANGELOG](./CHANGELOG.md).
+
 A [Standard Webhooks](https://www.standardwebhooks.com/)–compliant toolkit for sending and receiving
 webhooks in Spring Boot applications. The toolkit provides two drop-in auto-configuration libraries:
 
@@ -700,12 +712,14 @@ asserts the consumer handled the webhook — a complete cross-library round trip
 
 ## Quality gate
 
-Every library module enforces 100% JaCoCo line and branch coverage and a 100% PITest mutation score, both
-bound to the `verify` phase, so `mvn verify` fails the build if quality regresses. The enforced
+Every library module enforces 100% JaCoCo line and branch coverage and a 100% PITest mutation score. The
+coverage gate runs on every `mvn verify`; mutation testing is slower, so it runs with the `mutation` profile
+(`mvn verify -Pmutation`), which CI enables on every push and pull request. Either gate fails the build if
+quality regresses. The enforced
 thresholds and the sole executable-code-free `annotations/**` exclusion live in each module's `pom.xml`;
 the gate is described in [SPEC §16](./docs/reference/SPEC.md#16-quality-gate--coverage--mutation-testing).
-The authoritative, always-current counts are the JaCoCo and PITest reports produced by `mvn clean verify`
-under each module's `target/`.
+The authoritative, always-current counts are the JaCoCo and PITest reports produced by
+`mvn clean verify -Pmutation` under each module's `target/`.
 
 The standalone sample apps under `webhooks-sample/` (`producer-sample`, `consumer-sample`) are not part of the
 gated library reactor, so the 100% gate is not enforced on them; their cross-library behaviour is

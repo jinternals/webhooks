@@ -8,7 +8,7 @@ filed as public issues — see [SECURITY.md](SECURITY.md).
 
 ## Before you start
 
-- **Bugs:** search [existing issues](https://github.com/jinternals/webhook/issues) first, then open one using the
+- **Bugs:** search [existing issues](https://github.com/jinternals/webhooks/issues) first, then open one using the
   bug template, including a minimal reproduction.
 - **Features / API changes:** please open an issue to discuss the design *before* writing code. The toolkit
   deliberately keeps a small scope (Standard Webhooks compliance, no persistence — see
@@ -26,13 +26,16 @@ filed as public issues — see [SECURITY.md](SECURITY.md).
 ## Building
 
 ```bash
-# Full build + quality gate (tests, 100% coverage, 100% mutation score)
+# Build + tests + 100% coverage gate (~1 min)
 mvn clean verify
+
+# Full gate as CI runs it: also 100% PITest mutation score (~5 min)
+mvn clean verify -Pmutation
 
 # Fast inner loop: compile and run tests only
 mvn test
 
-# One module
+# One module (add -Pmutation for mutation testing)
 mvn -pl webhooks-consumer-autoconfigure -am verify
 ```
 
@@ -45,10 +48,10 @@ mvn -f webhooks-sample/pom.xml verify
 
 ## Quality gate
 
-Every library module enforces, at `mvn verify`:
+Every library module enforces:
 
-- **100% JaCoCo line and branch coverage**, and
-- **100% PITest mutation score** (`STRONGER` mutators).
+- **100% JaCoCo line and branch coverage** — on every `mvn verify`, and
+- **100% PITest mutation score** (`STRONGER` mutators) — with `-Pmutation` (always on in CI).
 
 A pull request that lowers either will fail CI. In practice this means:
 
@@ -62,7 +65,7 @@ A pull request that lowers either will fail CI. In practice this means:
 Run mutation testing for a single module while iterating:
 
 ```bash
-mvn -pl webhooks-core test-compile org.pitest:pitest-maven:mutationCoverage
+mvn -Pmutation -pl webhooks-core -am verify
 ```
 
 ## Code style
@@ -87,7 +90,7 @@ Other conventions:
 
 1. Fork the repository and create a branch from `main` (e.g. `fix/clock-skew-overflow`).
 2. Make focused commits with clear messages in the imperative mood ("Add …", "Fix …").
-3. Run `mvn spotless:apply` and `mvn clean verify` locally.
+3. Run `mvn spotless:apply` and `mvn clean verify -Pmutation` locally.
 4. Open a pull request and fill in the template. Link the issue it resolves (`Fixes #123`).
 5. CI must be green, and at least one maintainer review is required before merge.
 

@@ -1391,8 +1391,10 @@ handler, after it has extracted what it needs from the event. See §18 for perfo
 
 ## 16. Quality gate — coverage & mutation testing
 
-Every module enforces a **100% coverage + 100% mutation** gate, bound to `verify`, so `mvn verify`
-fails the build if quality regresses. Two complementary tools:
+Every module enforces a **100% coverage + 100% mutation** gate, bound to `verify`. The JaCoCo gate runs on
+every `mvn verify`; the slower PITest gate is skipped locally unless the `mutation` profile is active
+(`mvn verify -Pmutation`, `skipPitest=false`), and CI always runs it. Either fails the build if quality
+regresses. Two complementary tools:
 
 - **JaCoCo** — 100% **line *and* branch** coverage. Catches unexecuted code.
 - **PITest (PIT)** — 100% **mutation** score (STRONGER mutators) *and* 100% PIT line coverage.
@@ -1421,14 +1423,14 @@ Both thresholds are literal `100`. A build that passes has no un-asserted logic 
   generates no mutations for the pure logging method — such code is JaCoCo-covered but there is simply
   nothing to mutate, and that is recorded rather than hidden.
 
-Current status: the full library reactor `mvn clean verify` is **green** — every gated module at 100%
+Current status: the full library reactor `mvn clean verify -Pmutation` is **green** — every gated module at 100%
 mutation across its gated scope and 100% JaCoCo line+branch (`webhooks-core`,
 `webhooks-consumer-autoconfigure`, `webhooks-producer-autoconfigure`; the thin
 `webhooks-consumer-starter` / `webhooks-producer-starter` poms carry no gated logic). The standalone
 sample apps under `webhooks-sample/` are outside the gated reactor. The auto-configuration wiring under
 `config/**` is **not** excluded — it is covered to 100% JaCoCo line+branch and mutated to a 100% PIT
 score like the rest of the module; the sole exclusion is the executable-code-free `annotations/**`
-package. The live counts come from `mvn clean verify` itself (JaCoCo + PITest reports under each
+package. The live counts come from `mvn clean verify -Pmutation` itself (JaCoCo + PITest reports under each
 module's `target/`).
 
 **Dependency vulnerability scanning.** Beyond coverage/mutation, the build can scan dependencies for
@@ -1472,7 +1474,7 @@ a CVSS ≥ 7 finding. See §19e.
 
 *Status: implemented. The five library modules (`webhooks-core`, `webhooks-consumer-autoconfigure`,
 `webhooks-consumer-starter`, `webhooks-producer-autoconfigure`, `webhooks-producer-starter`) are built and
-pass the §16 quality gate (JaCoCo 100% line+branch, PITest 100% mutation) on `mvn clean verify`; the
+pass the §16 quality gate (JaCoCo 100% line+branch, PITest 100% mutation) on `mvn clean verify -Pmutation`; the
 standalone demo apps under `webhooks-sample/` sit outside that reactor. Both libraries are drop-in Spring Boot
 auto-configurations that
 coexist with an existing application (§14: no component scan, host-overridable beans; consumer scopes

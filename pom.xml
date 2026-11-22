@@ -23,7 +23,7 @@
       from spring-boot-starter-parent and every artifact would advertise Spring Boot's URL/SCM/developers.
       The child.*.inherit.append.path="false" attributes stop Maven appending each module's artifactId.
     -->
-    <url>https://github.com/jinternals/webhook</url>
+    <url>https://github.com/jinternals/webhooks</url>
     <inceptionYear>2026</inceptionYear>
 
     <licenses>
@@ -46,15 +46,15 @@
     <scm child.scm.connection.inherit.append.path="false"
          child.scm.developerConnection.inherit.append.path="false"
          child.scm.url.inherit.append.path="false">
-        <connection>scm:git:https://github.com/jinternals/webhook.git</connection>
-        <developerConnection>scm:git:ssh://git@github.com/jinternals/webhook.git</developerConnection>
-        <url>https://github.com/jinternals/webhook</url>
+        <connection>scm:git:https://github.com/jinternals/webhooks.git</connection>
+        <developerConnection>scm:git:ssh://git@github.com/jinternals/webhooks.git</developerConnection>
+        <url>https://github.com/jinternals/webhooks</url>
         <tag>HEAD</tag>
     </scm>
 
     <issueManagement>
         <system>GitHub Issues</system>
-        <url>https://github.com/jinternals/webhook/issues</url>
+        <url>https://github.com/jinternals/webhooks/issues</url>
     </issueManagement>
 
     <modules>
@@ -73,6 +73,9 @@
         <jacoco.version>0.8.12</jacoco.version>
         <pitest.version>1.30.2</pitest.version>
         <pitest-junit5.version>1.2.3</pitest-junit5.version>
+        <!-- Mutation testing is slow (~4 min), so the local `mvn verify` skips it by default and keeps only the
+             100% JaCoCo gate. Enable with the `mutation` profile (`mvn -Pmutation verify`); CI always does. -->
+        <skipPitest>true</skipPitest>
 
         <!-- Code formatting (Spotless + Palantir Java Format: 4-space, 120-col — matches the house style). -->
         <spotless.version>2.44.5</spotless.version>
@@ -181,9 +184,10 @@
                 </plugin>
 
                 <!--
-                  PITest mutation testing: 100% mutation + test-strength, enforced. `mutationCoverage`
-                  is bound to `verify` and fails the build below 100%. Run on demand with
-                  `mvn -pl <module> test-compile org.pitest:pitest-maven:mutationCoverage`.
+                  PITest mutation testing: 100% mutation + test-strength, enforced. `mutationCoverage` is bound to
+                  `verify` but skipped unless the `mutation` profile is active (see `skipPitest` above):
+                    mvn -Pmutation verify                       (whole reactor — what CI runs)
+                    mvn -Pmutation -pl <module> -am verify      (one module)
                 -->
                 <plugin>
                     <groupId>org.pitest</groupId>
@@ -282,6 +286,16 @@
     </build>
 
     <profiles>
+        <!--
+          Mutation-testing gate: `mvn -Pmutation verify` runs PITest (100% mutation score required) on top of
+          the always-on 100% JaCoCo coverage gate. CI runs this profile on every push and pull request.
+        -->
+        <profile>
+            <id>mutation</id>
+            <properties>
+                <skipPitest>false</skipPitest>
+            </properties>
+        </profile>
         <!--
           Opt-in vulnerability scan: `mvn -Psecurity-scan verify`. Kept out of the default build so the
           100% coverage/mutation gate stays fast and offline; CI can run this profile on a schedule. An

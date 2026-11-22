@@ -18,7 +18,7 @@ released version receives fixes.
 **Please do not open a public issue, discussion, or pull request for security problems.**
 
 Report privately through GitHub Security Advisories:
-**[Report a vulnerability](https://github.com/jinternals/webhook/security/advisories/new)**
+**[Report a vulnerability](https://github.com/jinternals/webhooks/security/advisories/new)**
 (repository → *Security* tab → *Report a vulnerability*).
 
 If you cannot use GitHub, email **pandeymradul@gmail.com** with the subject `[SECURITY] webhooks`.

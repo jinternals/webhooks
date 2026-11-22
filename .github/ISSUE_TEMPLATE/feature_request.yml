@@ -25,5 +25,5 @@ body:
     attributes:
       label: Scope check
       options:
-        - label: I've read the [Design scope](https://github.com/jinternals/webhook/blob/main/README.md#design-scope) (Standard Webhooks compliance, no persistence) and this fits within it — or I've explained why it should change.
+        - label: I've read the [Design scope](https://github.com/jinternals/webhooks/blob/main/README.md#design-scope) (Standard Webhooks compliance, no persistence) and this fits within it — or I've explained why it should change.
           required: true

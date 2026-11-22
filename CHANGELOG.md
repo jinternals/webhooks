@@ -33,4 +33,4 @@ contain breaking changes; they will always be called out under **Changed** or **
 - Test tooling: PITest 1.30.2 / pitest-junit5-plugin 1.2.3 (JUnit Platform 1.12 support); `@MockBean` replaced
   by `@MockitoBean`.
 
-[Unreleased]: https://github.com/jinternals/webhook/commits/main
+[Unreleased]: https://github.com/jinternals/webhooks/commits/main
