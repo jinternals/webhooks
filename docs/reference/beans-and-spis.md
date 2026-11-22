@@ -200,9 +200,14 @@ Sample implementations: [`ProducerAuthSampleApplication.java`](../../webhooks-sa
 WebhookTransport natsWebhookTransport(JetStream jetStream, ObjectMapper mapper) {
     return (url, headers, body) -> {
         String webhookId = headers.get(WebhookHeaders.ID).get(0);
-        byte[] payload = mapper.writeValueAsBytes(new OutboundWebhookMessage(url, webhookId, body, MDC.get("traceId")));
-        jetStream.publish("webhooks.outbound.send", payload,
-                PublishOptions.builder().stream("WEBHOOKS_OUTBOUND").messageId(webhookId).build());
+        try {
+            byte[] payload = mapper.writeValueAsBytes(
+                    new OutboundWebhookMessage(url, webhookId, body, MDC.get("traceId")));
+            jetStream.publish("webhooks.outbound.send", payload,
+                    PublishOptions.builder().stream("WEBHOOKS_OUTBOUND").messageId(webhookId).build());
+        } catch (Exception e) {
+            throw new WebhookDeliveryException("Failed to enqueue webhook to NATS JetStream", e);
+        }
     };
     // A relay worker pulls from WEBHOOKS_OUTBOUND and computes a fresh webhook-timestamp + webhook-signature
     // on every attempt so delayed retries still pass the receiver's 5m replay window.

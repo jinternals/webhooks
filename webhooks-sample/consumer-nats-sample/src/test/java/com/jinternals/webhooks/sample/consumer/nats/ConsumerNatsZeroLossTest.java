@@ -70,7 +70,9 @@ class ConsumerNatsZeroLossTest {
         final AtomicLong revisionSeq = new AtomicLong(1L);
         final List<byte[]> inboundPayloads = new ArrayList<>();
         final List<byte[]> dlqPayloads = new ArrayList<>();
+        final List<String> dlqMessageIds = new ArrayList<>();
         final AtomicBoolean failNextPublish = new AtomicBoolean(false);
+        final AtomicBoolean failNextKvPut = new AtomicBoolean(false);
 
         @Bean
         InMemoryNatsConsumerTestConfig natsState() {
@@ -142,6 +144,9 @@ class ConsumerNatsZeroLossTest {
                 return nextRev;
             });
             when(kv.put(anyString(), any(byte[].class))).thenAnswer(inv -> {
+                if (failNextKvPut.compareAndSet(true, false)) {
+                    throw new IOException("Transient NATS KV write failure");
+                }
                 String key = inv.getArgument(0);
                 String val = new String((byte[]) inv.getArgument(1), StandardCharsets.UTF_8);
                 long rev = revisionSeq.getAndIncrement();
@@ -197,6 +202,8 @@ class ConsumerNatsZeroLossTest {
                     });
             when(js.publish(eq("webhooks.inbound.dlq.events"), any(byte[].class), any(PublishOptions.class)))
                     .thenAnswer(inv -> {
+                        PublishOptions opts = inv.getArgument(2);
+                        dlqMessageIds.add(opts.getMessageId());
                         dlqPayloads.add(inv.getArgument(1));
                         return ack;
                     });
@@ -419,5 +426,28 @@ class ConsumerNatsZeroLossTest {
         assertThat(natsState.dlqPayloads).isEmpty();
         assertThat(failureListener.failedTypes()).isEmpty();
         assertThat(projectionService.processed()).hasSize(1);
+
+        // 3) If markProcessed() fails, ownedRevision is retained so release() still performs CAS delete!
+        String markFailId = "msg_mark_fail_1";
+        String markFailKey = NatsKvIdempotencyGuard.encodeKey(markFailId);
+        assertThat(idempotencyGuard.tryBegin(markFailId)).isTrue();
+        natsState.failNextKvPut.set(true);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> idempotencyGuard.markProcessed(markFailId))
+                .isInstanceOf(IllegalStateException.class);
+        // Sibling pod reclaims & marks processed at rev 888 before our release() runs:
+        natsState.kvStore.put(
+                markFailKey, new StoredKvEntry("processed", Instant.ofEpochSecond(epochSeconds.get()), 888L));
+        idempotencyGuard.release(markFailId);
+        assertThat(natsState.kvStore.get(markFailKey).value()).isEqualTo("processed");
+
+        // 4) Distinct poison messages carry distinct streamSequence-keyed DLQ messageIds (never deduplicated!)
+        natsState.dlqMessageIds.clear();
+        Message poison1 = mockJetStreamMessage("{not-json-1".getBytes(StandardCharsets.UTF_8), 1L);
+        when(poison1.metaData().streamSequence()).thenReturn(101L);
+        Message poison2 = mockJetStreamMessage("{not-json-2".getBytes(StandardCharsets.UTF_8), 1L);
+        when(poison2.metaData().streamSequence()).thenReturn(102L);
+        inboundWorker.processOne(poison1);
+        inboundWorker.processOne(poison2);
+        assertThat(natsState.dlqMessageIds).containsExactly("dlq_poison_seq_101", "dlq_poison_seq_102");
     }
 }

@@ -11,7 +11,7 @@ import org.springframework.http.ResponseEntity;
 
 /**
  * Single generic controller behind every configured listen path (see SPEC.md §3, §10). The matched
- * {@link Endpoint} is set on the request by {@link WebhookEndpointRegistry} so this stays path-agnostic.
+ * {@link Endpoint} is set on the request by {@link EndpointResolvingInterceptor} so this stays path-agnostic.
  *
  * <p>This is a thin HTTP adapter (Single Responsibility): it extracts the matched endpoint and request
  * headers and delegates to the receive pipeline — verify → dedupe → route → deserialize + validate →

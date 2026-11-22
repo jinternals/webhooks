@@ -97,10 +97,18 @@ class SpiSampleApplicationTest {
         idempotencyGuard.markProcessed("msg_spi_99");
         assertThat(idempotencyGuard.tryBegin("msg_spi_99")).isFalse();
 
-        // Also exercise RecordedHooks HandlerFailureListener callbacks
+        // Also exercise RecordedHooks HandlerFailureListener callbacks + bounded InMemoryKeyValueStore cap
         recordedHooks.onHandlerFailed("contact.created", new RuntimeException("boom"));
         recordedHooks.onHandlerTimeout("contact.created");
         assertThat(recordedHooks.asyncHandlerFailures()).contains("failed:contact.created", "timeout:contact.created");
         assertThat(ReflectionTestUtils.getField(urlValidator, "allowLoopback")).isEqualTo(true);
+
+        SharedStoreIdempotencyGuard.InMemoryKeyValueStore store =
+                new SharedStoreIdempotencyGuard.InMemoryKeyValueStore();
+        for (int i = 0; i < 10_005; i++) {
+            store.set("k-" + i, "processed", java.time.Duration.ofHours(24));
+        }
+        java.util.Map<?, ?> internalMap = (java.util.Map<?, ?>) ReflectionTestUtils.getField(store, "entries");
+        assertThat(internalMap).hasSize(10_000);
     }
 }

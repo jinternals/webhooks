@@ -3,8 +3,9 @@ package com.jinternals.webhooks.sample.spi;
 import com.jinternals.webhooks.consumer.idempotency.IdempotencyGuard;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantLock;
 import org.springframework.lang.Nullable;
 
 /**
@@ -59,38 +60,48 @@ public class SharedStoreIdempotencyGuard implements IdempotencyGuard {
 
         private record Entry(String value, Instant expiresAt) {}
 
-        private final Map<String, Entry> entries = new ConcurrentHashMap<>();
+        private final ReentrantLock lock = new ReentrantLock();
+        private final Map<String, Entry> entries = new LinkedHashMap<>(256, 0.75f, true) {
+            @Override
+            protected boolean removeEldestEntry(Map.Entry<String, Entry> eldest) {
+                return size() > MAX_ENTRIES;
+            }
+        };
 
         @Override
         public boolean setIfAbsent(String key, String value, Duration ttl) {
             Instant now = Instant.now();
-            evictExpiredIfOverCapacity(now);
-            boolean[] inserted = {false};
-            entries.compute(key, (k, existing) -> {
+            lock.lock();
+            try {
+                Entry existing = entries.get(key);
                 if (existing == null || !existing.expiresAt().isAfter(now)) {
-                    inserted[0] = true;
-                    return new Entry(value, now.plus(ttl));
+                    entries.put(key, new Entry(value, now.plus(ttl)));
+                    return true;
                 }
-                return existing;
-            });
-            return inserted[0];
+                return false;
+            } finally {
+                lock.unlock();
+            }
         }
 
         @Override
         public void set(String key, String value, Duration ttl) {
             Instant now = Instant.now();
-            evictExpiredIfOverCapacity(now);
-            entries.put(key, new Entry(value, now.plus(ttl)));
+            lock.lock();
+            try {
+                entries.put(key, new Entry(value, now.plus(ttl)));
+            } finally {
+                lock.unlock();
+            }
         }
 
         @Override
         public void delete(String key) {
-            entries.remove(key);
-        }
-
-        private void evictExpiredIfOverCapacity(Instant now) {
-            if (entries.size() >= MAX_ENTRIES) {
-                entries.entrySet().removeIf(e -> !e.getValue().expiresAt().isAfter(now));
+            lock.lock();
+            try {
+                entries.remove(key);
+            } finally {
+                lock.unlock();
             }
         }
     }

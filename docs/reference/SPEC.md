@@ -169,7 +169,7 @@ how the sender decides whether to retry (see `STANDARD_WEBHOOKS.md` §8).
 Modelled on `@EventMapper`. The value is the Standard Webhooks `type` string.
 
 ```java
-@Target({ElementType.TYPE, ElementType.ANNOTATION_TYPE})
+@Target(ElementType.TYPE)
 @Retention(RetentionPolicy.RUNTIME)
 @Documented
 public @interface WebhookType {
@@ -407,23 +407,26 @@ Adapted from `DynamicEndpointRegistry`: at `@PostConstruct`, register one POST m
 configured path, all pointing at a single generic controller method.
 
 ```java
-public class WebhookEndpointRegistry implements InitializingBean {
+public class WebhookEndpointRegistry {
 
     private final RequestMappingHandlerMapping handlerMapping;
     private final WebhookReceiveController controller;
     private final WebhookProperties properties;
 
-    @Override
-    public void afterPropertiesSet() {
-        Method handle = ReflectionUtils.findMethod(WebhookReceiveController.class,
-            "handle", HttpServletRequest.class, String.class);
+    @PostConstruct
+    public void registerEndpoints() {
+        Method handle = Objects.requireNonNull(ReflectionUtils.findMethod(WebhookReceiveController.class,
+            "handle", HttpServletRequest.class, String.class));
 
         for (Endpoint ep : properties.getConsumer().getEndpoints()) {
-            RequestMappingInfo info = RequestMappingInfo
+            RequestMappingInfo.Builder builder = RequestMappingInfo
                 .paths(ep.getPath())
-                .methods(RequestMethod.POST)
-                .build();
-            handlerMapping.registerMapping(info, controller, handle);
+                .methods(RequestMethod.POST);
+            RequestMappingInfo.BuilderConfiguration config = handlerMapping.getBuilderConfiguration();
+            if (config != null) {
+                builder.options(config);
+            }
+            handlerMapping.registerMapping(builder.build(), controller, handle);
         }
     }
 }
@@ -1001,7 +1004,7 @@ public interface IdempotencyGuard {
 ```
 
 The pipeline calls `tryBegin` after verification; on a `false` it returns `204` without dispatching. It
-`markProcessed` only **after** `dispatch(...)` returns normally, and `release`s on any `RuntimeException`
+`markProcessed` only **after** `dispatch(...)` returns normally, and `release`s on any `Throwable`
 so a failed delivery is retryable rather than swallowed. The no-op default (`tryBegin` always `true`,
 `markProcessed`/`release` no-ops) never dedupes; the in-memory implementation remembers committed ids for
 its TTL window.
@@ -1107,7 +1110,7 @@ There is **no custom flag** — control it exactly as any other Spring observati
 | --- | --- | --- |
 | Consumer receive | `management.observations.enable.webhook.receive=false` | No `webhook.receive` metric/span |
 | Producer send | `management.observations.enable.webhook.send=false` | No `webhook.send` metric/span |
-| Everything | `management.observations.enable=false` | Disables all observations in the app |
+| Everything | `management.observations.enable.all=false` | Disables all observations in the app |
 
 No `webhooks.*.observations.*` flag is introduced. Where the data lands (metrics, spans, both, or
 nothing) is entirely a function of what the host app wires — see the README subsection linked above.
@@ -1131,60 +1134,63 @@ and custom SPI `spi-sample`) that depend only on the published starters and are 
 webhooks/                              # parent POM (pom packaging), shared dependencyManagement
 ├── webhooks-core/                     # SHARED (plain jar) — package com.jinternals.webhooks.core
 │   ├── annotations/      @WebhookType, @Redact                 (shared by both sides)
-│   ├── model/            Envelope, WebhookHeaders        (the Standard Webhooks wire format)
-│   ├── redact/           WebhookRedactor                 (log-safe rendering, cached reflection §9a)
-│   ├── registry/         WebhookTypeRegistry             (immutable type → class map holder; no scanning)
-│   └── secret/           SecretProvider<T>               (generic secret-resolution SPI, §8a / §19)
+│   ├── config/           InvalidWebhookConfigurationException  (startup failure diagnostics)
+│   ├── model/            Envelope, WebhookHeaders              (the Standard Webhooks wire format)
+│   ├── redact/           WebhookRedactor                       (log-safe rendering, cached reflection §9a)
+│   ├── registry/         WebhookTypeRegistry                   (immutable type → class map holder; no scanning)
+│   ├── secret/           SecretProvider<T>                     (generic secret-resolution SPI, §8a / §19)
+│   └── sign/             SymmetricKeys, Ed25519Keys, Ed25519Signatures (v1 + v2a crypto primitives)
 │
 ├── webhooks-consumer-autoconfigure/   # CONSUMER AUTOCONFIGURE (auto-configured) — package …webhooks.consumer
-│   ├── annotations/      @WebhookHandler                 (consumer-only)
+│   ├── annotations/      @WebhookHandler                       (consumer-only)
 │   ├── config/           WebhookProperties, WebhookConsumerAutoConfiguration (core beans),
-│   │                     WebhookConsumerWebAutoConfiguration (web-only)
-│   ├── registry/         WebhookTypeScanner              (Spring classpath scan: type → class)
+│   │                     WebhookConsumerWebAutoConfiguration (web-only), WebhookConfigurationFailureAnalyzer
+│   ├── registry/         WebhookTypeScanner                    (Spring classpath scan: type → class)
 │   ├── web/              WebhookEndpointRegistry, WebhookReceiveController, WebhookReceivePipeline,
 │   │                     RawBodyArgumentResolver, EndpointResolvingInterceptor, WebConfiguration
 │   ├── web/receive/      WebhookBodyVerifier, EventResolver, Resolution, WebhookRequestHeaders,
 │   │                     ReceiveObservabilityRecorder, TimedHandlerDispatcher  (SRP stages, §11)
-│   ├── verify/           WebhookVerifier (wraps standardwebhooks),
+│   ├── verify/           WebhookVerifier, DefaultWebhookVerifier, HmacWebhookVerifier, Ed25519WebhookVerifier,
+│   │                     NoOpWebhookVerifier, TimestampValidator, ClockSkewTimestampValidator,
 │   │                     ConfigSecretProvider implements SecretProvider<Endpoint>, SecretValidator
-│   ├── validation/       PayloadValidator (Bean Validation on the @WebhookType object, §6a)
+│   ├── validation/       PayloadValidator                      (Bean Validation on the @WebhookType object, §6a)
 │   ├── metadata/         MetadataFactory, MetadataContributor (SPI); model/ WebhookMetadata
+│   ├── metrics/          WebhookMetrics, MicrometerWebhookMetrics, NoOpWebhookMetrics
 │   ├── dispatch/         WebhookDispatcher (@Observed "webhook.receive", §13), WebhookHandlerMethod,
-│   │                     HandlerExecutor (SPI) + Sync/Async impls (§15)
+│   │                     HandlerExecutor (SPI) + Sync/Async impls (§15), HandlerFailureListener
 │   ├── idempotency/      IdempotencyGuard (reserve/commit SPI, §11; no-op default, optional in-memory)
 │   ├── web/error/        GlobalExceptionHandler (ProblemDetail), UnknownTypeException,
 │   │                     InvalidPayloadException (→400), NoWebhookHandlerException (→500), …
-│   └── resources/META-INF/spring/…AutoConfiguration.imports
+│   └── resources/META-INF/spring/…AutoConfiguration.imports (+ spring.factories FailureAnalyzer)
 │
 ├── webhooks-consumer-starter/         # CONSUMER STARTER (thin pom) — depends on …-autoconfigure + runtime deps
 │
 ├── webhooks-producer-autoconfigure/   # PRODUCER AUTOCONFIGURE (auto-configured) — package …webhooks.producer  (§19)
 │   ├── annotations/      @WebhookClient, @EnableWebhookClients
-│   ├── config/           WebhookProducerProperties (named destinations), WebhookProducerAutoConfiguration
+│   ├── config/           WebhookProducerProperties, WebhookProducerAutoConfiguration,
+│   │                     DestinationValidator, WebhookConfigurationFailureAnalyzer
 │   ├── secret/           ConfigDestinationSecretProvider implements SecretProvider<Destination>
-│   ├── sign/             WebhookSigner (wraps standardwebhooks sign)
-│   ├── transport/        WebhookTransport (SPI) + RestClientWebhookTransport, WebhookDeliveryException
+│   ├── security/         DestinationUrlValidator, AllowAllDestinationUrlValidator, AllowListDestinationUrlValidator
+│   ├── sign/             WebhookSigner, DefaultWebhookSigner, HmacWebhookSigner, Ed25519WebhookSigner, NoOpWebhookSigner
+│   ├── transport/        WebhookTransport, AttemptAwareWebhookTransport, RetryingWebhookTransport,
+│   │                     InterceptingWebhookTransport, RestClientWebhookTransport, WebhookRequestInterceptor,
+│   │                     WebhookDeliveryListener, DeliveryFailure, WebhookDeliveryException, SafeUrl
 │   ├── client/           WebhookPublisher (@Observed "webhook.send" build+sign+send engine, §13), WebhookClientInvocationHandler
-│   │                     client/registrar/ WebhookClientRegistrar, WebhookClientFactoryBean (wiring glue)
-│   └── resources/META-INF/spring/…AutoConfiguration.imports
+│   │                     client/registrar/ WebhookClientRegistrar, WebhookClientFactoryBean, WebhookClientFailureAnalyzer
+│   └── resources/META-INF/spring/…AutoConfiguration.imports (+ spring.factories FailureAnalyzers)
 │
 └── webhooks-producer-starter/         # PRODUCER STARTER (thin pom) — depends on …-autoconfigure + runtime deps
 
 webhooks-sample/                                # STANDALONE DEMO APPS (NOT part of the reactor above)
-├── producer-sample/                   # sends webhooks (port 9090) — depends on webhooks-producer-starter
-│   ├── Application.java               # @SpringBootApplication + @EnableWebhookClients(CrmWebhooks, CrmWebhooksV2a)
-│   ├── events/                        @WebhookType events (ContactCreated)
-│   ├── client/           CrmWebhooks (v1), CrmWebhooksV2a (v2a)  @WebhookClient     (producer demo)
-│   ├── trace/            TraceHeaderWebhookInterceptor  copies MDC traceId → x-trace-id
-│   └── web/              PublishController  POST /publish/contact-created[-v2a]      (producer demo)
-├── consumer-sample/                   # receives webhooks (port 9091) — depends on webhooks-consumer-starter
-│   ├── Application.java               # @SpringBootApplication
-│   ├── events/                        @WebhookType events
-│   ├── handlers/                      @WebhookHandler beans                         (consumer demo)
-│   ├── trace/            TraceContextFilter  binds webhook-id + x-trace-id to the MDC
-│   └── SampleMetadataContributor      demo MetadataContributor
-├── docker-compose.yml                 # brings both apps up together
-└── integration-test.sh               # cross-library proof: publish via producer → assert consumer handled it
+├── producer-sample/                   # quickstart sender (:9090, v1 HMAC + v2a Ed25519 + x-trace-id)
+├── consumer-sample/                   # quickstart receiver (:9091, v1 + v2a + @Redact + MetadataContributor)
+├── producer-nats-sample/              # zero-loss sender (:9092, NATS JetStream outbox + fresh per-attempt signing + DLQ)
+├── consumer-nats-sample/              # zero-loss receiver (:9093, NATS JetStream inbox + NATS KV CAS idempotency + DLQ)
+├── producer-auth-sample/              # OAuth2 JWT bearer sender (:9094, WebhookRequestInterceptor + HMAC)
+├── consumer-auth-sample/              # OAuth2 JWT bearer receiver (:9095, SecurityFilterChain 401 + HMAC 400)
+├── spi-sample/                        # single-app producer+consumer coexistence & custom SPI overrides (:9096)
+├── docker-compose*.yml                # quickstart, NATS JetStream, and OAuth2 auth Docker stacks
+└── integration-test*.sh               # end-to-end Docker verification suites for all three multi-service stacks
 ```
 
 **Core dependencies:** `jackson-databind` (the `Envelope.data` node), `spring-core`
@@ -1411,8 +1417,8 @@ mutation across its gated scope and 100% JaCoCo line+branch (`webhooks-core`,
 `webhooks-consumer-starter` / `webhooks-producer-starter` poms carry no gated logic). The standalone
 sample apps under `webhooks-sample/` are outside the gated reactor. The auto-configuration wiring under
 `config/**` is **not** excluded — it is covered to 100% JaCoCo line+branch and mutated to a 100% PIT
-score like the rest of the module; the sole exclusion is the executable-code-free `annotations/**`
-package. The live counts come from `mvn clean verify -Pmutation` itself (JaCoCo + PITest reports under each
+score like the rest of the module; the narrow exclusions are executable-code-free `annotations/**` (plus
+`webhooks-core`'s Lombok wire DTO `model/**`). The live counts come from `mvn clean verify -Pmutation` itself (JaCoCo + PITest reports under each
 module's `target/`).
 
 **Dependency vulnerability scanning.** Beyond coverage/mutation, the build can scan dependencies for

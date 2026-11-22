@@ -72,4 +72,25 @@ class WebhookEndpointRegistryTest {
 
         verifyNoInteractions(handlerMapping);
     }
+
+    @Test
+    void usesHandlerMappingBuilderConfigurationSoHostPathMatchingSettingsAreHonoured() {
+        RequestMappingHandlerMapping handlerMapping = new RequestMappingHandlerMapping();
+        // Configure non-default AntPathMatcher mode (patternParser = null) so omitting builder.options(config)
+        // would fall back to Spring 6's default PathPatternParser instead of honouring handlerMapping's config.
+        handlerMapping.setPatternParser(null);
+        handlerMapping.setApplicationContext(new org.springframework.context.support.StaticApplicationContext());
+        handlerMapping.afterPropertiesSet();
+        WebhookReceiveController controller = mock(WebhookReceiveController.class);
+        WebhookProperties properties = new WebhookProperties();
+        properties.getConsumer().setEndpoints(List.of(endpoint("/webhooks/crm", List.of())));
+
+        new WebhookEndpointRegistry(handlerMapping, controller, properties).registerEndpoints();
+
+        Assertions.assertThat(handlerMapping.getHandlerMethods()).hasSize(1);
+        RequestMappingInfo registered =
+                handlerMapping.getHandlerMethods().keySet().iterator().next();
+        Assertions.assertThat(registered.getPatternsCondition()).isNotNull();
+        Assertions.assertThat(registered.getPathPatternsCondition()).isNull();
+    }
 }

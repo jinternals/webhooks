@@ -159,16 +159,6 @@ public class WebhookDispatcher implements InitializingBean {
     }
 
     /**
-     * Route an event to its handler. Throws {@link NoWebhookHandlerException} when no handler is
-     * registered for its type — a modelled, accepted type with no {@code @WebhookHandler} is a config
-     * gap, not a success: silently acknowledging it would let the sender stop retrying while nothing
-     * processed the event (SPEC.md §10, §15).
-     *
-     * <p>Instrumented with {@link Observed @Observed} (SPEC.md §13): when the host app has actuator (and
-     * optionally a tracer bridge) on the classpath this emits a {@code webhook.receive} timer and a
-     * tracing span. Disable via the standard {@code management.observations.enable.webhook.receive=false}.
-     */
-    /**
      * Eagerly verify on the request thread that a {@code @WebhookHandler} is registered for {@code event}
      * before submitting to an asynchronous {@link HandlerExecutor}, so a missing handler surfaces as an
      * HTTP {@code 500} (allowing sender retry) in both {@code sync} and {@code async} modes rather than
@@ -181,6 +171,16 @@ public class WebhookDispatcher implements InitializingBean {
         }
     }
 
+    /**
+     * Route an event to its handler. Throws {@link NoWebhookHandlerException} when no handler is
+     * registered for its type — a modelled, accepted type with no {@code @WebhookHandler} is a config
+     * gap, not a success: silently acknowledging it would let the sender stop retrying while nothing
+     * processed the event (SPEC.md §10, §15).
+     *
+     * <p>Instrumented with {@link Observed @Observed} (SPEC.md §13): when the host app has actuator (and
+     * optionally a tracer bridge) on the classpath this emits a {@code webhook.receive} timer and a
+     * tracing span. Disable via the standard {@code management.observations.enable.webhook.receive=false}.
+     */
     @Observed(name = "webhook.receive", contextualName = "webhook receive")
     public void dispatch(Object event, WebhookMetadata metadata) {
         WebhookHandlerMethod handler = handlers.get(event.getClass());

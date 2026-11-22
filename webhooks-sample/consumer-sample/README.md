@@ -30,7 +30,7 @@ flowchart TD
 | File | Role |
 | --- | --- |
 | `events/*` | `@WebhookType` POJOs carrying Bean Validation (`@NotBlank`, `@Positive`, `@Size`) and `@Redact` annotations. |
-| `handlers/ContactHandlers`, `BillingHandlers` | `@WebhookHandler` methods demonstrating `(Event)` (`BillingHandlers`), `(Event, WebhookMetadata)`, and `(WebhookMetadata, Event)` (`ContactHandlers`) signatures plus `metadata.redactedEvent()`. |
+| `handlers/ContactHandlers`, `BillingHandlers` | `@WebhookHandler` methods demonstrating `(Event, WebhookMetadata)` and `(WebhookMetadata, Event)` parameter orders plus `metadata.redactedEvent()` (single-arg `(Event)` is also supported). |
 | `SampleMetadataContributor` | `MetadataContributor` copying `x-event-source` into `metadata.attribute("eventSource")`. |
 | `trace/TraceContextFilter` | Servlet filter binding `webhook-id` and `x-trace-id` into SLF4J `MDC`. |
 | `sign.py` / `smoke-test.sh` / `load-test.*` | Local CLI helpers to sign payloads and smoke/load-test the receiver directly. |

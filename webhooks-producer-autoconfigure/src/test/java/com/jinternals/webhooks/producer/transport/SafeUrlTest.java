@@ -209,5 +209,24 @@ class SafeUrlTest {
                         "I/O error on POST request for \"https://crm.example.com:8443/webhooks\": Connection refused")
                 .doesNotContain("s3cr3t")
                 .doesNotContain("admin");
+
+        // Fragment-stripped echo that STILL retains ?token=secret must also have its query redacted!
+        String rawWithQueryAndFrag = "https://crm.example.com/webhooks?token=LEAK_QUERY#frag";
+        String fragStrippedEcho =
+                "I/O error on POST request for \"https://crm.example.com/webhooks?token=LEAK_QUERY\": timeout";
+        assertThat(SafeUrl.redactMessage(fragStrippedEcho, rawWithQueryAndFrag))
+                .isEqualTo("I/O error on POST request for \"https://crm.example.com/webhooks\": timeout")
+                .doesNotContain("LEAK_QUERY");
+
+        // Root-path URLs with '@' inside ?query or #fragment must NOT be mangled as userinfo!
+        assertThat(SafeUrl.redactMessage(
+                        "Peer https://api.example.com?email=alice@corp.com and https://api.example.com#sec@1",
+                        "https://other.example.com/hook"))
+                .isEqualTo("Peer https://api.example.com?email=alice@corp.com and https://api.example.com#sec@1");
+
+        // Multiline unparseable query/fragment is stripped across newlines too.
+        assertThat(SafeUrl.sanitize("ht tp://broken/path?token=line1\nsecret_line2"))
+                .isEqualTo("ht tp://broken/path")
+                .doesNotContain("secret_line2");
     }
 }

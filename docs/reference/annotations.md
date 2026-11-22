@@ -44,7 +44,7 @@ import com.jinternals.webhooks.core.annotations.Redact;
 public record ContactCreated(String id, @Redact String email, @Redact(show = 4) String ssn) { }
 ```
 
-- `show` (`int`, default `0`) — number of trailing characters to leave visible (e.g. `@Redact(show = 4)` on `"123-45-6789"` renders `"***6789"`; if the value has `<= show` characters it is fully redacted).
+- `show` (`int`, default `0`) — number of trailing characters to leave visible (e.g. `@Redact(show = 4)` on `"123-45-6789"` renders `"*******6789"`; if the value has `<= show` characters it is fully redacted).
 
 ```java
 @WebhookHandler

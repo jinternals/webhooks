@@ -45,10 +45,13 @@ public class WebhookEndpointRegistry {
                 "WebhookReceiveController.handle(...) not found");
 
         for (Endpoint endpoint : properties.getConsumer().getEndpoints()) {
-            RequestMappingInfo info = RequestMappingInfo.paths(endpoint.getPath())
-                    .methods(RequestMethod.POST)
-                    .build();
-            handlerMapping.registerMapping(info, controller, handle);
+            RequestMappingInfo.Builder builder =
+                    RequestMappingInfo.paths(endpoint.getPath()).methods(RequestMethod.POST);
+            RequestMappingInfo.BuilderConfiguration config = handlerMapping.getBuilderConfiguration();
+            if (config != null) {
+                builder.options(config);
+            }
+            handlerMapping.registerMapping(builder.build(), controller, handle);
             log.info(
                     "Registered webhook endpoint POST {} accepting types {}",
                     endpoint.getPath(),

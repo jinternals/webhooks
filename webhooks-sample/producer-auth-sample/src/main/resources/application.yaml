@@ -6,7 +6,7 @@ sample:
   auth:
     jwt-secret: ${WEBHOOK_JWT_SECRET:demo-jwt-hs256-signing-key-at-least-32-bytes}
     issuer: ${WEBHOOK_JWT_ISSUER:https://producer.webhooks.local}
-    audience: webhooks-consumer
+    audience: ${WEBHOOK_JWT_AUDIENCE:webhooks-consumer}
 
 webhooks:
   producer:

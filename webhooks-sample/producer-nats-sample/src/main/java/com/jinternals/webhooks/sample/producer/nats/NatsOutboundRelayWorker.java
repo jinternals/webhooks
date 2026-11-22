@@ -194,7 +194,10 @@ public class NatsOutboundRelayWorker implements SmartLifecycle {
             queued = objectMapper.readValue(msg.getData(), OutboundWebhookMessage.class);
         } catch (Exception malformed) {
             log.error("Poison outbound message could not be parsed; routing to DLQ", malformed);
-            if (publishToDlq(msg.getData(), "poison_" + attempt)) {
+            String poisonKey = msg.metaData() != null
+                    ? "poison_seq_" + msg.metaData().streamSequence()
+                    : "poison_" + java.util.UUID.randomUUID();
+            if (publishToDlq(msg.getData(), poisonKey)) {
                 msg.term();
             } else {
                 msg.nakWithDelay(natsProperties.getBaseRetryDelay());
@@ -249,8 +252,16 @@ public class NatsOutboundRelayWorker implements SmartLifecycle {
         if (signer.isEnabled()) {
             Destination destination = findDestinationByUrl(queued.url());
             List<String> secrets = secretProvider.secretsFor(destination);
+            if (secrets == null || secrets.isEmpty()) {
+                throw new WebhookDeliveryException(
+                        "No signing secret configured for destination URL: " + SafeUrl.sanitize(queued.url()));
+            }
             StringBuilder combined = new StringBuilder();
             for (String secret : secrets) {
+                if (secret == null || secret.isBlank()) {
+                    throw new WebhookDeliveryException("Null/blank signing secret returned for destination URL: "
+                            + SafeUrl.sanitize(queued.url()));
+                }
                 if (combined.length() > 0) {
                     combined.append(' ');
                 }
@@ -306,14 +317,17 @@ public class NatsOutboundRelayWorker implements SmartLifecycle {
     }
 
     private boolean publishToDlq(byte[] rawPayload, String webhookId) {
+        String dedupKey = (webhookId != null && !webhookId.isBlank())
+                ? webhookId
+                : java.util.UUID.randomUUID().toString();
         try {
             PublishOptions options = PublishOptions.builder().stream(natsProperties.getDlqStream())
-                    .messageId("dlq_" + webhookId)
+                    .messageId("dlq_" + dedupKey)
                     .build();
             jetStream.publish(natsProperties.getDlqSubject(), rawPayload, options);
             return true;
         } catch (Exception dlqEx) {
-            log.error("Failed to publish abandoned webhook id={} to DLQ; retaining in WorkQueue", webhookId, dlqEx);
+            log.error("Failed to publish abandoned webhook id={} to DLQ; retaining in WorkQueue", dedupKey, dlqEx);
             return false;
         }
     }

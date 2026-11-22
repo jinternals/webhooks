@@ -84,9 +84,10 @@ public class WebhookClientRegistrar implements ImportBeanDefinitionRegistrar {
             @Override
             protected boolean isCandidateComponent(
                     org.springframework.beans.factory.annotation.AnnotatedBeanDefinition beanDefinition) {
-                // A @WebhookClient is an interface; the scanner's default rejects interfaces, so we
-                // accept exactly the interface candidates (a @WebhookClient on a class is ignored).
-                return beanDefinition.getMetadata().isInterface();
+                // A @WebhookClient is a plain interface; the scanner's default rejects interfaces, so we
+                // accept interface candidates while excluding classes and @interface annotation types.
+                AnnotationMetadata candidateMetadata = beanDefinition.getMetadata();
+                return candidateMetadata.isInterface() && !candidateMetadata.isAnnotation();
             }
         };
         scanner.addIncludeFilter(new AnnotationTypeFilter(WebhookClient.class));
@@ -112,7 +113,7 @@ public class WebhookClientRegistrar implements ImportBeanDefinitionRegistrar {
      * destination would otherwise NPE (or publish to nowhere) at first use (see SPEC.md §19).
      */
     static void validateClientInterface(Class<?> clientInterface) {
-        if (!clientInterface.isInterface()) {
+        if (!clientInterface.isInterface() || clientInterface.isAnnotation()) {
             throw new InvalidWebhookClientException(
                     "@WebhookClient " + clientInterface.getName() + " must be an interface.");
         }

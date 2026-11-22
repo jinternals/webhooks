@@ -15,9 +15,10 @@ import org.springframework.lang.Nullable;
  * </ul>
  *
  * <p>{@link #sanitize(String)} keeps the parts that make a log entry useful (scheme, host, port, path) and
- * drops the userinfo and query. A URL that cannot be parsed is reduced to its scheme+authority prefix (up to
- * the first {@code '?'}) so a malformed value with a trailing {@code ?token=…} still does not leak. This is a
- * logging aid only; the real, unmodified URL is always used for the actual delivery.
+ * drops the userinfo, query, and fragment. A URL that cannot be parsed is reduced to its scheme+authority+path
+ * prefix (up to the first {@code '?'} or {@code '#'}) so a malformed value with a trailing {@code ?token=…} or
+ * {@code #secret} still does not leak. This is a logging aid only; the real, unmodified URL is always used for
+ * the actual delivery.
  */
 public final class SafeUrl {
 
@@ -27,8 +28,8 @@ public final class SafeUrl {
     static final String NULL_URL = "<null>";
 
     /**
-     * Return a log-safe rendering of {@code url}: scheme, host, port and path only — userinfo and query
-     * removed. Never returns {@code null}.
+     * Return a log-safe rendering of {@code url}: scheme, host, port and path only — userinfo, query, and
+     * fragment removed. Never returns {@code null}.
      */
     public static String sanitize(@Nullable String url) {
         if (url == null) {
@@ -38,7 +39,7 @@ public final class SafeUrl {
             URI uri = new URI(url);
             if (uri.getHost() == null) {
                 // No parseable authority (e.g. an opaque or relative value): best-effort strip of both the
-                // userinfo and anything from the first "?" so neither "user:token@" nor "?token=…" can leak.
+                // userinfo and anything from the first "?" or "#" so neither "user:token@" nor "?token=…" leaks.
                 return bestEffortStrip(url);
             }
             StringBuilder safe = new StringBuilder();
@@ -55,7 +56,7 @@ public final class SafeUrl {
             return safe.toString();
         } catch (URISyntaxException e) {
             // Unparseable URL (e.g. an illegal character): we cannot rely on URI parsing, so best-effort strip
-            // the userinfo and query so neither embedded credentials nor a "?token=…" leak.
+            // the userinfo, query, and fragment so neither embedded credentials nor a "?token=…" leak.
             return bestEffortStrip(url);
         }
     }
@@ -63,15 +64,20 @@ public final class SafeUrl {
     /**
      * Best-effort redaction for a value {@link URI} could not give us a host for (opaque, relative, or
      * outright unparseable): drop the userinfo ({@code //user:token@} → {@code //}) and anything from the
-     * first {@code '?'}. This is textual, not a parse, precisely because the input may be malformed; it keeps
-     * the useful prefix while ensuring the two secret-bearing components cannot survive.
+     * first {@code '?'} or {@code '#'}. This is textual, not a parse, precisely because the input may be
+     * malformed; it keeps the useful prefix while ensuring the secret-bearing components cannot survive.
      */
     private static String bestEffortStrip(String url) {
         return stripUserInfo(stripQueryAndFragment(url));
     }
 
-    /** Matches a query ({@code ?…}) or fragment ({@code #…}) suffix to the end of the string. */
-    private static final java.util.regex.Pattern QUERY_OR_FRAGMENT = java.util.regex.Pattern.compile("[?#].*");
+    /** Matches a query ({@code ?…}) or fragment ({@code #…}) suffix to the end of the string (including newlines). */
+    private static final java.util.regex.Pattern QUERY_OR_FRAGMENT =
+            java.util.regex.Pattern.compile("[?#].*", java.util.regex.Pattern.DOTALL);
+
+    /** Matches a {@code #fragment} suffix to the end of the string (including newlines). */
+    private static final java.util.regex.Pattern FRAGMENT =
+            java.util.regex.Pattern.compile("#.*", java.util.regex.Pattern.DOTALL);
 
     private static String stripQueryAndFragment(String url) {
         return QUERY_OR_FRAGMENT.matcher(url).replaceFirst("");
@@ -81,20 +87,21 @@ public final class SafeUrl {
      * Pattern matching a userinfo ({@code user:password@}) segment at the start of a double-slash authority.
      * Group 1 captures the scheme-and-authority-start prefix up to and including the double slash (so it works
      * for both an absolute {@code https:} URL and a scheme-relative one); the userinfo that follows is the
-     * greedy run of non-slash characters up to the <em>last</em> {@code '@'} before a path slash — so a
-     * password that itself contains {@code '@'} is stripped in full while an {@code '@'} appearing later in the
-     * path is never mistaken for a userinfo delimiter.
+     * greedy run of authority characters up to the <em>last</em> {@code '@'} before a path/query/fragment/whitespace
+     * boundary — so a password that itself contains {@code '@'} is stripped in full while an {@code '@'} appearing
+     * later in the path is never mistaken for a userinfo delimiter.
      */
-    private static final java.util.regex.Pattern USERINFO = java.util.regex.Pattern.compile("(^[^/]*//)[^/]*@");
+    private static final java.util.regex.Pattern USERINFO = java.util.regex.Pattern.compile("(^[^/\\s]*//)[^/?#\\s]*@");
 
     /**
      * Matches any {@code scheme://userinfo@} token embedded inside an HTTP client exception message (for
      * example when Spring's {@code RestClient} strips {@code ?query}/{@code #fragment} or re-encodes
      * {@code %}-escapes before formatting {@code ResourceAccessException}, so the echoed URL no longer matches
-     * {@code url} byte-for-byte).
+     * {@code url} byte-for-byte). Excludes {@code /}, {@code ?}, {@code #}, whitespace, and quotes so an
+     * {@code '@'} inside a path, query parameter, or fragment is never mistaken for {@code userinfo}.
      */
     private static final java.util.regex.Pattern EMBEDDED_USERINFO =
-            java.util.regex.Pattern.compile("([a-zA-Z][a-zA-Z0-9+.-]*://)[^/\\s\"']+@");
+            java.util.regex.Pattern.compile("([a-zA-Z][a-zA-Z0-9+.-]*://)[^/?#\\s\"']+@");
 
     private static String stripUserInfo(String url) {
         return USERINFO.matcher(url).replaceFirst("$1");
@@ -102,9 +109,10 @@ public final class SafeUrl {
 
     /**
      * Redact a secret-bearing {@code url} wherever it appears inside a human-readable {@code message} —
-     * replacing every literal occurrence of the raw URL with its {@link #sanitize(String) sanitized} form, and
+     * replacing every literal occurrence of the raw URL (and its fragment-stripped form, for clients that drop
+     * {@code #fragment} before formatting errors) with its {@link #sanitize(String) sanitized} form, and
      * scrubbing any remaining {@code scheme://userinfo@} credentials that the HTTP client echoed after
-     * stripping query/fragment components or re-encoding escapes.
+     * stripping query components or re-encoding escapes.
      *
      * @param message the exception/log message (may be {@code null})
      * @param url     the raw destination URL that may be embedded in {@code message} (may be {@code null})
@@ -116,8 +124,9 @@ public final class SafeUrl {
         if (message == null || url == null) {
             return message;
         }
-        // An empty url needs no explicit guard: String.replace("", sanitize("")) is replace("", "") — a no-op.
-        String replaced = message.replace(url, sanitize(url));
+        String sanitized = sanitize(url);
+        String withoutFragment = FRAGMENT.matcher(url).replaceFirst("");
+        String replaced = message.replace(url, sanitized).replace(withoutFragment, sanitized);
         return EMBEDDED_USERINFO.matcher(replaced).replaceAll("$1");
     }
 }

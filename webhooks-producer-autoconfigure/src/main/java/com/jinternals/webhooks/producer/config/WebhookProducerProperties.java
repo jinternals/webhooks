@@ -24,13 +24,13 @@ import org.springframework.validation.annotation.Validated;
  *       billing: { url: "https://billing.example.com/webhooks", secret: "whsec_..." }
  * </pre>
  *
- * <p>{@link Validated @Validated}: a null HTTP connect/read timeout fails the context at <strong>bind
- * time</strong> with a clear message. The retry policy is deliberately <em>not</em> constrained here:
- * {@code max-attempts}, {@code jitter}, and the backoff bounds are instead clamped to safe ranges at runtime
+ * <p>{@link Validated @Validated}: null or sub-millisecond HTTP connect/read timeouts and null retry backoff
+ * durations fail the context at <strong>bind time</strong> with a clear message. Numeric retry bounds
+ * ({@code max-attempts}, {@code jitter}, and negative backoff durations) are clamped to safe ranges at runtime
  * by {@code RetryingWebhookTransport} (e.g. jitter is clamped into {@code [0,1]}, a sub-1 attempt count
- * becomes a single attempt), so a slightly off value degrades gracefully rather than failing startup — see
- * the retry documentation in README.md. Destination URL/secret completeness is validated separately at
- * startup by {@link DestinationValidator} (SPEC §19d).
+ * becomes a single attempt), so an out-of-range numeric value degrades gracefully rather than failing startup.
+ * Destination URL/secret completeness is validated separately at startup by {@link DestinationValidator}
+ * (SPEC §19d).
  */
 @Data
 @Validated

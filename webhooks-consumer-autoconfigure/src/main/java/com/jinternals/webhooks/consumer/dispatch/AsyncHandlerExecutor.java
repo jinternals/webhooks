@@ -117,20 +117,18 @@ public class AsyncHandlerExecutor implements HandlerExecutor, AutoCloseable {
         scheduledCancel.set(cancelFuture);
         try {
             pool.execute(task);
-        } catch (RuntimeException e) {
+        } catch (Throwable t) {
             cancelFuture.cancel(false);
-            throw e;
+            throw t;
         }
         // (#1) Interrupt hygiene on the CallerRunsPolicy path. When the queue was full the task ran
         // synchronously on THIS (request/servlet) thread; a timeout firing in that window calls
         // future.cancel(true), which interrupts THIS thread, and a well-behaved handler re-asserts the
         // interrupt. Without clearing it we would hand the container back a request thread whose interrupt flag
-        // is still set, poisoning the next blocking operation when the thread is reused. task.isDone() is true
-        // here only when the task already ran to completion on this thread (caller-runs) or finished before we
-        // got here; on the common pooled path it is still running on a worker and this is a no-op. Clearing is
-        // safe: the only interrupt source inside this method is our own timeout cancel, and the container never
-        // dispatches a request on an already-interrupted thread.
-        if (task.isDone()) {
+        // is still set, poisoning the next blocking operation when the thread is reused. task.isCancelled() is
+        // true ONLY when our own timeout cancelled the task (so a fast handler completing without timing out
+        // never scrubs a pre-existing caller interrupt).
+        if (task.isCancelled()) {
             Thread.interrupted(); // clear any interrupt our own timeout introduced on the request thread
         }
     }

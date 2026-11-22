@@ -120,9 +120,12 @@ public class NatsKvIdempotencyGuard implements IdempotencyGuard {
             return;
         }
         String key = encodeKey(webhookId);
-        popOwnedRevision(key);
         try {
             keyValue.put(key, PROCESSED);
+            // Pop only AFTER put() succeeds: if put() throws, WebhookReceivePipeline invokes release(),
+            // which must still see ownedRevision so it runs a revision-checked CAS delete rather than an
+            // unconditional delete that could wipe a sibling pod's reclaimed lease.
+            popOwnedRevision(key);
         } catch (IOException | JetStreamApiException e) {
             throw new IllegalStateException("Failed to mark webhook-id processed in NATS KV: " + webhookId, e);
         }

@@ -1,9 +1,11 @@
 package com.jinternals.webhooks.sample.producer.nats;
 
+import com.jinternals.webhooks.producer.transport.WebhookDeliveryException;
 import com.jinternals.webhooks.sample.producer.nats.client.CrmWebhooks;
 import com.jinternals.webhooks.sample.producer.nats.events.ContactCreated;
 import java.util.UUID;
 import org.slf4j.MDC;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -24,6 +26,8 @@ public class NatsPublishController {
         try {
             crmWebhooks.contactCreated(event);
             return ResponseEntity.accepted().body("enqueued");
+        } catch (WebhookDeliveryException e) {
+            return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body("enqueue failed: " + e.getMessage());
         } finally {
             MDC.remove(NatsJetStreamWebhookTransport.TRACE_MDC_KEY);
         }

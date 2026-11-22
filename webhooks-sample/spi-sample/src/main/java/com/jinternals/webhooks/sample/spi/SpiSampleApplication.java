@@ -14,6 +14,8 @@ import com.jinternals.webhooks.producer.annotations.WebhookClient;
 import com.jinternals.webhooks.producer.config.WebhookProducerProperties;
 import com.jinternals.webhooks.producer.security.DestinationUrlValidator;
 import com.jinternals.webhooks.producer.transport.DeliveryFailure;
+import com.jinternals.webhooks.producer.transport.SafeUrl;
+import com.jinternals.webhooks.producer.transport.WebhookDeliveryException;
 import com.jinternals.webhooks.producer.transport.WebhookDeliveryListener;
 import java.util.List;
 import java.util.Map;
@@ -26,6 +28,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -117,7 +120,7 @@ public class SpiSampleApplication {
 
         @Override
         public void onDeliveryFailed(DeliveryFailure failure) {
-            log.warn("Captured abandoned delivery url={} reason={}", failure.url(), failure.reason());
+            log.warn("Captured abandoned delivery url={} reason={}", SafeUrl.sanitize(failure.url()), failure.reason());
             deliveryFailures.addLast(failure);
             while (deliveryFailures.size() > MAX_RETAINED) {
                 deliveryFailures.pollFirst();
@@ -183,8 +186,12 @@ public class SpiSampleApplication {
 
         @PostMapping("/publish/contact-created")
         ResponseEntity<String> publish(@RequestBody ContactCreated event) {
-            crmWebhooks.contactCreated(event);
-            return ResponseEntity.accepted().body("published");
+            try {
+                crmWebhooks.contactCreated(event);
+                return ResponseEntity.accepted().body("published");
+            } catch (WebhookDeliveryException e) {
+                return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body("delivery failed: " + e.getMessage());
+            }
         }
     }
 }

@@ -154,7 +154,7 @@ public class WebhookProperties {
             }
             Set<String> paths = new HashSet<>();
             for (Endpoint endpoint : endpoints) {
-                if (!paths.add(endpoint.getPath())) {
+                if (endpoint != null && !paths.add(endpoint.getPath())) {
                     return false;
                 }
             }

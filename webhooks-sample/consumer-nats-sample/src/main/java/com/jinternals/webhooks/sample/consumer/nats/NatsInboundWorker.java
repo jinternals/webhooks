@@ -151,7 +151,10 @@ public class NatsInboundWorker implements SmartLifecycle {
             inbound = objectMapper.readValue(msg.getData(), InboundWebhookMessage.class);
         } catch (Exception malformed) {
             log.error("Poison inbound message could not be parsed; routing to DLQ", malformed);
-            if (publishToDlq(msg.getData(), "poison_" + attempt)) {
+            String poisonKey = msg.metaData() != null
+                    ? "poison_seq_" + msg.metaData().streamSequence()
+                    : "poison_" + java.util.UUID.randomUUID();
+            if (publishToDlq(msg.getData(), poisonKey)) {
                 msg.term();
             } else {
                 msg.nakWithDelay(properties.getRetryDelay());
@@ -214,14 +217,17 @@ public class NatsInboundWorker implements SmartLifecycle {
     }
 
     private boolean publishToDlq(byte[] rawPayload, String webhookId) {
+        String dedupKey = (webhookId != null && !webhookId.isBlank())
+                ? webhookId
+                : java.util.UUID.randomUUID().toString();
         try {
             PublishOptions options = PublishOptions.builder().stream(properties.getDlqStream())
-                    .messageId("dlq_" + webhookId)
+                    .messageId("dlq_" + dedupKey)
                     .build();
             jetStream.publish(properties.getDlqSubject(), rawPayload, options);
             return true;
         } catch (Exception dlqEx) {
-            log.error("Failed to publish inbound webhook id={} to DLQ; retaining in WorkQueue", webhookId, dlqEx);
+            log.error("Failed to publish inbound webhook id={} to DLQ; retaining in WorkQueue", dedupKey, dlqEx);
             return false;
         }
     }

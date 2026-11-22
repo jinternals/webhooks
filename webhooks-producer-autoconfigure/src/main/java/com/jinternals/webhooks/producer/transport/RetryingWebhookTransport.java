@@ -173,8 +173,15 @@ public class RetryingWebhookTransport implements AttemptAwareWebhookTransport {
         return e.getStatusCode().map(String::valueOf).orElse("transport");
     }
 
-    /** 5xx and 429 are retryable; a transport error (no status) is retryable; any other 4xx is fatal. */
+    /**
+     * 5xx and 429 are retryable; a transport error (no status) is retryable unless caused by a syntactically
+     * invalid request/URI ({@link IllegalArgumentException}, which can never succeed on retry); any other 4xx
+     * is fatal.
+     */
     private boolean isRetryable(WebhookDeliveryException e) {
+        if (e.getCause() instanceof IllegalArgumentException) {
+            return false;
+        }
         Optional<Integer> status = e.getStatusCode();
         if (status.isEmpty()) {
             return true; // transport-level error (timeout, connection refused)

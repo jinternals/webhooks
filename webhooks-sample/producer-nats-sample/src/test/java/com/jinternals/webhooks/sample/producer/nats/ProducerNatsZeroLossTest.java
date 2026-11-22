@@ -94,6 +94,7 @@ class ProducerNatsZeroLossTest {
     static class InMemoryNatsTestConfig {
         final List<byte[]> outboundPayloads = new ArrayList<>();
         final List<byte[]> dlqPayloads = new ArrayList<>();
+        final List<String> dlqMessageIds = new ArrayList<>();
         final AtomicBoolean failNextDlqPublish = new AtomicBoolean(false);
 
         @Bean
@@ -138,6 +139,8 @@ class ProducerNatsZeroLossTest {
                         if (failNextDlqPublish.compareAndSet(true, false)) {
                             throw new IOException("DLQ stream temporarily unreachable");
                         }
+                        PublishOptions opts = inv.getArgument(2);
+                        dlqMessageIds.add(opts.getMessageId());
                         dlqPayloads.add(inv.getArgument(1));
                         return ack;
                     });
@@ -252,5 +255,15 @@ class ProducerNatsZeroLossTest {
         relayWorker.deliverOne(unknownAttempt2);
         verify(unknownAttempt2).term();
         assertThat(natsState.dlqPayloads).hasSize(1);
+
+        // 3) Distinct poison messages carry distinct streamSequence-keyed DLQ messageIds (never deduplicated!)
+        natsState.dlqMessageIds.clear();
+        Message poison1 = mockJetStreamMessage("{bad-1".getBytes(StandardCharsets.UTF_8), 1L);
+        when(poison1.metaData().streamSequence()).thenReturn(201L);
+        Message poison2 = mockJetStreamMessage("{bad-2".getBytes(StandardCharsets.UTF_8), 1L);
+        when(poison2.metaData().streamSequence()).thenReturn(202L);
+        relayWorker.deliverOne(poison1);
+        relayWorker.deliverOne(poison2);
+        assertThat(natsState.dlqMessageIds).containsExactly("dlq_poison_seq_201", "dlq_poison_seq_202");
     }
 }

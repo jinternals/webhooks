@@ -15,7 +15,7 @@ import java.lang.annotation.Target;
  * incoming webhook body can be deserialized by its {@code type} without a switch; on the producer
  * side the same annotation derives the {@code type} string written into the outgoing envelope.
  */
-@Target({ElementType.TYPE, ElementType.ANNOTATION_TYPE})
+@Target(ElementType.TYPE)
 @Retention(RetentionPolicy.RUNTIME)
 @Documented
 public @interface WebhookType {

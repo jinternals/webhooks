@@ -70,24 +70,33 @@ contain breaking changes; they will always be called out under **Changed** or **
   timestamp / lag / `Retry-After` arithmetic overflows.
 - `AsyncHandlerExecutor.close()` now drains in-flight and queued `204`-acknowledged handlers up to `timeout`
   before `shutdownNow()`, routing any remaining unexecuted tasks to `HandlerFailureListener`, and guards
-  against both pre-close task drops (`shutdownLock`) and duplicate timeout/completion failure callbacks.
+  against both post-shutdown task drops (custom `RejectedExecutionHandler`) and duplicate timeout/completion
+  failure callbacks (`task.cancel(false)` / `task.isCancelled()`).
 - `WebhookClientRegistrar` now uses `ClassUtils.getPackageName`, resolves classes via the thread context
-  `ClassLoader` for Spring Boot DevTools compatibility, and deduplicates client bean definitions across
-  multiple `@EnableWebhookClients` configurations.
+  `ClassLoader` for Spring Boot DevTools compatibility, excludes `@interface` annotation types from
+  `@WebhookClient` scanning/validation, and deduplicates client bean definitions across multiple
+  `@EnableWebhookClients` configurations.
+- `WebhookEndpointRegistry` now applies `RequestMappingHandlerMapping#getBuilderConfiguration()` so registered
+  `RequestMappingInfo` routes honour Spring Boot 3's `PathPatternParser` and host path-matching settings, and
+  `WebhookConsumerWebAutoConfiguration` is gated on `@ConditionalOnBean(name = "requestMappingHandlerMapping")`.
 - Enforced `http`/`https` schemes in `DestinationValidator` and `AllowListDestinationUrlValidator` (with
   bracketed IPv6 host normalization), rejected duplicate consumer endpoint `path`s and blank `@WebhookType`
-  values at startup, joined multi-line `webhook-signature` headers per RFC 9110 §5.3, and validated positive
-  (`>= 1ms`) HTTP connect/read and async handler timeouts at bind time.
-- Redacted embedded `userinfo` credentials in `SafeUrl.redactMessage` even when `RestClient` strips query or
-  fragment components, passed `URI.create(url)` in `RestClientWebhookTransport` so percent-encoded query strings
-  are never double-encoded, isolated `webhookProducerRestClient` (`defaultCandidate = false` + `@Qualifier`) with
-  managed `HttpClient` shutdown and `ObjectProvider<RestClient.Builder>`, and notified `WebhookDeliveryListener`
-  when retry backoff is interrupted.
+  values at startup, restricted `@WebhookType` to `@Target(ElementType.TYPE)`, joined multi-line
+  `webhook-signature` headers per RFC 9110 §5.3, and validated positive (`>= 1ms`) HTTP connect/read and async
+  handler timeouts at bind time.
+- Redacted embedded `userinfo` and fragment-stripped query credentials in `SafeUrl.redactMessage` without
+  mangling `@` in root-URL queries/fragments, passed `URI.create(url)` in `RestClientWebhookTransport` so
+  percent-encoded query strings are never double-encoded, treated syntactically invalid URI failures as
+  non-retryable in `RetryingWebhookTransport`, isolated `webhookProducerRestClient`
+  (`defaultCandidate = false` + `@Qualifier`) with managed `HttpClient` shutdown and
+  `ObjectProvider<RestClient.Builder>`, and notified `WebhookDeliveryListener` when retry backoff is
+  interrupted.
 - Rejected JSON literal `null` envelopes with `400 Bad Request` (`InvalidPayloadException`), released
   `IdempotencyGuard` reservations on `Error` as well as `RuntimeException`, protected committed entries in
-  `InMemoryIdempotencyGuard` against late `release()`, failed eagerly with `500` on missing `@WebhookHandler`
-  before `async` submission, supported generic bridge and overridden `@WebhookHandler` methods plus
-  package-private `@WebhookClient` `default` methods, skipped registering `EndpointResolvingInterceptor` when
-  `endpoints` is empty, and pre-hashed `v2a` Ed25519 payloads once per verification with a signature count cap.
+  `InMemoryIdempotencyGuard` against late `release()` without sliding TTL on rejected duplicates, failed
+  eagerly with `500` on missing `@WebhookHandler` before `async` submission, supported generic bridge and
+  overridden `@WebhookHandler` methods plus package-private `@WebhookClient` `default` methods, skipped
+  registering `EndpointResolvingInterceptor` when `endpoints` is empty, and pre-hashed `v2a` Ed25519 payloads
+  once per verification with a signature count cap.
 
 [Unreleased]: https://github.com/jinternals/webhooks/commits/main

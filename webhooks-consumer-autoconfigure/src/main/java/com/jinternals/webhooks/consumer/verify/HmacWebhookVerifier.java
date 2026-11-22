@@ -29,8 +29,8 @@ import org.springframework.util.ConcurrentReferenceHashMap;
  *
  * <p>The replay-window (timestamp freshness) check is a <strong>separate, injectable concern</strong>
  * delegated to a {@link TimestampValidator} (SPI), because the upstream library always enforces a fixed
- * ±5-minute window that it exposes no way to tune or disable. The shipped default disables it; see
- * {@link TimestampValidator}.
+ * ±5-minute window that it exposes no way to tune or disable. Auto-configuration wires
+ * {@link ClockSkewTimestampValidator} (±5m tolerance) by default; see {@link TimestampValidator}.
  *
  * <p>Signature comparison is constant-time ({@link MessageDigest#isEqual}). Throws
  * {@link WebhookVerificationException} on any failure.

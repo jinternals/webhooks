@@ -13,7 +13,7 @@ import java.lang.reflect.Method;
  * validated eagerly at startup by {@code WebhookClientRegistrar}, so this handler can publish directly
  * without re-checking. {@code Object} methods ({@code equals}/{@code hashCode}/{@code toString}) are
  * handled locally so the proxy behaves sensibly as a bean, and {@code default} interface methods run their
- * own body (via {@link InvocationHandler#invokeDefault}) instead of being mis-published.
+ * own body (via {@link MethodHandles#privateLookupIn}) instead of being mis-published.
  */
 public class WebhookClientInvocationHandler implements InvocationHandler {
 

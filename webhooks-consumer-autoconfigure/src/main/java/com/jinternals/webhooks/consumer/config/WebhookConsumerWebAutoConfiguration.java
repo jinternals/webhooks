@@ -24,6 +24,7 @@ import java.time.Clock;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.autoconfigure.web.servlet.WebMvcAutoConfiguration;
@@ -45,8 +46,9 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandl
  *       intercepts the host app's own controllers.</li>
  * </ul>
  */
-@AutoConfiguration(after = WebMvcAutoConfiguration.class)
+@AutoConfiguration(after = {WebMvcAutoConfiguration.class, WebhookConsumerAutoConfiguration.class})
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
+@ConditionalOnBean(name = "requestMappingHandlerMapping")
 public class WebhookConsumerWebAutoConfiguration {
 
     /**

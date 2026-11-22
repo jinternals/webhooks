@@ -5,6 +5,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -28,11 +29,10 @@ public class ContactProjectionService {
                     return size() > MAX_RETAINED_PROJECTIONS;
                 }
             });
-    private volatile boolean failNext = false;
+    private final AtomicBoolean failNext = new AtomicBoolean(false);
 
     public void process(InboundWebhookMessage message) {
-        if (failNext) {
-            failNext = false;
+        if (failNext.compareAndSet(true, false)) {
             throw new IllegalStateException("Simulated transient downstream DB outage");
         }
         String key = message.webhookId() != null
@@ -50,7 +50,7 @@ public class ContactProjectionService {
     }
 
     public void failNextInvocation() {
-        this.failNext = true;
+        this.failNext.set(true);
     }
 
     public List<InboundWebhookMessage> processed() {

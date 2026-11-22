@@ -174,7 +174,7 @@ management:
       webhook.receive: false   # disable consumer receive metrics + spans
       webhook.send: false      # disable producer send metrics + spans
 # Disable all observations:
-# management.observations.enable: false
+# management.observations.enable.all: false
 ```
 
 See [SPEC §13](../reference/SPEC.md#13-observability) for the full observation design.

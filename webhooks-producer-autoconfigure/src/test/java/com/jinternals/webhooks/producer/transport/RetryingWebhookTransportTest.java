@@ -628,4 +628,20 @@ class RetryingWebhookTransportTest {
             Thread.interrupted();
         }
     }
+
+    @Test
+    void doesNotRetrySyntacticallyInvalidUriFailure() {
+        AtomicInteger calls = new AtomicInteger();
+        WebhookDeliveryException invalidUri =
+                new WebhookDeliveryException("bad uri", new IllegalArgumentException("Illegal character in path"));
+        WebhookTransport delegate = failing(99, invalidUri, calls);
+
+        assertThatThrownBy(() -> retrying(delegate, retry(3)).send(URL, HEADERS, BODY))
+                .isSameAs(invalidUri);
+
+        assertThat(calls.get()).isEqualTo(1);
+        assertThat(sleeps).isEmpty();
+        assertThat(deadLetters).hasSize(1);
+        assertThat(deadLetters.get(0).reason()).isEqualTo(DeliveryFailure.Reason.FATAL);
+    }
 }

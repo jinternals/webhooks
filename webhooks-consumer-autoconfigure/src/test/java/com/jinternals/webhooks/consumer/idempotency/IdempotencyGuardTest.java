@@ -224,10 +224,13 @@ class IdempotencyGuardTest {
         seconds.addAndGet(540L); // +9m: slow handler finishes near end of initial 10m reservation
         guard.markProcessed("id-ttl"); // refreshes TTL to +10m from completion (1_700_001_140)
 
-        seconds.addAndGet(120L); // +11m from start, +2m after commit -> still deduplicated (and slides TTL to +10m)
+        seconds.addAndGet(120L); // +11m from start, +2m after commit -> still deduplicated (without extending TTL)
         assertThat(guard.tryBegin("id-ttl")).isFalse();
 
-        seconds.addAndGet(600L); // exact 10m boundary from last sight (now == expiry -> !isAfter(now) -> expired)
+        seconds.addAndGet(479L); // 1s before commit's 10m TTL -> still deduplicated
+        assertThat(guard.tryBegin("id-ttl")).isFalse();
+
+        seconds.addAndGet(1L); // exact 10m boundary from commit (now == expiry -> !isAfter(now) -> expired)
         assertThat(guard.tryBegin("id-ttl")).isTrue();
     }
 

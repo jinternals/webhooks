@@ -244,5 +244,12 @@ class WebhookPropertiesValidationTest {
         assertThat(nullEndpoints.getConsumer().isEndpointPathsUnique()).isTrue();
         assertThat(validator.validate(nullEndpoints))
                 .anySatisfy(v -> assertThat(v.getPropertyPath().toString()).contains("endpoints"));
+
+        WebhookProperties nullElement = new WebhookProperties();
+        nullElement.getConsumer().getEndpoints().add(null);
+        Endpoint validEndpoint = new Endpoint();
+        validEndpoint.setPath("/webhooks/crm");
+        nullElement.getConsumer().getEndpoints().add(validEndpoint);
+        assertThat(nullElement.getConsumer().isEndpointPathsUnique()).isTrue();
     }
 }

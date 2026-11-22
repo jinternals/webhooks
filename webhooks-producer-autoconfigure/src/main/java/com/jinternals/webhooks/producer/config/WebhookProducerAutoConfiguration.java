@@ -52,13 +52,13 @@ import org.springframework.web.client.RestClient;
 public class WebhookProducerAutoConfiguration {
 
     /**
-     * RestClient used by the default transport, with connect/read timeouts applied so a stalled
-     * destination cannot pin the calling thread (SPEC §19c), and <strong>redirect following disabled</strong>
-     * ({@link HttpClient.Redirect#NEVER}). Standard Webhooks treats a {@code 3xx} as a delivery failure
-     * ("don't follow redirects — update the webhook URL instead"), so the client must surface the redirect
-     * status to {@link RestClientWebhookTransport} rather than quietly chase it to another host (which would
-     * also bypass the destination URL allow-list). The host can supply its own {@code webhookProducerRestClient}
-     * bean for further HTTP tuning.
+     * Underlying JDK {@link HttpClient} for the default transport, with connect timeout applied so a stalled
+     * destination cannot pin the calling thread (SPEC §19c), <strong>redirect following disabled</strong>
+     * ({@link HttpClient.Redirect#NEVER}), and {@code destroyMethod = "close"} so internal selector/worker
+     * threads are shut down when the application context closes. Standard Webhooks treats a {@code 3xx} as a
+     * delivery failure ("don't follow redirects — update the webhook URL instead"), so the client must surface
+     * the redirect status to {@link RestClientWebhookTransport} rather than quietly chase it to another host
+     * (which would also bypass the destination URL allow-list).
      */
     @Bean(name = "webhookProducerHttpClient", defaultCandidate = false, destroyMethod = "close")
     @ConditionalOnMissingBean(name = {"webhookProducerRestClient", "webhookProducerHttpClient"})
@@ -69,6 +69,13 @@ public class WebhookProducerAutoConfiguration {
                 .build();
     }
 
+    /**
+     * {@link RestClient} used by the default transport, cloned from the host's {@link RestClient.Builder} (so
+     * Micrometer HTTP client observation/tracing customizers propagate automatically) with read timeout applied
+     * via {@link JdkClientHttpRequestFactory}. Marked {@code defaultCandidate = false} so it never collides with
+     * unqualified {@code @Autowired RestClient} injection in host services; override by defining a
+     * {@code webhookProducerRestClient} bean.
+     */
     @Bean(name = "webhookProducerRestClient", defaultCandidate = false)
     @ConditionalOnMissingBean(name = "webhookProducerRestClient")
     public RestClient webhookProducerRestClient(

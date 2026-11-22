@@ -287,7 +287,7 @@ Flags that default to *enabled* can be turned off; features that default to *dis
 | --- | --- | --- |
 | Receive observations (`webhook.receive` metric and span) | Enabled (with actuator present) | `management.observations.enable.webhook.receive=false` to disable |
 | Send observations (`webhook.send` metric and span) | Enabled (with actuator present) | `management.observations.enable.webhook.send=false` to disable |
-| All observations | Enabled (with actuator present) | `management.observations.enable=false` to disable |
+| All observations | Enabled (with actuator present) | `management.observations.enable.all=false` to disable |
 | Startup secret validation | Enabled | `webhooks.consumer.validate-secrets-on-startup=false` to disable |
 | Startup destination validation | Enabled | `webhooks.producer.validate-destinations-on-startup=false` to disable |
 | Inbound signature verification | **Enabled** (`v1` HMAC / `v2a` Ed25519) | `webhooks.consumer.signature-verification-enabled=false` to disable (only behind transport auth). See [SPEC §8f](./docs/reference/SPEC.md#8f-disabling-message-security). |
@@ -396,7 +396,7 @@ management:
       webhook.receive: false   # disables consumer receive metrics and spans
       webhook.send: false      # disables producer send metrics and spans
 # To disable all observations in the application:
-# management.observations.enable: false
+# management.observations.enable.all: false
 ```
 
 See [SPEC §13](./docs/reference/SPEC.md#13-observability) for the full design.
@@ -701,7 +701,7 @@ The runnable demos live as standalone Spring Boot apps under [`webhooks-sample/`
   [Zero-webhook-loss queueing](./docs/guides/zero-loss-queueing.md)).
 - **`producer-auth-sample` (`:9094`) + `consumer-auth-sample` (`:9095`):** OAuth2 JWT `Authorization: Bearer`
   transport authentication (`401`) layered in front of Standard Webhooks signature verification (`400`)
-  (`docker-compose.auth.yml`; see [Transport authentication](./docs/guides/transport-authentication.md)).
+  (`docker-compose.auth.yml`, `./integration-test-auth.sh`; see [Transport authentication](./docs/guides/transport-authentication.md)).
 - **`spi-sample` (`:9096`):** custom `SecretProvider<Endpoint>`, `@Bean("destinationSecretProvider")`,
   reserve-then-commit `IdempotencyGuard`, `DestinationUrlValidator`, `HandlerFailureListener`, and
   `WebhookDeliveryListener` with both starters coexisting in one app (see
@@ -715,8 +715,9 @@ mvn -pl webhooks-consumer-starter,webhooks-producer-starter -am install -DskipTe
 mvn -T 1C clean verify
 
 # run the Docker end-to-end stacks (from webhooks-sample/)
-./integration-test.sh        # quickstart stack
+./integration-test.sh        # quickstart stack (v1 + v2a)
 ./integration-test-nats.sh   # zero-webhook-loss NATS JetStream stack
+./integration-test-auth.sh   # OAuth2 JWT + Standard Webhooks dual-layer auth stack
 ```
 
 ## Quality gate
@@ -725,15 +726,16 @@ Every library module enforces 100% JaCoCo line and branch coverage and a 100% PI
 coverage gate runs on every `mvn verify`; mutation testing is slower, so it runs with the `mutation` profile
 (`mvn verify -Pmutation`), which CI enables on every push and pull request. Either gate fails the build if
 quality regresses. The enforced
-thresholds and the sole executable-code-free `annotations/**` exclusion live in each module's `pom.xml`;
+thresholds and narrow exclusions (executable-code-free `annotations/**`, plus `webhooks-core`'s Lombok wire
+DTO `model/**`) live in each module's `pom.xml`;
 the gate is described in [SPEC §16](./docs/reference/SPEC.md#16-quality-gate--coverage--mutation-testing).
 The authoritative, always-current counts are the JaCoCo and PITest reports produced by
 `mvn clean verify -Pmutation` under each module's `target/`.
 
 The standalone sample apps under `webhooks-sample/` are not part of the gated library reactor, so the 100%
 mutation gate is not enforced on them; their behaviour is exercised by each sample's `@SpringBootTest` suite
-(`mvn -f webhooks-sample/pom.xml verify`) and the Docker end-to-end scripts (`integration-test.sh` and
-`integration-test-nats.sh`).
+(`mvn -f webhooks-sample/pom.xml verify`) and the Docker end-to-end scripts (`integration-test.sh`,
+`integration-test-nats.sh`, and `integration-test-auth.sh`).
 
 Beyond coverage and mutation, the build can scan dependencies for known CVEs with
 [OWASP dependency-check](https://owasp.org/www-project-dependency-check/), run via the opt-in

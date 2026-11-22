@@ -423,6 +423,10 @@ class WebhookClientRegistrarTest {
                         com.jinternals.webhooks.producer.fixtures.invalidtype.NotAnInterfaceWebhooks.class))
                 .isInstanceOf(InvalidWebhookClientException.class)
                 .hasMessageContaining("must be an interface");
+        assertThatThrownBy(() -> WebhookClientRegistrar.validateClientInterface(
+                        com.jinternals.webhooks.producer.fixtures.mixed.NotAClientAnnotation.class))
+                .isInstanceOf(InvalidWebhookClientException.class)
+                .hasMessageContaining("must be an interface");
     }
 
     @Test

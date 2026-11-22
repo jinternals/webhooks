@@ -3,6 +3,7 @@ package com.jinternals.webhooks.sample.producer.auth;
 import com.jinternals.webhooks.core.annotations.WebhookType;
 import com.jinternals.webhooks.producer.annotations.EnableWebhookClients;
 import com.jinternals.webhooks.producer.annotations.WebhookClient;
+import com.jinternals.webhooks.producer.transport.WebhookDeliveryException;
 import com.jinternals.webhooks.producer.transport.WebhookRequestInterceptor;
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
 import java.nio.charset.StandardCharsets;
@@ -19,6 +20,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.JwsHeader;
@@ -105,8 +107,12 @@ public class ProducerAuthSampleApplication {
 
         @PostMapping("/publish/contact-created")
         ResponseEntity<String> publish(@RequestBody ContactCreated event) {
-            crmWebhooks.contactCreated(event);
-            return ResponseEntity.accepted().body("published");
+            try {
+                crmWebhooks.contactCreated(event);
+                return ResponseEntity.accepted().body("published");
+            } catch (WebhookDeliveryException e) {
+                return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body("delivery failed: " + e.getMessage());
+            }
         }
     }
 }

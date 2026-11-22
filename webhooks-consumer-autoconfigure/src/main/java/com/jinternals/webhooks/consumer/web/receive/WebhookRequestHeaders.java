@@ -44,8 +44,8 @@ public final class WebhookRequestHeaders {
 
     /**
      * The first value of a header (matched case-insensitively with {@link Locale#ROOT}), or {@code null} when
-     * absent or empty. Fast-paths exact lower-cased keys collected by {@link #collect(HttpServletRequest)} and
-     * falls back to a case-insensitive scan when callers supply a mixed-case map directly.
+     * absent or empty — works uniformly for lower-cased maps built by {@link #collect(HttpServletRequest)} and
+     * mixed-case maps supplied directly by callers.
      */
     public static String first(Map<String, List<String>> headers, String name) {
         String lower = name.toLowerCase(Locale.ROOT);

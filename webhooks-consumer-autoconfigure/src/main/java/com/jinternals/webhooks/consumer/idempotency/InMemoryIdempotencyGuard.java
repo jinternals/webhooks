@@ -85,9 +85,10 @@ public class InMemoryIdempotencyGuard implements IdempotencyGuard {
         boolean accepted;
         lock.lock();
         try {
-            Instant previousExpiry = seen.put(webhookId, nextExpiry);
+            Instant previousExpiry = seen.get(webhookId);
             accepted = previousExpiry == null || !previousExpiry.isAfter(now);
             if (accepted) {
+                seen.put(webhookId, nextExpiry);
                 committed.remove(webhookId);
             }
         } finally {

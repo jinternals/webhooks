@@ -28,17 +28,17 @@ producer binds `webhooks.producer.*`. The two are independent — configure only
 > **Payload validation has no config.** It is declared with Bean Validation annotations on the `@WebhookType`
 > event classes (`@NotBlank`, `@Positive`, `@Size`, …) and enforced on every deserialized event; unknown
 > fields inside the event `data` object are rejected by the strict event reader. See
-> [configuration §6a](./SPEC.md#6a-per-type-payload-validation).
+> [SPEC §6a](./SPEC.md#6a-per-type-payload-validation).
 
 ### Handler execution (`webhooks.consumer.handler`)
 
 | Property | Type | Default | Description |
 | --- | --- | --- | --- |
 | `mode` | `sync` \| `async` | `sync` | `sync` runs the handler inline (`2xx` = processed); `async` returns `204` first and runs it on a pool (`2xx` = accepted). See [Reliability → sync vs async](../guides/reliability.md#sync-vs-async-handling). |
-| `core-pool-size` | int | `4` | Async core threads. |
-| `max-pool-size` | int | `16` | Async max threads. |
-| `queue-capacity` | int | `1000` | Async bounded queue; a full queue applies back-pressure via `CallerRunsPolicy` (runs on the request thread). |
-| `timeout` | Duration | `30s` | Async per-handler timeout; an over-running handler is interrupted and routed to `onHandlerTimeout`. |
+| `core-pool-size` | int | `4` | Async core threads (`> 0`, `<= max-pool-size`). |
+| `max-pool-size` | int | `16` | Async max threads (`>= core-pool-size`). |
+| `queue-capacity` | int | `1000` | Async bounded queue (`> 0`); a full queue applies back-pressure via `CallerRunsPolicy` (runs on the request thread). |
+| `timeout` | Duration | `30s` | Async per-handler timeout (`>= 1ms`); an over-running handler is interrupted and routed to `onHandlerTimeout`. |
 
 ### Correlation & trace context
 
@@ -56,8 +56,8 @@ A list; each entry is one listen path.
 
 | Property | Type | Default | Description |
 | --- | --- | --- | --- |
-| `path` | String | *(required)* | Listen path, e.g. `/webhooks/crm`. |
-| `secret` | String | *(required)* | Primary verification key: a `whsec_…` HMAC secret (`v1`) **or** a `whpk_…` Ed25519 public key (`v2a`). The scheme is selected by prefix. |
+| `path` | String | *(required)* | Unique absolute listen path starting with `/`, e.g. `/webhooks/crm`. |
+| `secret` | String | *(required)* | Primary verification key: a `whsec_…` HMAC secret (`v1`) **or** a `whpk_…` Ed25519 public key (`v2a`). The scheme is selected by prefix. Not required when `signature-verification-enabled=false` or when a custom `SecretProvider<Endpoint>` bean resolves secrets externally. |
 | `additional-secrets` | List&lt;String&gt; | *(empty)* | Extra accepted keys for zero-downtime rotation (or a mixed `v1`/`v2a` migration); a signature verifying against the primary **or** any of these is accepted. See [secret rotation](../guides/verification-and-security.md#secret-rotation). |
 | `endpoint-id` | String | *(none)* | **Required for `v2a`** (when `secret`/`additional-secrets` holds a `whpk_` key): the stable identifier prepended to the signed content. Must match the producer's value exactly and **must not contain `.`**. Ignored (with a startup warning) on a `v1`-only endpoint. See [asymmetric signatures](../guides/verification-and-security.md#asymmetric-signatures-ed25519-v2a). |
 | `types` | List&lt;String&gt; | *(empty)* | Optional allow-list of accepted event types. Empty = accept any known `@WebhookType`. A type outside the list is handled by `unknown-type-policy`. |
@@ -114,8 +114,8 @@ A map keyed by the name used in `@WebhookClient(destination = "...")`.
 
 | Property | Type | Default | Description |
 | --- | --- | --- | --- |
-| `connect-timeout` | Duration | `5s` | Max time to establish the TCP connection. |
-| `read-timeout` | Duration | `10s` | Max time to wait for the response once connected. A timeout is retryable. |
+| `connect-timeout` | Duration | `5s` | Max time to establish the TCP connection (`>= 1ms`). |
+| `read-timeout` | Duration | `10s` | Max time to wait for the response once connected (`>= 1ms`). A timeout is retryable. |
 
 ### Retry (`webhooks.producer.retry`)
 
@@ -174,7 +174,7 @@ Not under `webhooks.*`, but relevant: both sides wrap their hot path in Micromet
 | --- | --- | --- |
 | `management.observations.enable.webhook.receive` | `true` | Consumer receive metrics + spans. |
 | `management.observations.enable.webhook.send` | `true` | Producer send metrics + spans. |
-| `management.observations.enable` | `true` | Master switch for all observations. |
+| `management.observations.enable.all` | `true` | Master switch for all observations. |
 
 See [Observability → tracing](../guides/observability.md#tracing--observations).
 
