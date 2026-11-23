@@ -1,7 +1,7 @@
 package com.jinternals.webhooks.core.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 /**
  * The Standard Webhooks envelope — the shared wire format for both sides. On the consumer side it is

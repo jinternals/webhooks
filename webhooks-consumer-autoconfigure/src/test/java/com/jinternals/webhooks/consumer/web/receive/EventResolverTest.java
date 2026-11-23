@@ -8,7 +8,6 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jinternals.webhooks.consumer.config.WebhookProperties;
 import com.jinternals.webhooks.consumer.config.WebhookProperties.Endpoint;
 import com.jinternals.webhooks.consumer.config.WebhookProperties.UnknownTypePolicy;
@@ -20,6 +19,7 @@ import com.jinternals.webhooks.core.model.Envelope;
 import com.jinternals.webhooks.core.registry.WebhookTypeRegistry;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Unit test for {@link EventResolver} (SPEC.md §5, §6a): routing (accept + model) then strict
@@ -36,7 +36,7 @@ class EventResolverTest {
     private final PayloadValidator payloadValidator = mock(PayloadValidator.class);
     private final WebhookProperties properties = new WebhookProperties();
     private final EventResolver resolver =
-            new EventResolver(typeRegistry, payloadValidator, new ObjectMapper(), properties);
+            new EventResolver(typeRegistry, payloadValidator, new JsonMapper(), properties);
 
     private Endpoint endpoint(List<String> types) {
         Endpoint endpoint = new Endpoint();
@@ -48,7 +48,7 @@ class EventResolverTest {
     private Envelope envelope(String type, String dataJson) throws Exception {
         Envelope envelope = new Envelope();
         envelope.setType(type);
-        envelope.setData(new ObjectMapper().readTree(dataJson));
+        envelope.setData(new JsonMapper().readTree(dataJson));
         return envelope;
     }
 

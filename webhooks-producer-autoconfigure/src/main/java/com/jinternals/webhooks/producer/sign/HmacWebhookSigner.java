@@ -5,7 +5,7 @@ import com.jinternals.webhooks.core.sign.SymmetricKeys;
 import com.standardwebhooks.Webhook;
 import com.standardwebhooks.exceptions.WebhookSigningException;
 import java.util.concurrent.ConcurrentMap;
-import org.springframework.lang.Nullable;
+import org.jspecify.annotations.Nullable;
 import org.springframework.util.ConcurrentReferenceHashMap;
 
 /**

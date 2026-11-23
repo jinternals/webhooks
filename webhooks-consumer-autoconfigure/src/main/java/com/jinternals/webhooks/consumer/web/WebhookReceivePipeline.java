@@ -1,8 +1,5 @@
 package com.jinternals.webhooks.consumer.web;
 
-import com.fasterxml.jackson.core.JacksonException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.ObjectReader;
 import com.jinternals.webhooks.consumer.config.WebhookProperties.Endpoint;
 import com.jinternals.webhooks.consumer.idempotency.IdempotencyGuard;
 import com.jinternals.webhooks.consumer.metadata.MetadataFactory;
@@ -23,6 +20,9 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectReader;
 
 /**
  * Orchestrates the receive pipeline for a single delivery (see SPEC.md §10): verify → dedupe → resolve

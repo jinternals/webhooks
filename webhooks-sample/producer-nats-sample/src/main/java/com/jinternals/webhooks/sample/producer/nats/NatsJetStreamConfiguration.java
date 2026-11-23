@@ -13,9 +13,9 @@ import io.nats.client.api.StorageType;
 import io.nats.client.api.StreamConfiguration;
 import java.io.IOException;
 import java.time.Duration;
-import org.springframework.boot.actuate.health.Health;
-import org.springframework.boot.actuate.health.HealthIndicator;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.health.contributor.Health;
+import org.springframework.boot.health.contributor.HealthIndicator;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 

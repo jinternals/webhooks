@@ -21,6 +21,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.AutoConfigurationPackage;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.autoconfigure.aop.AopAutoConfiguration;
+import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -37,7 +38,7 @@ import org.springframework.test.web.servlet.MockMvc;
 @SpringBootTest(
         classes = WebhookConsumerIntegrationTest.TestApp.class,
         webEnvironment = SpringBootTest.WebEnvironment.MOCK)
-@org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
+@org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc
 class WebhookConsumerIntegrationTest {
 
     @WebhookType("contact.created")
@@ -58,10 +59,10 @@ class WebhookConsumerIntegrationTest {
         WebhookConsumerAutoConfiguration.class,
         WebhookConsumerWebAutoConfiguration.class,
         AopAutoConfiguration.class,
-        org.springframework.boot.autoconfigure.web.servlet.WebMvcAutoConfiguration.class,
-        org.springframework.boot.autoconfigure.web.servlet.DispatcherServletAutoConfiguration.class,
-        org.springframework.boot.autoconfigure.jackson.JacksonAutoConfiguration.class,
-        org.springframework.boot.autoconfigure.validation.ValidationAutoConfiguration.class
+        org.springframework.boot.webmvc.autoconfigure.WebMvcAutoConfiguration.class,
+        org.springframework.boot.webmvc.autoconfigure.DispatcherServletAutoConfiguration.class,
+        JacksonAutoConfiguration.class,
+        org.springframework.boot.validation.autoconfigure.ValidationAutoConfiguration.class
     })
     static class TestApp {
         @Bean

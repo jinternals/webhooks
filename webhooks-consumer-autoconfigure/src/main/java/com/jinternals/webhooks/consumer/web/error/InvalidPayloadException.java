@@ -1,5 +1,7 @@
 package com.jinternals.webhooks.consumer.web.error;
 
+import java.io.Serial;
+
 /**
  * Raised when a <strong>verified</strong> request body cannot be parsed as a Standard Webhooks envelope,
  * or when the envelope's {@code data} node cannot be strictly deserialized into its {@code @WebhookType}
@@ -12,6 +14,7 @@ package com.jinternals.webhooks.consumer.web.error;
  */
 public class InvalidPayloadException extends RuntimeException {
 
+    @Serial
     private static final long serialVersionUID = 1L;
 
     private final String type;

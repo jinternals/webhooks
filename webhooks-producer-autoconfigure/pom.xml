@@ -25,18 +25,14 @@
             <version>${project.version}</version>
         </dependency>
 
-        <!-- RestClient + Jackson standard modules (JavaTimeModule, Jdk8Module, ParameterNamesModule) for
-             @WebhookClient delivery. The producer is a client only: it POSTs outbound and never serves HTTP, so
-             it uses spring-boot-starter-json + spring-web rather than spring-boot-starter-web (avoiding
-             spring-webmvc and embedded Tomcat while ensuring non-web hosts can serialize java.time.Instant,
-             LocalDate, Optional, and Java records in @WebhookType payloads out of the box). -->
+        <!-- RestClient + Jackson 3 for @WebhookClient delivery. The producer is a client only: it POSTs
+             outbound and never serves HTTP, so it uses spring-boot-starter-restclient rather than
+             spring-boot-starter-webmvc (avoiding spring-webmvc and embedded Tomcat while pulling in
+             spring-boot-starter-jackson and spring-boot-restclient for out-of-the-box java.time, Optional,
+             and Java record serialization). -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-json</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework</groupId>
-            <artifactId>spring-web</artifactId>
+            <artifactId>spring-boot-starter-restclient</artifactId>
         </dependency>
 
         <!-- Auto-configuration + @ConfigurationProperties support. -->
@@ -65,15 +61,14 @@
             <groupId>io.micrometer</groupId>
             <artifactId>micrometer-observation</artifactId>
         </dependency>
-
-        <!-- AOP so Micrometer's ObservedAspect can advise @Observed methods (brings aspectjweaver).
-             OPTIONAL: the ObservedAspect bean is guarded by @ConditionalOnClass(ProceedingJoinPoint),
-             so the publisher degrades gracefully without AOP (no @Observed publish timing). A host that
-             wants it adds spring-boot-starter-aop itself, so the starter does not force it downstream. -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-aop</artifactId>
+            <artifactId>spring-boot-starter-aspectj</artifactId>
             <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.jspecify</groupId>
+            <artifactId>jspecify</artifactId>
         </dependency>
 
         <!-- Generates configuration metadata for webhooks.producer.* properties. -->

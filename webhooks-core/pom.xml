@@ -16,9 +16,13 @@
     <description>Standard Webhooks shared core — wire model, @WebhookType/@Redact, redactor, type registry, secret SPI</description>
 
     <dependencies>
+        <dependency>
+            <groupId>org.jspecify</groupId>
+            <artifactId>jspecify</artifactId>
+        </dependency>
         <!-- Jackson for the Envelope's JsonNode data field (the wire model is Jackson-shaped). -->
         <dependency>
-            <groupId>com.fasterxml.jackson.core</groupId>
+            <groupId>tools.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
         </dependency>
 

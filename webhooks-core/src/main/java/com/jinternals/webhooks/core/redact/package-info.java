@@ -1,5 +1,5 @@
 /** Log-safe rendering of webhook event payloads with {@code @Redact} field masking. */
-@NonNullApi
+@NullMarked
 package com.jinternals.webhooks.core.redact;
 
-import org.springframework.lang.NonNullApi;
+import org.jspecify.annotations.NullMarked;

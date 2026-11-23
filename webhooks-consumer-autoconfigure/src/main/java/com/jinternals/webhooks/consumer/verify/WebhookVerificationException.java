@@ -1,6 +1,7 @@
 package com.jinternals.webhooks.consumer.verify;
 
-import org.springframework.lang.Nullable;
+import java.io.Serial;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Thrown when an inbound webhook fails authenticity or freshness verification — missing required headers,
@@ -21,6 +22,7 @@ import org.springframework.lang.Nullable;
  */
 public class WebhookVerificationException extends RuntimeException {
 
+    @Serial
     private static final long serialVersionUID = 1L;
 
     public WebhookVerificationException(@Nullable String message) {

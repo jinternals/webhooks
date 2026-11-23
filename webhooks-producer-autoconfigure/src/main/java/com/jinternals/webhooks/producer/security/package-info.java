@@ -1,5 +1,5 @@
 /** Destination URL validation SPI and host allow-list implementation (SSRF protection). */
-@NonNullApi
+@NullMarked
 package com.jinternals.webhooks.producer.security;
 
-import org.springframework.lang.NonNullApi;
+import org.jspecify.annotations.NullMarked;

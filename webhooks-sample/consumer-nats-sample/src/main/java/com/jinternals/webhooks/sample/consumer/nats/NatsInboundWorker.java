@@ -1,7 +1,5 @@
 package com.jinternals.webhooks.sample.consumer.nats;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.ObjectReader;
 import com.jinternals.webhooks.consumer.dispatch.HandlerFailureListener;
 import io.nats.client.JetStream;
 import io.nats.client.JetStreamSubscription;
@@ -19,6 +17,8 @@ import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.context.SmartLifecycle;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectReader;
 
 /**
  * Multi-instance-safe NATS JetStream worker draining {@code WEBHOOKS_INBOUND}.

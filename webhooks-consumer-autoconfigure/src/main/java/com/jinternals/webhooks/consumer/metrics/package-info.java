@@ -1,5 +1,5 @@
 /** Consumer observability metrics SPI and Micrometer-backed implementation. */
-@NonNullApi
+@NullMarked
 package com.jinternals.webhooks.consumer.metrics;
 
-import org.springframework.lang.NonNullApi;
+import org.jspecify.annotations.NullMarked;

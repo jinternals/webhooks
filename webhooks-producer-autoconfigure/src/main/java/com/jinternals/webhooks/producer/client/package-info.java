@@ -1,5 +1,5 @@
 /** Core publishing engine backing {@code @WebhookClient} interfaces. */
-@NonNullApi
+@NullMarked
 package com.jinternals.webhooks.producer.client;
 
-import org.springframework.lang.NonNullApi;
+import org.jspecify.annotations.NullMarked;

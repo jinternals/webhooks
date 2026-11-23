@@ -1,5 +1,5 @@
 /** Startup configuration validation exceptions shared by consumer and producer. */
-@NonNullApi
+@NullMarked
 package com.jinternals.webhooks.core.config;
 
-import org.springframework.lang.NonNullApi;
+import org.jspecify.annotations.NullMarked;

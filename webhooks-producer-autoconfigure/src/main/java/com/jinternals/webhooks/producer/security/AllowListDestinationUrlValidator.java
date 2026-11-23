@@ -8,7 +8,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
-import org.springframework.lang.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Opt-in {@link DestinationUrlValidator} that permits delivery only to {@code http}/{@code https} URLs on an

@@ -1,7 +1,5 @@
 package com.jinternals.webhooks.sample.producer.nats;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.ObjectWriter;
 import com.jinternals.webhooks.core.model.WebhookHeaders;
 import com.jinternals.webhooks.producer.security.DestinationUrlValidator;
 import com.jinternals.webhooks.producer.transport.SafeUrl;
@@ -16,6 +14,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectWriter;
 
 /**
  * Durable {@link WebhookTransport} backed by NATS JetStream ({@code WEBHOOKS_OUTBOUND}).

@@ -33,12 +33,15 @@ contain breaking changes; they will always be called out under **Changed** or **
 
 ### Changed
 
-- Built against Spring Boot 3.5.16 (was 3.3.5).
+- Upgraded to **Spring Boot 4.0.10** (Spring Framework 7, Jackson 3 `tools.jackson.*`, JSpecify
+  `@NullMarked` / `@Nullable` null-safety annotations, and modular starters `spring-boot-starter-webmvc`,
+  `spring-boot-starter-restclient`, `spring-boot-starter-aspectj`,
+  `spring-boot-starter-security-oauth2-resource-server`).
 - `@WebhookType` discovery now uses Spring's `ClassPathScanningCandidateComponentProvider` instead of
   `org.reflections` (unmaintained) — one fewer runtime dependency. Only concrete, independent (top-level or
   `static` nested) classes directly annotated with `@WebhookType` are discovered.
-- Test tooling: PITest 1.30.2 / pitest-junit5-plugin 1.2.3 (JUnit Platform 1.12 support); `@MockBean` replaced
-  by `@MockitoBean`.
+- Test tooling: JaCoCo 0.8.16, PITest 1.30.2 / pitest-junit5-plugin 1.2.3; `@MockBean` replaced by
+  `@MockitoBean`.
 - `WebhookMetadata.deliveryLag()` now returns `Optional<Duration>` (matching `eventLag()`) so unsigned
   deliveries without a `webhook-timestamp` header never NPE, and `WebhookMetadata.toString()` renders
   `redactedEvent()` with `authorization` / `proxy-authorization` / `cookie` headers masked.
@@ -60,12 +63,13 @@ contain breaking changes; they will always be called out under **Changed** or **
   Ed25519/HMAC keys in `ConcurrentReferenceHashMap` and bounded Micrometer meters in `ConcurrentHashMap`,
   enforced defensive immutability on `DeliveryFailure` and `WebhookMetadata`, added `Clock` injection
   (`ObjectProvider<Clock>`) across consumer and producer, tightened internal helper visibility, and added
-  `@NonNullApi` / `@Nullable` package annotations.
+  JSpecify `@NullMarked` / `@Nullable` package and API annotations.
 
 ### Fixed
 
-- Ordered consumer and producer auto-configurations after Spring Boot Actuator's `ObservationAutoConfiguration`
-  so the fallback `ObservationRegistry.NOOP` bean never pre-empts Actuator's real `ObservationRegistry`.
+- Ordered consumer and producer auto-configurations after Spring Boot's
+  `org.springframework.boot.micrometer.observation.autoconfigure.ObservationAutoConfiguration` so the fallback
+  `ObservationRegistry.NOOP` bean never pre-empts the host's real `ObservationRegistry`.
 - `DestinationValidator` now honours `webhooks.producer.signing-enabled=false`, validates symmetric `whsec_`
   secrets at startup, and redacts embedded credentials/query tokens in `URISyntaxException` messages.
 - Enforced `endpoint-id` presence and dot-freeness on `DefaultWebhookVerifier` `v2a` verification, rejected
@@ -80,7 +84,7 @@ contain breaking changes; they will always be called out under **Changed** or **
   `@WebhookClient` scanning/validation, and deduplicates client bean definitions across multiple
   `@EnableWebhookClients` configurations.
 - `WebhookEndpointRegistry` now applies `RequestMappingHandlerMapping#getBuilderConfiguration()` so registered
-  `RequestMappingInfo` routes honour Spring Boot 3's `PathPatternParser` and host path-matching settings, and
+  `RequestMappingInfo` routes honour Spring MVC's `PathPatternParser` and host path-matching settings, and
   `WebhookConsumerWebAutoConfiguration` is gated on `@ConditionalOnBean(name = "requestMappingHandlerMapping")`.
 - Enforced `http`/`https` schemes in `DestinationValidator` and `AllowListDestinationUrlValidator` (with
   bracketed IPv6 host normalization), rejected duplicate consumer endpoint `path`s and blank `@WebhookType`
@@ -107,7 +111,8 @@ contain breaking changes; they will always be called out under **Changed** or **
   resolution, rejected duplicate `webhook-id` / `webhook-timestamp` headers and non-canonical timestamp strings,
   normalized RFC 9110 `, `-folded `webhook-signature` headers, guarded comma-only `X-Forwarded-For` headers and
   ISO-8601 numeric-offset event timestamps in `MetadataFactory`, fast-failed oversized `Content-Length`
-  requests before opening the servlet `InputStream`, and included `spring-boot-starter-json` in
-  `webhooks-producer-autoconfigure` for out-of-the-box `java.time` serialization in non-web apps.
+  requests before opening the servlet `InputStream`, and included `spring-boot-starter-restclient`
+  (`spring-boot-starter-jackson`) in `webhooks-producer-autoconfigure` for out-of-the-box `java.time`
+  serialization in non-web apps.
 
 [Unreleased]: https://github.com/jinternals/webhooks/commits/main

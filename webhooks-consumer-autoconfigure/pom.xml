@@ -28,7 +28,7 @@
         <!-- Spring MVC: the listener registers POST mappings at runtime. -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-web</artifactId>
+            <artifactId>spring-boot-starter-webmvc</artifactId>
         </dependency>
 
         <!-- Auto-configuration + @ConfigurationProperties support. -->
@@ -44,6 +44,10 @@
             <groupId>io.micrometer</groupId>
             <artifactId>micrometer-observation</artifactId>
         </dependency>
+        <dependency>
+            <groupId>org.jspecify</groupId>
+            <artifactId>jspecify</artifactId>
+        </dependency>
 
         <!-- Opt-in consumer metrics (§20.6/A4). MicrometerWebhookMetrics compiles against the core
              Meter API (Counter/Timer/MeterRegistry), but the metrics bean is guarded by
@@ -56,13 +60,13 @@
             <optional>true</optional>
         </dependency>
 
-        <!-- AOP so Micrometer's ObservedAspect can advise @Observed methods (brings aspectjweaver).
+        <!-- AspectJ so Micrometer's ObservedAspect can advise @Observed methods (brings aspectjweaver).
              OPTIONAL: the ObservedAspect bean is guarded by @ConditionalOnClass(ProceedingJoinPoint),
-             so the listener degrades gracefully without AOP (no @Observed dispatch timing). A host that
-             wants it adds spring-boot-starter-aop itself, so the starter does not force it downstream. -->
+             so the listener degrades gracefully without AspectJ (no @Observed dispatch timing). A host that
+             wants it adds spring-boot-starter-aspectj itself, so the starter does not force it downstream. -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-aop</artifactId>
+            <artifactId>spring-boot-starter-aspectj</artifactId>
             <optional>true</optional>
         </dependency>
 
@@ -94,6 +98,11 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webmvc-test</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>

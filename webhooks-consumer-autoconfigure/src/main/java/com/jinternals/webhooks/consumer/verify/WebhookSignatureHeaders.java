@@ -4,7 +4,7 @@ import com.jinternals.webhooks.core.model.WebhookHeaders;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import org.springframework.lang.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Parses the three Standard Webhooks headers ({@code webhook-id}, {@code webhook-timestamp},

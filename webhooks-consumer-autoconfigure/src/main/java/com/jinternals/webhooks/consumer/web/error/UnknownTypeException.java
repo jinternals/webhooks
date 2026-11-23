@@ -1,8 +1,11 @@
 package com.jinternals.webhooks.consumer.web.error;
 
+import java.io.Serial;
+
 /** Raised when an incoming event type is not accepted and the policy is REJECT (see SPEC.md §5, §12). */
 public class UnknownTypeException extends RuntimeException {
 
+    @Serial
     private static final long serialVersionUID = 1L;
 
     private final String type;

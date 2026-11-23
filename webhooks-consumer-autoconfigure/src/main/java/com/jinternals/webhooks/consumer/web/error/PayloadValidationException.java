@@ -1,10 +1,12 @@
 package com.jinternals.webhooks.consumer.web.error;
 
+import java.io.Serial;
 import java.util.List;
 
 /** Raised when an event payload fails Bean Validation against its {@code @WebhookType} class (see SPEC.md §6a, §12). */
 public class PayloadValidationException extends RuntimeException {
 
+    @Serial
     private static final long serialVersionUID = 1L;
 
     private final String type;

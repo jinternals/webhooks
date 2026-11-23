@@ -3,6 +3,7 @@ package com.jinternals.webhooks.core.sign;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.lang.reflect.Modifier;
 import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.util.Base64;
@@ -130,7 +131,7 @@ class Ed25519KeysTest {
     void utilityClassIsNotInstantiable() throws Exception {
         // Ed25519Keys is a static-only utility; its private constructor exists solely to prevent instantiation.
         var ctor = Ed25519Keys.class.getDeclaredConstructor();
-        assertThat(java.lang.reflect.Modifier.isPrivate(ctor.getModifiers())).isTrue();
+        assertThat(Modifier.isPrivate(ctor.getModifiers())).isTrue();
         ctor.setAccessible(true);
         assertThat(ctor.newInstance()).isInstanceOf(Ed25519Keys.class);
     }

@@ -1,7 +1,5 @@
 package com.jinternals.webhooks.sample.producer.nats;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.ObjectReader;
 import com.jinternals.webhooks.core.model.WebhookHeaders;
 import com.jinternals.webhooks.core.secret.SecretProvider;
 import com.jinternals.webhooks.producer.config.WebhookProducerProperties;
@@ -38,6 +36,8 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.SmartLifecycle;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectReader;
 
 /**
  * Multi-instance-safe NATS JetStream relay worker draining {@code WEBHOOKS_OUTBOUND}.

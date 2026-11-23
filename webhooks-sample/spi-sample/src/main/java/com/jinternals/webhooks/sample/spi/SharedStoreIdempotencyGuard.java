@@ -6,7 +6,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.locks.ReentrantLock;
-import org.springframework.lang.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Sample reserve-then-commit {@link IdempotencyGuard} (see {@code docs/reference/beans-and-spis.md}).

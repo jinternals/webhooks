@@ -2,7 +2,7 @@ package com.jinternals.webhooks.core.sign;
 
 import com.jinternals.webhooks.core.config.WebhookConfigurationException;
 import java.util.List;
-import org.springframework.lang.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Shared, scheme-aware validation of Standard Webhooks signing material, used at <strong>startup</strong> by

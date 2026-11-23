@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.jinternals.webhooks.core.config.WebhookConfigurationException;
+import java.lang.reflect.Modifier;
 import java.util.List;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.Test;
@@ -165,7 +166,7 @@ class SigningSchemeValidatorTest {
     @Test
     void utilityClassIsNotInstantiable() throws Exception {
         var ctor = SigningSchemeValidator.class.getDeclaredConstructor();
-        assertThat(java.lang.reflect.Modifier.isPrivate(ctor.getModifiers())).isTrue();
+        assertThat(Modifier.isPrivate(ctor.getModifiers())).isTrue();
         ctor.setAccessible(true);
         assertThat(ctor.newInstance()).isInstanceOf(SigningSchemeValidator.class);
     }

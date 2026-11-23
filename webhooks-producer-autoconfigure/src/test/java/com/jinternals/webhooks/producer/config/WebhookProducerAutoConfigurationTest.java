@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jinternals.webhooks.core.secret.SecretProvider;
 import com.jinternals.webhooks.producer.client.WebhookPublisher;
 import com.jinternals.webhooks.producer.config.WebhookProducerProperties.Destination;
@@ -31,7 +30,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration;
 import org.springframework.web.client.RestClient;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Unit test for {@link WebhookProducerAutoConfiguration}: each {@code @Bean} method must produce a bean that
@@ -67,8 +68,7 @@ class WebhookProducerAutoConfigurationTest {
         try {
             int port = server.getAddress().getPort();
             WebhookProducerProperties props = properties();
-            java.net.http.HttpClient httpClient = autoConfig.webhookProducerHttpClient(props);
-            try {
+            try (java.net.http.HttpClient httpClient = autoConfig.webhookProducerHttpClient(props)) {
                 RestClient restClient = autoConfig.webhookProducerRestClient(emptyBuilderProvider(), httpClient, props);
                 RestClientWebhookTransport transport =
                         new RestClientWebhookTransport(restClient, new AllowAllDestinationUrlValidator());
@@ -77,8 +77,6 @@ class WebhookProducerAutoConfigurationTest {
                         .isInstanceOf(WebhookDeliveryException.class)
                         .hasMessageContaining("failed with status 302");
                 assertThat(redirectTargetHits).hasValue(0);
-            } finally {
-                httpClient.close();
             }
         } finally {
             server.stop(0);
@@ -106,8 +104,7 @@ class WebhookProducerAutoConfigurationTest {
             int port = server.getAddress().getPort();
             WebhookProducerProperties properties = properties();
             properties.getHttp().setReadTimeout(Duration.ofMillis(250));
-            java.net.http.HttpClient httpClient = autoConfig.webhookProducerHttpClient(properties);
-            try {
+            try (java.net.http.HttpClient httpClient = autoConfig.webhookProducerHttpClient(properties)) {
                 RestClient restClient =
                         autoConfig.webhookProducerRestClient(emptyBuilderProvider(), httpClient, properties);
                 RestClientWebhookTransport transport =
@@ -118,8 +115,6 @@ class WebhookProducerAutoConfigurationTest {
                         .isInstanceOf(WebhookDeliveryException.class);
                 long elapsedMs = (System.nanoTime() - start) / 1_000_000;
                 assertThat(elapsedMs).isLessThan(4_000);
-            } finally {
-                httpClient.close();
             }
         } finally {
             server.stop(0);
@@ -227,8 +222,7 @@ class WebhookProducerAutoConfigurationTest {
         try {
             int port = server.getAddress().getPort();
             WebhookProducerProperties props = properties();
-            java.net.http.HttpClient httpClient = autoConfig.webhookProducerHttpClient(props);
-            try {
+            try (java.net.http.HttpClient httpClient = autoConfig.webhookProducerHttpClient(props)) {
                 RestClient restClient = autoConfig.webhookProducerRestClient(emptyBuilderProvider(), httpClient, props);
                 WebhookRequestInterceptor addBearer = (url, headers, body) -> {
                     var out = new java.util.LinkedHashMap<>(headers);
@@ -248,8 +242,6 @@ class WebhookProducerAutoConfigurationTest {
 
                 assertThat(seenAuth.get()).isEqualTo("Bearer token-123");
                 assertThat(seenSigned.get()).isEqualTo("msg_1"); // the signed header survives interception
-            } finally {
-                httpClient.close();
             }
         } finally {
             server.stop(0);
@@ -301,7 +293,7 @@ class WebhookProducerAutoConfigurationTest {
         SecretProvider<Destination> secretProvider = mock(SecretProvider.class);
 
         WebhookPublisher publisher = autoConfig.webhookPublisher(
-                new ObjectMapper(),
+                new JsonMapper(),
                 new DefaultWebhookSigner(),
                 mock(WebhookTransport.class),
                 secretProvider,
@@ -331,7 +323,7 @@ class WebhookProducerAutoConfigurationTest {
 
         WebhookTransport recordingTransport = mock(WebhookTransport.class);
         WebhookPublisher publisher = autoConfig.webhookPublisher(
-                new ObjectMapper(),
+                new JsonMapper(),
                 new DefaultWebhookSigner(),
                 recordingTransport,
                 autoConfig.destinationSecretProvider(),
@@ -398,20 +390,21 @@ class WebhookProducerAutoConfigurationTest {
 
     @Test
     void observationRegistryBacksOffWhenActuatorObservationAutoConfigurationIsPresent() {
-        // Regression guard: com.jinternals... sorts alphabetically BEFORE org.springframework.boot.actuate...
+        // Regression guard: com.jinternals... sorts alphabetically BEFORE org.springframework.boot.micrometer...
         // Without afterName = "...ObservationAutoConfiguration", our NOOP fallback registered first and caused
-        // Actuator's ObservationAutoConfiguration to back off, silently disabling ALL observations in the host app.
+        // Spring Boot's ObservationAutoConfiguration to back off, silently disabling ALL observations in the host app.
         new org.springframework.boot.test.context.runner.ApplicationContextRunner()
                 .withConfiguration(org.springframework.boot.autoconfigure.AutoConfigurations.of(
                         WebhookProducerAutoConfiguration.class,
-                        org.springframework.boot.autoconfigure.jackson.JacksonAutoConfiguration.class,
-                        org.springframework.boot.autoconfigure.web.client.RestClientAutoConfiguration.class,
-                        org.springframework.boot.actuate.autoconfigure.metrics.MetricsAutoConfiguration.class,
-                        org.springframework.boot.actuate.autoconfigure.metrics.export.simple
+                        JacksonAutoConfiguration.class,
+                        org.springframework.boot.restclient.autoconfigure.RestClientAutoConfiguration.class,
+                        org.springframework.boot.micrometer.metrics.autoconfigure.MetricsAutoConfiguration.class,
+                        org.springframework.boot.micrometer.metrics.autoconfigure.export.simple
                                 .SimpleMetricsExportAutoConfiguration.class,
-                        org.springframework.boot.actuate.autoconfigure.metrics.CompositeMeterRegistryAutoConfiguration
-                                .class,
-                        org.springframework.boot.actuate.autoconfigure.observation.ObservationAutoConfiguration.class))
+                        org.springframework.boot.micrometer.metrics.autoconfigure
+                                .CompositeMeterRegistryAutoConfiguration.class,
+                        org.springframework.boot.micrometer.observation.autoconfigure.ObservationAutoConfiguration
+                                .class))
                 .run(ctx -> {
                     ObservationRegistry observationRegistry = ctx.getBean(ObservationRegistry.class);
                     assertThat(observationRegistry).isNotSameAs(ObservationRegistry.NOOP);
@@ -452,8 +445,7 @@ class WebhookProducerAutoConfigurationTest {
             // unqualified host RestClient carrying a secret default Authorization header.
             new org.springframework.boot.test.context.runner.ApplicationContextRunner()
                     .withConfiguration(org.springframework.boot.autoconfigure.AutoConfigurations.of(
-                            WebhookProducerAutoConfiguration.class,
-                            org.springframework.boot.autoconfigure.jackson.JacksonAutoConfiguration.class))
+                            WebhookProducerAutoConfiguration.class, JacksonAutoConfiguration.class))
                     .withUserConfiguration(HostRestClientConfig.class)
                     .run(ctx -> {
                         // 1) Unqualified ctx.getBean(RestClient.class) resolves uniquely to hostStripeRestClient!

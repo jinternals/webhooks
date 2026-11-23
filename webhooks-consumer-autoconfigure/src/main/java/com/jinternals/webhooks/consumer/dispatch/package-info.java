@@ -1,5 +1,5 @@
 /** Handler discovery and synchronous/asynchronous dispatch SPIs for inbound webhooks. */
-@NonNullApi
+@NullMarked
 package com.jinternals.webhooks.consumer.dispatch;
 
-import org.springframework.lang.NonNullApi;
+import org.jspecify.annotations.NullMarked;

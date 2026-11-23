@@ -1,7 +1,5 @@
 package com.jinternals.webhooks.sample.consumer.nats;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.ObjectWriter;
 import com.jinternals.webhooks.consumer.annotations.WebhookHandler;
 import com.jinternals.webhooks.consumer.model.WebhookMetadata;
 import com.jinternals.webhooks.sample.consumer.nats.events.ContactCreated;
@@ -12,6 +10,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectWriter;
 
 /**
  * Synchronous {@code @WebhookHandler} that bridges verified inbound webhooks into the durable NATS JetStream

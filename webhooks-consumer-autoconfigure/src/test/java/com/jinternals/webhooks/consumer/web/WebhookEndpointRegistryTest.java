@@ -76,9 +76,12 @@ class WebhookEndpointRegistryTest {
     @Test
     void usesHandlerMappingBuilderConfigurationSoHostPathMatchingSettingsAreHonoured() {
         RequestMappingHandlerMapping handlerMapping = new RequestMappingHandlerMapping();
-        // Configure non-default AntPathMatcher mode (patternParser = null) so omitting builder.options(config)
-        // would fall back to Spring 6's default PathPatternParser instead of honouring handlerMapping's config.
-        handlerMapping.setPatternParser(null);
+        // Configure a non-default case-insensitive PathPatternParser so omitting builder.options(config)
+        // would fall back to PathPatternParser.defaultInstance (case-sensitive == true).
+        org.springframework.web.util.pattern.PathPatternParser customParser =
+                new org.springframework.web.util.pattern.PathPatternParser();
+        customParser.setCaseSensitive(false);
+        handlerMapping.setPatternParser(customParser);
         handlerMapping.setApplicationContext(new org.springframework.context.support.StaticApplicationContext());
         handlerMapping.afterPropertiesSet();
         WebhookReceiveController controller = mock(WebhookReceiveController.class);
@@ -90,7 +93,11 @@ class WebhookEndpointRegistryTest {
         Assertions.assertThat(handlerMapping.getHandlerMethods()).hasSize(1);
         RequestMappingInfo registered =
                 handlerMapping.getHandlerMethods().keySet().iterator().next();
-        Assertions.assertThat(registered.getPatternsCondition()).isNotNull();
-        Assertions.assertThat(registered.getPathPatternsCondition()).isNull();
+        Assertions.assertThat(registered.getPathPatternsCondition()).isNotNull();
+        Assertions.assertThat(registered
+                        .getPathPatternsCondition()
+                        .getFirstPattern()
+                        .matches(org.springframework.http.server.PathContainer.parsePath("/WEBHOOKS/CRM")))
+                .isTrue();
     }
 }

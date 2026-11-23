@@ -1,5 +1,7 @@
 package com.jinternals.webhooks.consumer.web.error;
 
+import java.io.Serial;
+
 /**
  * Raised when an inbound webhook body exceeds {@code webhooks.consumer.max-body-size} (see SPEC.md
  * §14a). Thrown while reading the raw body, <em>before</em> verification, so an oversized or slow
@@ -7,6 +9,7 @@ package com.jinternals.webhooks.consumer.web.error;
  */
 public class PayloadTooLargeException extends RuntimeException {
 
+    @Serial
     private static final long serialVersionUID = 1L;
 
     private final long limitBytes;

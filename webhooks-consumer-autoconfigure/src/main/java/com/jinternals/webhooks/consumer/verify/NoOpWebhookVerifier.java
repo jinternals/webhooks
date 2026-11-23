@@ -2,7 +2,7 @@ package com.jinternals.webhooks.consumer.verify;
 
 import java.util.List;
 import java.util.Map;
-import org.springframework.lang.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Disabled {@link WebhookVerifier}: verifies nothing and accepts <strong>every</strong> request. Wired when

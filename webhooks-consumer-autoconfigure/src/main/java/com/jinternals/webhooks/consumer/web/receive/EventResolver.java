@@ -1,9 +1,5 @@
 package com.jinternals.webhooks.consumer.web.receive;
 
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.ObjectReader;
 import com.jinternals.webhooks.consumer.config.WebhookProperties;
 import com.jinternals.webhooks.consumer.config.WebhookProperties.Endpoint;
 import com.jinternals.webhooks.consumer.config.WebhookProperties.UnknownTypePolicy;
@@ -12,11 +8,15 @@ import com.jinternals.webhooks.consumer.web.error.InvalidPayloadException;
 import com.jinternals.webhooks.consumer.web.error.UnknownTypeException;
 import com.jinternals.webhooks.core.model.Envelope;
 import com.jinternals.webhooks.core.registry.WebhookTypeRegistry;
-import java.io.IOException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectReader;
 
 /**
  * Receive-pipeline stage 2 (see SPEC.md §5, §6a, §10): from a verified envelope, decide whether the
@@ -111,8 +111,8 @@ public class EventResolver {
             event = eventReaders
                     .computeIfAbsent(eventClass, strictEventReader::forType)
                     .readValue(data);
-        } catch (IOException e) {
-            throw new InvalidPayloadException(type, e.getMessage(), e);
+        } catch (JacksonException e) {
+            throw new InvalidPayloadException(type, e.getOriginalMessage(), e);
         }
         payloadValidator.validate(type, event);
         return event;

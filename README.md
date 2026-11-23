@@ -4,7 +4,7 @@
 [![Maven Central](https://img.shields.io/maven-central/v/io.github.jinternals/webhooks-core?label=Maven%20Central)](https://central.sonatype.com/namespace/io.github.jinternals)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
 ![Java 21](https://img.shields.io/badge/Java-21-orange)
-![Spring Boot 3.5](https://img.shields.io/badge/Spring_Boot-3.5-6DB33F)
+![Spring Boot 4.0](https://img.shields.io/badge/Spring_Boot-4.0-6DB33F)
 [![Standard Webhooks](https://img.shields.io/badge/Standard_Webhooks-compliant-8A2BE2)](https://www.standardwebhooks.com/)
 
 > [!NOTE]
@@ -91,7 +91,7 @@ The project is a Maven reactor of five library modules — `webhooks-core` plus 
 | Requirement | Version |
 | --- | --- |
 | Java | 21 |
-| Spring Boot | 3.5.x |
+| Spring Boot | 4.0.x |
 | Maven | 3.9 or later |
 
 ## Consumer quick start
@@ -351,12 +351,12 @@ override the default; no component scan is involved and nothing needs to be disa
 Instrumentation uses the standard Micrometer Observation API (`@Observed` with `ObservedAspect`), so
 no custom flag is introduced; observations are controlled exactly as any other Spring observation.
 
-> **Requires Spring AOP.** `@Observed` is advised by Micrometer's `ObservedAspect`, which needs Spring
-> AOP/AspectJ on the classpath. Both libraries declare `spring-boot-starter-aop` as **optional**, so the
-> `webhook.receive` / `webhook.send` timers and spans appear only when the host application also has AOP
-> available (add `spring-boot-starter-aop` if it does not). Without AOP the libraries still function
+> **Requires AspectJ.** `@Observed` is advised by Micrometer's `ObservedAspect`, which needs
+> AspectJ on the classpath. Both libraries declare `spring-boot-starter-aspectj` as **optional**, so the
+> `webhook.receive` / `webhook.send` timers and spans appear only when the host application also has AspectJ
+> available (add `spring-boot-starter-aspectj` if it does not). Without AspectJ the libraries still function
 > fully — they simply emit no `@Observed` timing for these two methods. Actuator alone (a `MeterRegistry`)
-> is **not** sufficient; AOP is what makes the annotated method observed.
+> is **not** sufficient; AspectJ is what makes the annotated method observed.
 
 Each operation produces a single observation that yields both a metric (a timer) and a tracing span:
 

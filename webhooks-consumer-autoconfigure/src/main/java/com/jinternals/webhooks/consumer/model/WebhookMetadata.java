@@ -9,7 +9,7 @@ import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import org.springframework.lang.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Immutable metadata handed to webhook handlers alongside the deserialized event (see SPEC.md §9).

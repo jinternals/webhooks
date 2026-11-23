@@ -4,7 +4,7 @@
  * extension points; prefer the stable SPIs in {@code consumer.verify}, {@code consumer.idempotency},
  * {@code consumer.dispatch}, {@code consumer.metadata}, and {@code consumer.metrics}.
  */
-@NonNullApi
+@NullMarked
 package com.jinternals.webhooks.consumer.web.receive;
 
-import org.springframework.lang.NonNullApi;
+import org.jspecify.annotations.NullMarked;

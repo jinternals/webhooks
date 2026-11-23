@@ -1,5 +1,7 @@
 package com.jinternals.webhooks.consumer.verify;
 
+import java.io.Serial;
+
 /**
  * A {@link WebhookVerificationException} thrown by this toolkit's own verification code that carries the
  * typed {@link VerificationFailureReason} alongside the human-readable message (see SPEC.md §8, §20.6/A4).
@@ -12,6 +14,7 @@ package com.jinternals.webhooks.consumer.verify;
  */
 public class WebhookVerificationFailure extends WebhookVerificationException {
 
+    @Serial
     private static final long serialVersionUID = 1L;
 
     private final VerificationFailureReason reason;

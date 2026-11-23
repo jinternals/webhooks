@@ -13,7 +13,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jinternals.webhooks.consumer.config.WebhookProperties;
 import com.jinternals.webhooks.consumer.config.WebhookProperties.Endpoint;
 import com.jinternals.webhooks.consumer.config.WebhookProperties.UnknownTypePolicy;
@@ -50,6 +49,7 @@ import org.mockito.InOrder;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockHttpServletRequest;
+import tools.jackson.databind.json.JsonMapper;
 
 class WebhookReceiveControllerTest {
 
@@ -93,14 +93,14 @@ class WebhookReceiveControllerTest {
      */
     private WebhookReceiveController controllerWith(WebhookMetrics metrics) {
         WebhookBodyVerifier bodyVerifier = new WebhookBodyVerifier(verifier, secretProvider, metrics);
-        EventResolver eventResolver = new EventResolver(typeRegistry, payloadValidator, new ObjectMapper(), properties);
+        EventResolver eventResolver = new EventResolver(typeRegistry, payloadValidator, new JsonMapper(), properties);
         ReceiveObservabilityRecorder observability = new ReceiveObservabilityRecorder(metrics);
         TimedHandlerDispatcher eventDispatcher =
                 new TimedHandlerDispatcher(new SyncHandlerExecutor(), dispatcher, metrics);
         WebhookReceivePipeline pipeline = new WebhookReceivePipeline(
                 bodyVerifier,
                 idempotency,
-                new ObjectMapper(),
+                new JsonMapper(),
                 eventResolver,
                 metadataFactory,
                 observability,

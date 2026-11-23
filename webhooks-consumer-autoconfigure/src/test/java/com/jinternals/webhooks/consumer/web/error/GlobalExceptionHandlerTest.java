@@ -37,7 +37,7 @@ class GlobalExceptionHandlerTest {
     @Test
     void payloadTooLargeIs413() {
         ProblemDetail problem = handler.onPayloadTooLarge(new PayloadTooLargeException(256));
-        assertThat(problem.getStatus()).isEqualTo(HttpStatus.PAYLOAD_TOO_LARGE.value());
+        assertThat(problem.getStatus()).isEqualTo(HttpStatus.CONTENT_TOO_LARGE.value());
         assertThat(problem.getTitle()).isEqualTo("Payload too large");
         assertThat(problem.getType()).isEqualTo(URI.create("urn:webhooks:payload-too-large"));
         assertThat(problem.getProperties().get("limitBytes")).isEqualTo(256L);

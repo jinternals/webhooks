@@ -5,7 +5,7 @@ import com.jinternals.webhooks.core.sign.Ed25519Signatures;
 import com.jinternals.webhooks.core.sign.SigningSchemeValidator;
 import java.security.PrivateKey;
 import java.util.concurrent.ConcurrentMap;
-import org.springframework.lang.Nullable;
+import org.jspecify.annotations.Nullable;
 import org.springframework.util.ConcurrentReferenceHashMap;
 
 /**

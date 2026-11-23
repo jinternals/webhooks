@@ -120,8 +120,8 @@ follows the house style of the `jinternals` projects.
 | `@EventListener` handler method marker | `jinternals-event-bus` → `EventListener` | Our `@WebhookHandler` method annotation. |
 | Event headers constants | `jinternals-event-bus` → `EventHeaders` | Mapped onto Standard Webhooks headers. |
 
-> `dynamic-rest-api` targets **Spring Boot 3.3 / Java 21**. We target Java 21 too; the shipped parent is
-> Spring Boot 3.5.16. Payload validation uses Bean Validation (Hibernate Validator via
+> `dynamic-rest-api` targets **Java 21**. We target Java 21 too; the shipped parent is
+> Spring Boot 4.0.10. Payload validation uses Bean Validation (Hibernate Validator via
 > `spring-boot-starter-validation`) rather than a JSON-schema engine.
 
 ---
@@ -1089,10 +1089,10 @@ inbound HTTP layer is measured separately by actuator's `http.server.requests` (
   method is advised. Both annotated methods (`dispatch`, `publish`) are ordinary proxied Spring beans;
   the reflectively-registered `WebhookReceiveController#handle` is **not** proxied, so instrumentation
   deliberately lives on the dispatcher, not the controller. Actuator's own `http.server.requests`
-  already covers the HTTP layer of the receive endpoint. **AOP is an optional dependency**
-  (`spring-boot-starter-aop`, `<optional>true</optional>`): the `ObservedAspect` bean — and therefore the
+  already covers the HTTP layer of the receive endpoint. **AspectJ is an optional dependency**
+  (`spring-boot-starter-aspectj`, `<optional>true</optional>`): the `ObservedAspect` bean — and therefore the
   `webhook.receive` / `webhook.send` timers and spans — materialises only when the host app has AspectJ on
-  the classpath. A `MeterRegistry` alone is not enough; without AOP the libraries run fully but emit no
+  the classpath. A `MeterRegistry` alone is not enough; without AspectJ the libraries run fully but emit no
   `@Observed` timing for these two methods.
 - **`ObservationRegistry` from the host.** When the host app has `spring-boot-starter-actuator`, Boot
   auto-wires a real `ObservationRegistry` bound to its `MeterRegistry` (metrics) and, if a tracer
@@ -1119,7 +1119,7 @@ nothing) is entirely a function of what the host app wires — see the README su
 
 ## 14. Module / package layout
 
-Spring Boot 3.5.16 / Java 21. A **five-module Maven reactor** of libraries. A shared `webhooks-core` holds the
+Spring Boot 4.0.10 / Java 21. A **five-module Maven reactor** of libraries. A shared `webhooks-core` holds the
 config-free wire model and SPIs; each side ships a **starter + autoconfigure pair** —
 `webhooks-consumer-autoconfigure` / `webhooks-producer-autoconfigure` carry the auto-configured code (each
 depends on core), and the thin `webhooks-consumer-starter` / `webhooks-producer-starter` poms are what a
@@ -1193,23 +1193,23 @@ webhooks-sample/                                # STANDALONE DEMO APPS (NOT part
 └── integration-test*.sh               # end-to-end Docker verification suites for all three multi-service stacks
 ```
 
-**Core dependencies:** `jackson-databind` (the `Envelope.data` node), `spring-core`
-(`ReflectionUtils`). Core deliberately has **no classpath-scanning code** — scanning
-of `@WebhookType` classes is a consumer concern (`WebhookTypeScanner`), so the shared artifact stays
-lean and a producer never carries the scanner.
+**Core dependencies:** `tools.jackson.core:jackson-databind` (Jackson 3 for the `Envelope.data` node),
+`org.jspecify:jspecify` (`@NullMarked` / `@Nullable`), `spring-core` (`ReflectionUtils`). Core deliberately
+has **no classpath-scanning code** — scanning of `@WebhookType` classes is a consumer concern
+(`WebhookTypeScanner`), so the shared artifact stays lean and a producer never carries the scanner.
 
-**Consumer dependencies:** `webhooks-core`, `spring-boot-starter-web`, `spring-boot-autoconfigure`
+**Consumer dependencies:** `webhooks-core`, `spring-boot-starter-webmvc`, `spring-boot-autoconfigure`
 (the `@WebhookType` scan uses Spring's `ClassPathScanningCandidateComponentProvider`, via `WebhookTypeScanner`),
-`io.micrometer:micrometer-observation` + `spring-boot-starter-aop` (the `@Observed` Observation API,
+`io.micrometer:micrometer-observation` + `spring-boot-starter-aspectj` (the `@Observed` Observation API,
 §13), `com.standardwebhooks:standardwebhooks`, `spring-boot-starter-validation` (Hibernate Validator,
-§6a), Jackson (via Boot).
+§6a), Jackson 3 (via Boot).
 
-**Producer dependencies:** `webhooks-core`, `org.springframework:spring-web` (the `RestClient` HTTP
-client only — the producer is a webhook **client** and never serves HTTP, so it deliberately does **not**
-depend on `spring-boot-starter-web` / the servlet stack), `spring-boot-autoconfigure`,
-`spring-boot-starter-validation` (bind-time `@Validated` property constraints),
-`io.micrometer:micrometer-observation` + `spring-boot-starter-aop` (the `@Observed` Observation API,
-§13), `com.standardwebhooks:standardwebhooks`, Jackson (via Boot).
+**Producer dependencies:** `webhooks-core`, `spring-boot-starter-restclient` (the `RestClient` HTTP
+client + `spring-boot-starter-jackson` — the producer is a webhook **client** and never serves HTTP, so it
+deliberately does **not** depend on `spring-boot-starter-webmvc` / the servlet stack),
+`spring-boot-autoconfigure`, `spring-boot-starter-validation` (bind-time `@Validated` property constraints),
+`io.micrometer:micrometer-observation` + `spring-boot-starter-aspectj` (the `@Observed` Observation API,
+§13), `com.standardwebhooks:standardwebhooks`.
 
 **Sample-app dependencies:** `producer-sample` depends on `webhooks-producer-starter` and `consumer-sample`
 on `webhooks-consumer-starter` (each starter transitively brings its autoconfigure module and
@@ -1223,7 +1223,7 @@ up together and asserted by `webhooks-sample/integration-test.sh`).
 > **Published POMs are self-contained.** The consumer and producer autoconfigure modules declare their
 > `webhooks-core` dependency with an explicit `<version>` (not inherited from the reactor's
 > `dependencyManagement`), so an app resolving the starters as published artifacts — as the sample apps do
-> — still pulls `webhooks-core` (and the consumer's `spring-boot-starter-web`) transitively.
+> — still pulls `webhooks-core` (and the consumer's `spring-boot-starter-webmvc`) transitively.
 
 > **Shared core, no config leakage.** `webhooks-core` is config-free: the secret SPI is a generic
 > `SecretProvider<T>` so each side binds its own target (`SecretProvider<Endpoint>` on the consumer,

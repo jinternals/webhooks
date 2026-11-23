@@ -1,6 +1,6 @@
 package com.jinternals.webhooks.producer.sign;
 
-import org.springframework.lang.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Pluggable <strong>message-signing SPI</strong> for outbound webhooks (see SPEC.md §19, §19f, §19i). Produces

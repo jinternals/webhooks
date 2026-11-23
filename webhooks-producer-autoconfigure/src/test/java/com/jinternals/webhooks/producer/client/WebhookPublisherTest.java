@@ -11,8 +11,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.fasterxml.jackson.databind.JsonMappingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jinternals.webhooks.core.annotations.WebhookType;
 import com.jinternals.webhooks.core.model.WebhookHeaders;
 import com.jinternals.webhooks.core.secret.SecretProvider;
@@ -25,6 +23,10 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration;
+import tools.jackson.databind.DatabindException;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 class WebhookPublisherTest {
 
@@ -55,7 +57,7 @@ class WebhookPublisherTest {
     @BeforeEach
     @SuppressWarnings("unchecked")
     void setUp() {
-        objectMapper = new ObjectMapper();
+        objectMapper = new JsonMapper();
         signer = mock(WebhookSigner.class);
         when(signer.isEnabled()).thenReturn(true); // default: signing on (the real default is HmacWebhookSigner)
         transport = mock(WebhookTransport.class);
@@ -152,7 +154,7 @@ class WebhookPublisherTest {
     void wrapsSerializationFailure() throws Exception {
         ObjectMapper failing = mock(ObjectMapper.class);
         when(failing.writeValueAsString(org.mockito.ArgumentMatchers.any()))
-                .thenThrow(new JsonMappingException(null, "boom"));
+                .thenThrow(DatabindException.from((tools.jackson.core.JsonGenerator) null, "boom"));
         when(secretProvider.secretsFor(crm)).thenReturn(List.of("whsec_abc"));
 
         WebhookPublisher failingPublisher =
@@ -189,10 +191,10 @@ class WebhookPublisherTest {
         assertThat(sentBody.getValue()).isEqualTo(signedBody.getValue());
 
         var envelope = objectMapper.readTree(sentBody.getValue());
-        assertThat(envelope.get("type").asText()).isEqualTo("contact.created");
-        assertThat(envelope.get("timestamp").asText()).isNotBlank();
-        assertThat(envelope.get("data").get("id").asText()).isEqualTo("c-1");
-        assertThat(envelope.get("data").get("name").asText()).isEqualTo("Ada");
+        assertThat(envelope.get("type").asString()).isEqualTo("contact.created");
+        assertThat(envelope.get("timestamp").asString()).isNotBlank();
+        assertThat(envelope.get("data").get("id").asString()).isEqualTo("c-1");
+        assertThat(envelope.get("data").get("name").asString()).isEqualTo("Ada");
 
         Map<String, List<String>> headers = sentHeaders.getValue();
         assertThat(headers.get(WebhookHeaders.ID)).containsExactly(signedId.getValue());
@@ -326,7 +328,7 @@ class WebhookPublisherTest {
         // Envelope body (including the event's original occurrence timestamp) is identical across attempts.
         assertThat(attemptBodies.get(1)).isEqualTo(attemptBodies.get(0));
         var envelope = objectMapper.readTree(attemptBodies.get(1));
-        assertThat(envelope.get("timestamp").asText()).isEqualTo("2023-11-14T22:13:20Z");
+        assertThat(envelope.get("timestamp").asString()).isEqualTo("2023-11-14T22:13:20Z");
     }
 
     @Test
@@ -400,8 +402,8 @@ class WebhookPublisherTest {
 
         // spring-boot-starter-json registers JavaTimeModule automatically even in non-web producer apps:
         new org.springframework.boot.test.context.runner.ApplicationContextRunner()
-                .withConfiguration(org.springframework.boot.autoconfigure.AutoConfigurations.of(
-                        org.springframework.boot.autoconfigure.jackson.JacksonAutoConfiguration.class))
+                .withConfiguration(
+                        org.springframework.boot.autoconfigure.AutoConfigurations.of(JacksonAutoConfiguration.class))
                 .run(ctx -> {
                     ObjectMapper bootMapper = ctx.getBean(ObjectMapper.class);
                     when(secretProvider.secretsFor(crm)).thenReturn(List.of("whsec_abc"));
@@ -415,8 +417,10 @@ class WebhookPublisherTest {
                     ArgumentCaptor<String> sentBody = ArgumentCaptor.forClass(String.class);
                     verify(transport).send(anyString(), org.mockito.ArgumentMatchers.anyMap(), sentBody.capture());
                     var root = bootMapper.readTree(sentBody.getValue());
-                    assertThat(root.fieldNames()).toIterable().containsExactly("type", "timestamp", "data");
-                    assertThat(root.get("data").get("issuedAt").asText()).isEqualTo("2026-01-15T10:30:00Z");
+                    assertThat(root.propertyNames().iterator())
+                            .toIterable()
+                            .containsExactly("type", "timestamp", "data");
+                    assertThat(root.get("data").get("issuedAt").asString()).isEqualTo("2026-01-15T10:30:00Z");
                 });
     }
 }

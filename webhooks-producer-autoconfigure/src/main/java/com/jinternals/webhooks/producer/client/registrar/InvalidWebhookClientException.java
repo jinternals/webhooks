@@ -1,5 +1,6 @@
 package com.jinternals.webhooks.producer.client.registrar;
 
+import java.io.Serial;
 import java.lang.reflect.Method;
 
 /**
@@ -17,6 +18,7 @@ import java.lang.reflect.Method;
  */
 public class InvalidWebhookClientException extends RuntimeException {
 
+    @Serial
     private static final long serialVersionUID = 1L;
 
     private final transient Method method;

@@ -1,5 +1,7 @@
 package com.jinternals.webhooks.consumer.web.error;
 
+import java.io.Serial;
+
 /**
  * Raised when a request reaches the generic receive controller but no configured {@code Endpoint}
  * was matched for its path (see SPEC.md §14a). This should not happen in normal operation — every
@@ -9,6 +11,7 @@ package com.jinternals.webhooks.consumer.web.error;
  */
 public class EndpointNotConfiguredException extends RuntimeException {
 
+    @Serial
     private static final long serialVersionUID = 1L;
 
     public EndpointNotConfiguredException(String path) {

@@ -43,9 +43,9 @@ import org.springframework.boot.autoconfigure.AutoConfigurationPackages;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.boot.autoconfigure.jackson.JacksonAutoConfiguration;
-import org.springframework.boot.autoconfigure.validation.ValidationAutoConfiguration;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration;
+import org.springframework.boot.validation.autoconfigure.ValidationAutoConfiguration;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 
@@ -71,8 +71,8 @@ import org.springframework.context.annotation.Bean;
 @AutoConfiguration(
         after = {JacksonAutoConfiguration.class, ValidationAutoConfiguration.class},
         afterName = {
-            "org.springframework.boot.actuate.autoconfigure.observation.ObservationAutoConfiguration",
-            "org.springframework.boot.actuate.autoconfigure.metrics.CompositeMeterRegistryAutoConfiguration"
+            "org.springframework.boot.micrometer.observation.autoconfigure.ObservationAutoConfiguration",
+            "org.springframework.boot.micrometer.metrics.autoconfigure.CompositeMeterRegistryAutoConfiguration"
         })
 @EnableConfigurationProperties(WebhookProperties.class)
 public class WebhookConsumerAutoConfiguration {

@@ -4,6 +4,7 @@ import static net.bytebuddy.dynamic.loading.ClassLoadingStrategy.Default.INJECTI
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.jinternals.webhooks.core.annotations.Redact;
+import java.lang.reflect.Modifier;
 import net.bytebuddy.ByteBuddy;
 import net.bytebuddy.description.modifier.SyntheticState;
 import net.bytebuddy.description.modifier.Visibility;
@@ -60,7 +61,7 @@ class WebhookRedactorTest {
         // WebhookRedactor is a static-only utility; its private constructor exists solely to prevent
         // instantiation. Invoking it via reflection documents that intent and covers the line.
         var ctor = WebhookRedactor.class.getDeclaredConstructor();
-        assertThat(java.lang.reflect.Modifier.isPrivate(ctor.getModifiers())).isTrue();
+        assertThat(Modifier.isPrivate(ctor.getModifiers())).isTrue();
         ctor.setAccessible(true);
         assertThat(ctor.newInstance()).isInstanceOf(WebhookRedactor.class);
     }

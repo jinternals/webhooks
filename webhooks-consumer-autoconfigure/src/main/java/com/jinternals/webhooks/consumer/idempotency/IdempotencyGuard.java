@@ -1,6 +1,6 @@
 package com.jinternals.webhooks.consumer.idempotency;
 
-import org.springframework.lang.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Duplicate detection on {@code webhook-id} (see SPEC.md §11). This is the <strong>extension point

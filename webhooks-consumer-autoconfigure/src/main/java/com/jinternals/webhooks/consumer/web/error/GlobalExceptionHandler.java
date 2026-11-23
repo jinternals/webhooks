@@ -51,7 +51,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(PayloadTooLargeException.class)
     public ProblemDetail onPayloadTooLarge(PayloadTooLargeException ex) {
         log.warn("{}", ex.getMessage());
-        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.PAYLOAD_TOO_LARGE, ex.getMessage());
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONTENT_TOO_LARGE, ex.getMessage());
         problem.setType(URI.create("urn:webhooks:payload-too-large"));
         problem.setTitle("Payload too large");
         problem.setProperty("limitBytes", ex.getLimitBytes());

@@ -21,7 +21,7 @@ whichever side(s) you need.
 
 ### What are the requirements?
 
-Java 21, Spring Boot 3.5.x, Maven 3.9+. See [Getting started](../getting-started.md).
+Java 21, Spring Boot 4.0.x, Maven 3.9+. See [Getting started](../getting-started.md).
 
 ### Do I need `@EnableWebhooks` or component scanning?
 

@@ -1,7 +1,7 @@
 package com.jinternals.webhooks.core.registry;
 
 import java.util.Map;
-import org.springframework.lang.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Maps a Standard Webhooks {@code type} string to its {@code @WebhookType}-annotated Java class

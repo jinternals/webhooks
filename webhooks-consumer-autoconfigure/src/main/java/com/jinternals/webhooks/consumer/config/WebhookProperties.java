@@ -41,6 +41,7 @@ public class WebhookProperties {
     public static class Consumer {
         /** What to do when an incoming "type" has no matching {@code @WebhookType} class. */
         @NotNull
+        @Valid
         private UnknownTypePolicy unknownTypePolicy = UnknownTypePolicy.ACK_AND_IGNORE;
 
         /** Best-effort in-memory dedupe on webhook-id (off by default; see SPEC.md §11). */
@@ -60,6 +61,7 @@ public class WebhookProperties {
          * are rejected with {@code 413 Payload Too Large} <em>before</em> verification, so an
          * oversized or slow POST cannot exhaust memory or threads. Default 256&nbsp;KB.
          */
+        @Valid
         private DataSize maxBodySize = DataSize.ofKilobytes(256);
 
         /**
@@ -181,6 +183,7 @@ public class WebhookProperties {
 
         /** Execution mode. Default {@code SYNC}. */
         @NotNull
+        @Valid
         private Mode mode = Mode.SYNC;
 
         /** Async core pool size. */

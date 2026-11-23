@@ -1,6 +1,6 @@
 package com.jinternals.webhooks.producer.sign;
 
-import org.springframework.lang.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Disabled {@link WebhookSigner}: signs nothing. Wired when {@code webhooks.producer.signing-enabled=false}

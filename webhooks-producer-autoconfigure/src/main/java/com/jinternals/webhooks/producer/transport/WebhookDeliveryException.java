@@ -1,8 +1,9 @@
 package com.jinternals.webhooks.producer.transport;
 
+import java.io.Serial;
 import java.time.Duration;
 import java.util.Optional;
-import org.springframework.lang.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Thrown when an outbound webhook delivery fails — a non-2xx response from the destination or a
@@ -20,6 +21,7 @@ import org.springframework.lang.Nullable;
  */
 public class WebhookDeliveryException extends RuntimeException {
 
+    @Serial
     private static final long serialVersionUID = 1L;
 
     /** The HTTP status of the failing response, or {@code 0} when the failure was transport-level. */

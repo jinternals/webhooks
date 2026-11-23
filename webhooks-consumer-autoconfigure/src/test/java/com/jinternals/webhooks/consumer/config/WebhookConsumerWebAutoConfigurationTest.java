@@ -7,7 +7,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jinternals.webhooks.consumer.config.WebhookProperties.Endpoint;
 import com.jinternals.webhooks.consumer.dispatch.HandlerExecutor;
 import com.jinternals.webhooks.consumer.dispatch.WebhookDispatcher;
@@ -36,6 +35,7 @@ import org.springframework.http.ProblemDetail;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Unit test for {@link WebhookConsumerWebAutoConfiguration}: each web-layer {@code @Bean} method must
@@ -62,7 +62,7 @@ class WebhookConsumerWebAutoConfigurationTest {
                 emptySecretProvider(),
                 new WebhookTypeRegistry(Map.of()),
                 mock(PayloadValidator.class),
-                new ObjectMapper(),
+                new JsonMapper(),
                 new WebhookProperties(),
                 mock(IdempotencyGuard.class),
                 mock(MetadataFactory.class),
@@ -100,7 +100,7 @@ class WebhookConsumerWebAutoConfigurationTest {
                 emptySecretProvider(),
                 typeRegistry,
                 mock(PayloadValidator.class),
-                new ObjectMapper(),
+                new JsonMapper(),
                 new WebhookProperties(),
                 idempotency,
                 metadataFactory,
@@ -188,7 +188,7 @@ class WebhookConsumerWebAutoConfigurationTest {
         GlobalExceptionHandler handler = autoConfig.webhookExceptionHandler();
 
         ProblemDetail problem = handler.onPayloadTooLarge(new PayloadTooLargeException(256));
-        assertThat(problem.getStatus()).isEqualTo(HttpStatus.PAYLOAD_TOO_LARGE.value());
+        assertThat(problem.getStatus()).isEqualTo(HttpStatus.CONTENT_TOO_LARGE.value());
         assertThat(problem.getProperties()).containsEntry("limitBytes", 256L);
     }
 

@@ -1,6 +1,5 @@
 package com.jinternals.webhooks.consumer.config;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jinternals.webhooks.consumer.config.WebhookProperties.Endpoint;
 import com.jinternals.webhooks.consumer.dispatch.HandlerExecutor;
 import com.jinternals.webhooks.consumer.dispatch.WebhookDispatcher;
@@ -28,9 +27,10 @@ import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
-import org.springframework.boot.autoconfigure.web.servlet.WebMvcAutoConfiguration;
+import org.springframework.boot.webmvc.autoconfigure.WebMvcAutoConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Web-layer auto-configuration for the Standard Webhooks consumer (see SPEC.md §14), activated only in a

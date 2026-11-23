@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.aop.framework.ProxyFactory;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
 
 class WebhookDispatcherTest {
@@ -109,8 +110,7 @@ class WebhookDispatcherTest {
         // declare a @WebhookHandler. The @Lazy non-handler bean below must still be uninitialized after the
         // dispatcher's startup scan completes.
         UnrelatedLazyBean.INITIALIZED.set(false);
-        AnnotationConfigApplicationContext ctx = new AnnotationConfigApplicationContext(LazyBeanConfig.class);
-        try {
+        try (AnnotationConfigApplicationContext ctx = new AnnotationConfigApplicationContext(LazyBeanConfig.class)) {
             ctx.getBean(WebhookDispatcher.class); // triggers afterPropertiesSet scan
             assertThat(UnrelatedLazyBean.INITIALIZED)
                     .as("unrelated @Lazy non-handler bean must not be eagerly initialized by the scan")
@@ -119,8 +119,6 @@ class WebhookDispatcherTest {
             Handlers handlers = ctx.getBean(Handlers.class);
             ctx.getBean(WebhookDispatcher.class).dispatch(new EventA(), meta("a"));
             assertThat(handlers.last).isEqualTo("onlyEvent");
-        } finally {
-            ctx.close();
         }
     }
 
@@ -143,7 +141,7 @@ class WebhookDispatcherTest {
         ctx.registerBean("proxiedHandlers", Handlers.class, () -> proxied);
         ctx.registerBean("dispatcher", WebhookDispatcher.class, () -> new WebhookDispatcher(ctx));
         ctx.refresh();
-        try {
+        try (ctx) {
             WebhookDispatcher dispatcher = ctx.getBean(WebhookDispatcher.class);
 
             dispatcher.dispatch(new EventA(), meta("a"));
@@ -152,8 +150,6 @@ class WebhookDispatcherTest {
                     .as("dispatch must go through the proxy so advice runs")
                     .isTrue();
             assertThat(target.last).isEqualTo("onlyEvent"); // the real target handler ran
-        } finally {
-            ctx.close();
         }
     }
 
@@ -184,7 +180,7 @@ class WebhookDispatcherTest {
         ctx.registerBean("proxiedService", HandlerService.class, () -> proxied);
         ctx.registerBean("dispatcher", WebhookDispatcher.class, () -> new WebhookDispatcher(ctx));
         ctx.refresh();
-        try {
+        try (ctx) {
             WebhookDispatcher dispatcher = ctx.getBean(WebhookDispatcher.class);
 
             dispatcher.dispatch(new EventA(), meta("a"));
@@ -193,8 +189,6 @@ class WebhookDispatcherTest {
                     .as("dispatch must go through the JDK proxy so advice runs")
                     .isTrue();
             assertThat(target.last).isEqualTo("handlerService"); // the real target handler ran
-        } finally {
-            ctx.close();
         }
     }
 
@@ -292,6 +286,7 @@ class WebhookDispatcherTest {
 
     // Lite @Bean configs (deliberately NOT @Configuration so the library's component scan in the
     // integration test does not sweep them up as application config).
+    @Configuration
     static class DispatcherBeanConfig {
         @Bean
         WebhookDispatcher dispatcher(org.springframework.context.ApplicationContext ctx) {
@@ -299,6 +294,7 @@ class WebhookDispatcherTest {
         }
     }
 
+    @Configuration
     static class EventOnlyConfig {
         @Bean
         Handlers handlers() {
@@ -311,6 +307,7 @@ class WebhookDispatcherTest {
         }
     }
 
+    @Configuration
     static class MetaFirstConfig {
         @Bean
         MetaFirstHandler handler() {
@@ -332,6 +329,7 @@ class WebhookDispatcherTest {
         }
     }
 
+    @Configuration
     static class LazyBeanConfig {
         @Bean
         Handlers handlers() {

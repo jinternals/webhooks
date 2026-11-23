@@ -3,6 +3,7 @@ package com.jinternals.webhooks.core.sign;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.lang.reflect.Modifier;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.PrivateKey;
@@ -187,7 +188,7 @@ class Ed25519SignaturesTest {
     @Test
     void utilityClassIsNotInstantiable() throws Exception {
         var ctor = Ed25519Signatures.class.getDeclaredConstructor();
-        assertThat(java.lang.reflect.Modifier.isPrivate(ctor.getModifiers())).isTrue();
+        assertThat(Modifier.isPrivate(ctor.getModifiers())).isTrue();
         ctor.setAccessible(true);
         assertThat(ctor.newInstance()).isInstanceOf(Ed25519Signatures.class);
     }

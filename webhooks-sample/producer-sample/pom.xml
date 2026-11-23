@@ -35,7 +35,7 @@
              the web starter itself — without it the app starts and immediately exits. -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-web</artifactId>
+            <artifactId>spring-boot-starter-webmvc</artifactId>
         </dependency>
 
         <!-- Observability: actuator + a Prometheus registry to expose the library's metrics. -->

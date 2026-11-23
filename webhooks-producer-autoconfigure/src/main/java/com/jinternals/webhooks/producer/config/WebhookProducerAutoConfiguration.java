@@ -1,6 +1,5 @@
 package com.jinternals.webhooks.producer.config;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jinternals.webhooks.core.secret.SecretProvider;
 import com.jinternals.webhooks.producer.client.WebhookPublisher;
 import com.jinternals.webhooks.producer.config.WebhookProducerProperties.Destination;
@@ -28,12 +27,13 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.boot.autoconfigure.jackson.JacksonAutoConfiguration;
-import org.springframework.boot.autoconfigure.web.client.RestClientAutoConfiguration;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration;
+import org.springframework.boot.restclient.autoconfigure.RestClientAutoConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Auto-configuration for the Standard Webhooks producer (see SPEC.md §19). An existing Spring Boot
@@ -47,7 +47,7 @@ import org.springframework.web.client.RestClient;
  */
 @AutoConfiguration(
         after = {JacksonAutoConfiguration.class, RestClientAutoConfiguration.class},
-        afterName = "org.springframework.boot.actuate.autoconfigure.observation.ObservationAutoConfiguration")
+        afterName = "org.springframework.boot.micrometer.observation.autoconfigure.ObservationAutoConfiguration")
 @EnableConfigurationProperties(WebhookProducerProperties.class)
 public class WebhookProducerAutoConfiguration {
 

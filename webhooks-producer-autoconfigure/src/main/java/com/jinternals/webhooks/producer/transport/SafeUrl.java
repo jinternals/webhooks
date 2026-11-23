@@ -2,7 +2,7 @@ package com.jinternals.webhooks.producer.transport;
 
 import java.net.URI;
 import java.net.URISyntaxException;
-import org.springframework.lang.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Renders a destination URL in a form that is safe to place in logs and exception messages (see SPEC.md

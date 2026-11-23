@@ -3,7 +3,7 @@ package com.jinternals.webhooks.consumer.verify;
 import com.jinternals.webhooks.core.sign.Ed25519Keys;
 import java.util.List;
 import java.util.Map;
-import org.springframework.lang.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The shipped default {@link WebhookVerifier}: selects the Standard Webhooks verification scheme

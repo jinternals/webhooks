@@ -1,5 +1,5 @@
 /** Standard Webhooks signature verification and timestamp replay-window SPIs and implementations. */
-@NonNullApi
+@NullMarked
 package com.jinternals.webhooks.consumer.verify;
 
-import org.springframework.lang.NonNullApi;
+import org.jspecify.annotations.NullMarked;

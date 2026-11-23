@@ -2,7 +2,7 @@ package com.jinternals.webhooks.consumer.verify;
 
 import java.util.List;
 import java.util.Map;
-import org.springframework.lang.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Pluggable <strong>message-verification SPI</strong> for inbound webhooks (see SPEC.md §8, §8f, §8e). Verifies

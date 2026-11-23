@@ -1,5 +1,7 @@
 package com.jinternals.webhooks.consumer.web.error;
 
+import java.io.Serial;
+
 /**
  * Raised when a verified, accepted, and modelled event has no registered {@code @WebhookHandler} to run
  * (see SPEC.md §10, §15). The event type is known to the registry and allowed by the endpoint, yet no
@@ -12,6 +14,7 @@ package com.jinternals.webhooks.consumer.web.error;
  */
 public class NoWebhookHandlerException extends RuntimeException {
 
+    @Serial
     private static final long serialVersionUID = 1L;
 
     private final String type;

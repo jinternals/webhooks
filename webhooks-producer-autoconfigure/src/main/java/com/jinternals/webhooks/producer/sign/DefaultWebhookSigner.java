@@ -1,7 +1,7 @@
 package com.jinternals.webhooks.producer.sign;
 
 import com.jinternals.webhooks.core.sign.Ed25519Keys;
-import org.springframework.lang.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The shipped default {@link WebhookSigner}: selects the Standard Webhooks signing scheme

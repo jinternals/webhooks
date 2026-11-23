@@ -1,5 +1,5 @@
 /** Standard Webhooks cryptographic key serialization, validation, and {@code v2a} Ed25519 primitives. */
-@NonNullApi
+@NullMarked
 package com.jinternals.webhooks.core.sign;
 
-import org.springframework.lang.NonNullApi;
+import org.jspecify.annotations.NullMarked;

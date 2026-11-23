@@ -3,6 +3,7 @@ package com.jinternals.webhooks.core.sign;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.lang.reflect.Modifier;
 import java.util.Base64;
 import org.junit.jupiter.api.Test;
 
@@ -70,7 +71,7 @@ class SymmetricKeysTest {
     @Test
     void utilityClassIsNotInstantiable() throws Exception {
         var ctor = SymmetricKeys.class.getDeclaredConstructor();
-        assertThat(java.lang.reflect.Modifier.isPrivate(ctor.getModifiers())).isTrue();
+        assertThat(Modifier.isPrivate(ctor.getModifiers())).isTrue();
         ctor.setAccessible(true);
         assertThat(ctor.newInstance()).isInstanceOf(SymmetricKeys.class);
     }

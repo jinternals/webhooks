@@ -1,6 +1,7 @@
 package com.jinternals.webhooks.core.config;
 
-import org.springframework.lang.Nullable;
+import java.io.Serial;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Thrown at <strong>startup</strong> when webhook configuration is invalid in a way the context cannot
@@ -20,6 +21,7 @@ import org.springframework.lang.Nullable;
  */
 public class WebhookConfigurationException extends RuntimeException {
 
+    @Serial
     private static final long serialVersionUID = 1L;
 
     private final String action;

@@ -1,5 +1,5 @@
 /** Construction and customization ({@code MetadataContributor}) of {@code WebhookMetadata}. */
-@NonNullApi
+@NullMarked
 package com.jinternals.webhooks.consumer.metadata;
 
-import org.springframework.lang.NonNullApi;
+import org.jspecify.annotations.NullMarked;

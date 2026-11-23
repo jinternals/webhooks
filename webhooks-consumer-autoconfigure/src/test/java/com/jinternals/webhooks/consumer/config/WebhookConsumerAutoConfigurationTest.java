@@ -38,6 +38,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfigurationPackages;
+import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration;
 import org.springframework.context.support.GenericApplicationContext;
 
 /**
@@ -328,8 +329,8 @@ class WebhookConsumerAutoConfigurationTest {
                 .withUserConfiguration(AutoPackageAnchor.class, ForeignGenericSecretProviderConfig.class)
                 .withConfiguration(org.springframework.boot.autoconfigure.AutoConfigurations.of(
                         WebhookConsumerAutoConfiguration.class,
-                        org.springframework.boot.autoconfigure.jackson.JacksonAutoConfiguration.class,
-                        org.springframework.boot.autoconfigure.validation.ValidationAutoConfiguration.class))
+                        JacksonAutoConfiguration.class,
+                        org.springframework.boot.validation.autoconfigure.ValidationAutoConfiguration.class))
                 .withPropertyValues(
                         "webhooks.consumer.endpoints[0].path=/webhooks/crm",
                         "webhooks.consumer.endpoints[0].secret=whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw")
@@ -342,8 +343,8 @@ class WebhookConsumerAutoConfigurationTest {
                 .withUserConfiguration(AutoPackageAnchor.class, CustomEndpointSecretProviderConfig.class)
                 .withConfiguration(org.springframework.boot.autoconfigure.AutoConfigurations.of(
                         WebhookConsumerAutoConfiguration.class,
-                        org.springframework.boot.autoconfigure.jackson.JacksonAutoConfiguration.class,
-                        org.springframework.boot.autoconfigure.validation.ValidationAutoConfiguration.class))
+                        JacksonAutoConfiguration.class,
+                        org.springframework.boot.validation.autoconfigure.ValidationAutoConfiguration.class))
                 .withPropertyValues("webhooks.consumer.endpoints[0].path=/webhooks/crm")
                 .run(ctx -> assertThat(ctx).hasNotFailed());
     }
@@ -413,21 +414,22 @@ class WebhookConsumerAutoConfigurationTest {
 
     @Test
     void observationRegistryBacksOffWhenActuatorObservationAutoConfigurationIsPresent() {
-        // Regression guard: com.jinternals... sorts alphabetically BEFORE org.springframework.boot.actuate...
+        // Regression guard: com.jinternals... sorts alphabetically BEFORE org.springframework.boot.micrometer...
         // Without afterName = "...ObservationAutoConfiguration", our NOOP fallback registered first and caused
-        // Actuator's ObservationAutoConfiguration to back off, silently disabling ALL observations in the host app.
+        // Spring Boot's ObservationAutoConfiguration to back off, silently disabling ALL observations in the host app.
         new org.springframework.boot.test.context.runner.ApplicationContextRunner()
                 .withUserConfiguration(AutoPackageAnchor.class)
                 .withConfiguration(org.springframework.boot.autoconfigure.AutoConfigurations.of(
                         WebhookConsumerAutoConfiguration.class,
-                        org.springframework.boot.autoconfigure.jackson.JacksonAutoConfiguration.class,
-                        org.springframework.boot.autoconfigure.validation.ValidationAutoConfiguration.class,
-                        org.springframework.boot.actuate.autoconfigure.metrics.MetricsAutoConfiguration.class,
-                        org.springframework.boot.actuate.autoconfigure.metrics.export.simple
+                        JacksonAutoConfiguration.class,
+                        org.springframework.boot.validation.autoconfigure.ValidationAutoConfiguration.class,
+                        org.springframework.boot.micrometer.metrics.autoconfigure.MetricsAutoConfiguration.class,
+                        org.springframework.boot.micrometer.metrics.autoconfigure.export.simple
                                 .SimpleMetricsExportAutoConfiguration.class,
-                        org.springframework.boot.actuate.autoconfigure.metrics.CompositeMeterRegistryAutoConfiguration
-                                .class,
-                        org.springframework.boot.actuate.autoconfigure.observation.ObservationAutoConfiguration.class))
+                        org.springframework.boot.micrometer.metrics.autoconfigure
+                                .CompositeMeterRegistryAutoConfiguration.class,
+                        org.springframework.boot.micrometer.observation.autoconfigure.ObservationAutoConfiguration
+                                .class))
                 .run(ctx -> {
                     ObservationRegistry observationRegistry = ctx.getBean(ObservationRegistry.class);
                     assertThat(observationRegistry).isNotSameAs(ObservationRegistry.NOOP);

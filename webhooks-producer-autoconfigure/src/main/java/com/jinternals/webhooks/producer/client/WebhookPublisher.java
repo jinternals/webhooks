@@ -1,8 +1,6 @@
 package com.jinternals.webhooks.producer.client;
 
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jinternals.webhooks.core.annotations.WebhookType;
 import com.jinternals.webhooks.core.model.WebhookHeaders;
 import com.jinternals.webhooks.core.secret.SecretProvider;
@@ -20,6 +18,8 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.Supplier;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * The engine behind every {@code @WebhookClient} proxy (see SPEC.md §19): given an event object and a
@@ -187,7 +187,7 @@ public class WebhookPublisher {
     private String serialize(String type, Instant timestamp, Object event) {
         try {
             return objectMapper.writeValueAsString(new OutboundEnvelope(type, timestamp.toString(), event));
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("Failed to serialize webhook payload: " + e.getMessage(), e);
         }
     }

@@ -1,6 +1,6 @@
 package com.jinternals.webhooks.consumer.idempotency;
 
-import org.springframework.lang.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Default guard: never treats anything as a duplicate (see SPEC.md §11). Relies on the Standard
