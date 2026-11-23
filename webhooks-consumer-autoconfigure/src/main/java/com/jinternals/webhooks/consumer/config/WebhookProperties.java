@@ -120,9 +120,8 @@ public class WebhookProperties {
         private Handler handler = new Handler();
 
         @NotNull
-        @Valid
         @NestedConfigurationProperty
-        private List<Endpoint> endpoints = new ArrayList<>();
+        private List<@Valid Endpoint> endpoints = new ArrayList<>();
 
         /**
          * Reject a zero/negative {@code max-body-size} at bind time (DataSize has no numeric constraint

@@ -4,7 +4,7 @@
 [![Maven Central](https://img.shields.io/maven-central/v/io.github.jinternals/webhooks-core?label=Maven%20Central)](https://central.sonatype.com/namespace/io.github.jinternals)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
 ![Java 21](https://img.shields.io/badge/Java-21-orange)
-![Spring Boot 4.0](https://img.shields.io/badge/Spring_Boot-4.0-6DB33F)
+![Spring Boot 4.2](https://img.shields.io/badge/Spring_Boot-4.2-6DB33F)
 [![Standard Webhooks](https://img.shields.io/badge/Standard_Webhooks-compliant-8A2BE2)](https://www.standardwebhooks.com/)
 
 > [!NOTE]
@@ -91,7 +91,7 @@ The project is a Maven reactor of five library modules — `webhooks-core` plus 
 | Requirement | Version |
 | --- | --- |
 | Java | 21 |
-| Spring Boot | 4.0.x |
+| Spring Boot | 4.2.x |
 | Maven | 3.9 or later |
 
 ## Consumer quick start

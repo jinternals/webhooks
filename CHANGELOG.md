@@ -33,10 +33,10 @@ contain breaking changes; they will always be called out under **Changed** or **
 
 ### Changed
 
-- Upgraded to **Spring Boot 4.0.10** (Spring Framework 7, Jackson 3 `tools.jackson.*`, JSpecify
-  `@NullMarked` / `@Nullable` null-safety annotations, and modular starters `spring-boot-starter-webmvc`,
-  `spring-boot-starter-restclient`, `spring-boot-starter-aspectj`,
-  `spring-boot-starter-security-oauth2-resource-server`).
+- Upgraded to **Spring Boot 4.2.0** (Spring Framework 7, Jackson 3 `tools.jackson.*`, JSpecify
+  `@NullMarked` / `@Nullable` null-safety annotations, `spring-boot-dependencies` BOM in root `webhooks` POM,
+  and modular starters `spring-boot-starter-webmvc`, `spring-boot-starter-restclient`,
+  `spring-boot-starter-aspectj`, `spring-boot-starter-security-oauth2-resource-server`).
 - `@WebhookType` discovery now uses Spring's `ClassPathScanningCandidateComponentProvider` instead of
   `org.reflections` (unmaintained) — one fewer runtime dependency. Only concrete, independent (top-level or
   `static` nested) classes directly annotated with `@WebhookType` are discovered.

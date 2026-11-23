@@ -80,5 +80,5 @@ replaceable bean, every annotation); Operations covers running it in production.
 | Requirement | Version |
 | --- | --- |
 | Java | 21 |
-| Spring Boot | 4.0.x |
+| Spring Boot | 4.2.x |
 | Maven | 3.9+ |

@@ -39,8 +39,7 @@ public class WebhookProducerProperties {
 
     /** Named destinations keyed by the name used in {@code @WebhookClient(destination = "...")}. */
     @NotNull
-    @Valid
-    private Map<String, Destination> destinations = new LinkedHashMap<>();
+    private Map<String, @Valid Destination> destinations = new LinkedHashMap<>();
 
     /**
      * Validate every configured destination at startup (see SPEC.md §19d): a non-blank, parseable URL with a

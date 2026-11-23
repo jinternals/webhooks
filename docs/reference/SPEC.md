@@ -121,7 +121,7 @@ follows the house style of the `jinternals` projects.
 | Event headers constants | `jinternals-event-bus` → `EventHeaders` | Mapped onto Standard Webhooks headers. |
 
 > `dynamic-rest-api` targets **Java 21**. We target Java 21 too; the library BOM imports
-> `spring-boot-dependencies` `4.0.10`. Payload validation uses Bean Validation (Hibernate Validator via
+> `spring-boot-dependencies` `4.2.0`. Payload validation uses Bean Validation (Hibernate Validator via
 > `spring-boot-starter-validation`) rather than a JSON-schema engine.
 
 ---
@@ -1119,7 +1119,7 @@ nothing) is entirely a function of what the host app wires — see the README su
 
 ## 14. Module / package layout
 
-Spring Boot 4.0.10 / Java 21. A **five-module Maven reactor** of libraries. A shared `webhooks-core` holds the
+Spring Boot 4.2.0 / Java 21. A **five-module Maven reactor** of libraries. A shared `webhooks-core` holds the
 config-free wire model and SPIs; each side ships a **starter + autoconfigure pair** —
 `webhooks-consumer-autoconfigure` / `webhooks-producer-autoconfigure` carry the auto-configured code (each
 depends on core), and the thin `webhooks-consumer-starter` / `webhooks-producer-starter` poms are what a

@@ -30,7 +30,7 @@ body:
     id: env
     attributes:
       label: Spring Boot / Java version
-      placeholder: e.g. Spring Boot 4.0.10, Java 21
+      placeholder: e.g. Spring Boot 4.2.0, Java 21
     validations:
       required: true
   - type: textarea
