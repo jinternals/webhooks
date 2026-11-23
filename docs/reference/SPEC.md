@@ -120,8 +120,8 @@ follows the house style of the `jinternals` projects.
 | `@EventListener` handler method marker | `jinternals-event-bus` → `EventListener` | Our `@WebhookHandler` method annotation. |
 | Event headers constants | `jinternals-event-bus` → `EventHeaders` | Mapped onto Standard Webhooks headers. |
 
-> `dynamic-rest-api` targets **Java 21**. We target Java 21 too; the shipped parent is
-> Spring Boot 4.0.10. Payload validation uses Bean Validation (Hibernate Validator via
+> `dynamic-rest-api` targets **Java 21**. We target Java 21 too; the library BOM imports
+> `spring-boot-dependencies` `4.0.10`. Payload validation uses Bean Validation (Hibernate Validator via
 > `spring-boot-starter-validation`) rather than a JSON-schema engine.
 
 ---

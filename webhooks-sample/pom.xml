@@ -7,7 +7,7 @@
     <!--
       Parent + aggregator for the seven STANDALONE sample apps (quickstart, NATS JetStream zero-loss,
       OAuth2 JWT auth, and custom SPI overrides). This reactor is deliberately separate from the
-      libraries' webhooks-parent: the samples depend on the PUBLISHED webhooks-* artifacts, not on
+      libraries' webhooks root POM: the samples depend on the PUBLISHED webhooks-* artifacts, not on
       sibling modules. Build/install the libraries first, then build here:
 
           (repo root) mvn -pl webhooks-consumer-starter,webhooks-producer-starter -am install
