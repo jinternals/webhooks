@@ -46,7 +46,10 @@
         <!-- NATS Java client (JetStream + KeyValue) for the zero-loss queue sample apps. -->
         <jnats.version>2.20.5</jnats.version>
         <!-- Code formatting, matching the libraries' house style (Palantir Java Format: 4-space, 120-col). -->
-        <spotless.version>2.44.5</spotless.version>
+        <spotless.version>3.12.0</spotless.version>
+        <!-- Compile-time JSpecify nullness verification against the published webhooks-* JARs. -->
+        <errorprone.version>2.53.0</errorprone.version>
+        <nullaway.version>0.14.4</nullaway.version>
     </properties>
 
     <dependencyManagement>
@@ -72,15 +75,42 @@
     <build>
         <pluginManagement>
             <plugins>
-                <!-- Lombok annotation processor wiring, shared by both sample apps. -->
+                <!-- Lombok + Error Prone / NullAway (JSpecify mode on @NullMarked packages). -->
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-compiler-plugin</artifactId>
                     <configuration>
+                        <fork>true</fork>
+                        <compilerArgs>
+                            <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED</arg>
+                            <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.file=ALL-UNNAMED</arg>
+                            <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.main=ALL-UNNAMED</arg>
+                            <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.model=ALL-UNNAMED</arg>
+                            <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.parser=ALL-UNNAMED</arg>
+                            <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.processing=ALL-UNNAMED</arg>
+                            <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.tree=ALL-UNNAMED</arg>
+                            <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED</arg>
+                            <arg>-J--add-opens=jdk.compiler/com.sun.tools.javac.code=ALL-UNNAMED</arg>
+                            <arg>-J--add-opens=jdk.compiler/com.sun.tools.javac.comp=ALL-UNNAMED</arg>
+                            <arg>-XDcompilePolicy=simple</arg>
+                            <arg>-XDaddTypeAnnotationsToSymbol=true</arg>
+                            <arg>--should-stop=ifError=FLOW</arg>
+                            <arg>-Xplugin:ErrorProne -XepDisableAllChecks -Xep:NullAway:ERROR -XepOpt:NullAway:OnlyNullMarked=true -XepOpt:NullAway:JSpecifyMode=true</arg>
+                        </compilerArgs>
                         <annotationProcessorPaths>
                             <path>
                                 <groupId>org.projectlombok</groupId>
                                 <artifactId>lombok</artifactId>
+                            </path>
+                            <path>
+                                <groupId>com.google.errorprone</groupId>
+                                <artifactId>error_prone_core</artifactId>
+                                <version>${errorprone.version}</version>
+                            </path>
+                            <path>
+                                <groupId>com.uber.nullaway</groupId>
+                                <artifactId>nullaway</artifactId>
+                                <version>${nullaway.version}</version>
                             </path>
                         </annotationProcessorPaths>
                     </configuration>

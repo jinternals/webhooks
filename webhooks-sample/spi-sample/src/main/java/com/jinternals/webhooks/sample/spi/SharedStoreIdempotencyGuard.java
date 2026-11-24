@@ -79,12 +79,12 @@ public class SharedStoreIdempotencyGuard implements IdempotencyGuard {
     public static final class InMemoryKeyValueStore implements KeyValueStore {
         private static final int MAX_ENTRIES = 10_000;
 
-        private record Entry(String value, Instant expiresAt) {}
+        private record StoredEntry(String value, Instant expiresAt) {}
 
         private final ReentrantLock lock = new ReentrantLock();
-        private final Map<String, Entry> entries = new LinkedHashMap<>(256, 0.75f, true) {
+        private final Map<String, StoredEntry> entries = new LinkedHashMap<>(256, 0.75f, true) {
             @Override
-            protected boolean removeEldestEntry(Map.Entry<String, Entry> eldest) {
+            protected boolean removeEldestEntry(Map.Entry<String, StoredEntry> eldest) {
                 return size() > MAX_ENTRIES;
             }
         };
@@ -94,9 +94,9 @@ public class SharedStoreIdempotencyGuard implements IdempotencyGuard {
             Instant now = Instant.now();
             lock.lock();
             try {
-                Entry existing = entries.get(key);
+                StoredEntry existing = entries.get(key);
                 if (existing == null || !existing.expiresAt().isAfter(now)) {
-                    entries.put(key, new Entry(value, now.plus(ttl)));
+                    entries.put(key, new StoredEntry(value, now.plus(ttl)));
                     return true;
                 }
                 return false;
@@ -110,7 +110,7 @@ public class SharedStoreIdempotencyGuard implements IdempotencyGuard {
             Instant now = Instant.now();
             lock.lock();
             try {
-                entries.put(key, new Entry(value, now.plus(ttl)));
+                entries.put(key, new StoredEntry(value, now.plus(ttl)));
             } finally {
                 lock.unlock();
             }
@@ -120,7 +120,7 @@ public class SharedStoreIdempotencyGuard implements IdempotencyGuard {
         public boolean deleteIfValueMatches(String key, String expectedValue) {
             lock.lock();
             try {
-                Entry existing = entries.get(key);
+                StoredEntry existing = entries.get(key);
                 if (existing != null && expectedValue.equals(existing.value())) {
                     entries.remove(key);
                     return true;

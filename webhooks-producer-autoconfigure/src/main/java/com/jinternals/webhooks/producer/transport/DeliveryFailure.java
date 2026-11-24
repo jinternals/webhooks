@@ -35,9 +35,24 @@ public record DeliveryFailure(
         Reason reason,
         WebhookDeliveryException cause) {
 
-    /** Defensively freezes {@code headers} (both the outer map and each header's value list). */
-    public DeliveryFailure {
-        headers = freezeHeaders(headers);
+    /**
+     * Defensively freezes {@code headers} (both the outer map and each header's value list). Uses an
+     * explicit canonical constructor so {@code javac} emits {@code METHOD_FORMAL_PARAMETER} JSpecify
+     * type-use annotations cleanly for downstream null-checkers (JDK-8307507).
+     */
+    public DeliveryFailure(
+            String url,
+            @Nullable Map<String, @Nullable List<String>> headers,
+            String body,
+            int attempts,
+            Reason reason,
+            WebhookDeliveryException cause) {
+        this.url = url;
+        this.headers = freezeHeaders(headers);
+        this.body = body;
+        this.attempts = attempts;
+        this.reason = reason;
+        this.cause = cause;
     }
 
     private static Map<String, List<String>> freezeHeaders(@Nullable Map<String, @Nullable List<String>> headers) {

@@ -8,6 +8,7 @@ import com.jinternals.webhooks.consumer.metadata.MetadataContributor;
 import com.jinternals.webhooks.consumer.model.WebhookMetadata;
 import com.jinternals.webhooks.core.annotations.Redact;
 import com.jinternals.webhooks.core.annotations.WebhookType;
+import com.jinternals.webhooks.core.model.Envelope;
 import com.jinternals.webhooks.core.secret.SecretProvider;
 import com.jinternals.webhooks.producer.annotations.EnableWebhookClients;
 import com.jinternals.webhooks.producer.annotations.WebhookClient;
@@ -24,11 +25,17 @@ import java.util.concurrent.atomic.AtomicInteger;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.aot.hint.BindingReflectionHintsRegistrar;
+import org.springframework.aot.hint.MemberCategory;
+import org.springframework.aot.hint.RuntimeHints;
+import org.springframework.aot.hint.RuntimeHintsRegistrar;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.ImportRuntimeHints;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
@@ -41,8 +48,9 @@ import org.springframework.web.bind.annotation.RestController;
  * with both {@code webhooks-consumer-starter} and {@code webhooks-producer-starter} coexisting in one
  * application context.
  */
-@SpringBootApplication
+@SpringBootApplication(proxyBeanMethods = false)
 @EnableWebhookClients(clients = SpiSampleApplication.CrmWebhooks.class)
+@ImportRuntimeHints(SpiSampleApplication.SampleWebhookNativeHints.class)
 public class SpiSampleApplication {
 
     private static final Logger log = LoggerFactory.getLogger(SpiSampleApplication.class);
@@ -199,6 +207,22 @@ public class SpiSampleApplication {
             } catch (WebhookDeliveryException e) {
                 return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body("delivery failed: " + e.getMessage());
             }
+        }
+    }
+
+    /**
+     * Optional GraalVM native-image {@link RuntimeHintsRegistrar} registering the JDK dynamic proxy for
+     * {@link CrmWebhooks} alongside Jackson/reflection metadata for {@link Envelope}, {@link ContactCreated},
+     * and {@link ContactHandlers}.
+     */
+    static class SampleWebhookNativeHints implements RuntimeHintsRegistrar {
+        private static final BindingReflectionHintsRegistrar BINDING_HINTS = new BindingReflectionHintsRegistrar();
+
+        @Override
+        public void registerHints(RuntimeHints hints, @Nullable ClassLoader classLoader) {
+            hints.proxies().registerJdkProxy(CrmWebhooks.class);
+            BINDING_HINTS.registerReflectionHints(hints.reflection(), Envelope.class, ContactCreated.class);
+            hints.reflection().registerType(ContactHandlers.class, MemberCategory.INVOKE_PUBLIC_METHODS);
         }
     }
 }

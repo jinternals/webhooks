@@ -50,11 +50,30 @@ public record WebhookMetadata(
 
     /**
      * Defensively copies and freezes {@code headers} and {@code attributes} (preserving nullable map
-     * values, e.g. empty header value lists flattened to {@code null} by {@code MetadataFactory}).
+     * values, e.g. empty header value lists flattened to {@code null} by {@code MetadataFactory}). An
+     * explicit canonical constructor is used instead of a compact constructor so {@code javac} emits
+     * {@code METHOD_FORMAL_PARAMETER} type-use annotations on {@code Map<String, @Nullable …>} rather than
+     * {@code FIELD} targets (JDK-8307507).
      */
-    public WebhookMetadata {
-        headers = headers == null ? Map.of() : Collections.unmodifiableMap(new LinkedHashMap<>(headers));
-        attributes = attributes == null ? Map.of() : Collections.unmodifiableMap(new LinkedHashMap<>(attributes));
+    public WebhookMetadata(
+            String type,
+            @Nullable String webhookId,
+            @Nullable Instant attemptTimestamp,
+            @Nullable Instant eventTimestamp,
+            String endpointPath,
+            @Nullable String sourceIp,
+            Object event,
+            @Nullable Map<String, @Nullable String> headers,
+            @Nullable Map<String, @Nullable Object> attributes) {
+        this.type = type;
+        this.webhookId = webhookId;
+        this.attemptTimestamp = attemptTimestamp;
+        this.eventTimestamp = eventTimestamp;
+        this.endpointPath = endpointPath;
+        this.sourceIp = sourceIp;
+        this.event = event;
+        this.headers = headers == null ? Map.of() : Collections.unmodifiableMap(new LinkedHashMap<>(headers));
+        this.attributes = attributes == null ? Map.of() : Collections.unmodifiableMap(new LinkedHashMap<>(attributes));
     }
 
     /**

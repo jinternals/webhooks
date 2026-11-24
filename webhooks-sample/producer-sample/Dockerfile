@@ -12,7 +12,7 @@ WORKDIR /workspace
 # 1) Build + install the libraries into the local repo. The root reactor lists all library modules, so
 #    we copy them all; -pl then narrows the install to just the producer chain the sample needs (the
 #    producer starter brings the autoconfigure module transitively).
-COPY pom.xml ./
+COPY pom.xml lombok.config ./
 COPY webhooks-core/ webhooks-core/
 COPY webhooks-consumer-autoconfigure/ webhooks-consumer-autoconfigure/
 COPY webhooks-consumer-starter/ webhooks-consumer-starter/
