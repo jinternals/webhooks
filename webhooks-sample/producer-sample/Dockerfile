@@ -27,7 +27,7 @@ RUN --mount=type=cache,target=/root/.m2 \
     mvn -q -f webhooks-sample/pom.xml -pl producer-sample -am package -DskipTests \
     && cp webhooks-sample/producer-sample/target/producer-sample-*.jar /workspace/app.jar
 
-FROM eclipse-temurin:21-jre
+FROM eclipse-temurin:25-jre
 WORKDIR /app
 COPY --from=build /workspace/app.jar app.jar
 USER ubuntu
