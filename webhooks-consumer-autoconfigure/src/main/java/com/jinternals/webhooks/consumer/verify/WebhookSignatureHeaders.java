@@ -4,7 +4,6 @@ import com.jinternals.webhooks.core.model.WebhookHeaders;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import org.jspecify.annotations.Nullable;
 
 /**
  * Parses the three Standard Webhooks headers ({@code webhook-id}, {@code webhook-timestamp},
@@ -18,14 +17,22 @@ import org.jspecify.annotations.Nullable;
  */
 final class WebhookSignatureHeaders {
 
+    /** Upper bound on {@code webhook-id} length to prevent oversized idempotency keys and log lines. */
+    static final int MAX_ID_LENGTH = 256;
+
+    /** Upper bound on joined {@code webhook-signature} header length to bound tokenization against hostile headers. */
+    static final int MAX_SIGNATURE_HEADER_LENGTH = 4096;
+
     final String msgId;
     final long timestamp;
     final String signature;
+    final String[] tokens;
 
     private WebhookSignatureHeaders(String msgId, long timestamp, String signature) {
         this.msgId = msgId;
         this.timestamp = timestamp;
         this.signature = signature;
+        this.tokens = signature.split(" ");
     }
 
     /**
@@ -37,25 +44,65 @@ final class WebhookSignatureHeaders {
             java.util.regex.Pattern.compile(",\\s+(?=[A-Za-z0-9]+,)");
 
     /**
-     * Read and validate the required headers.
+     * Read and validate the required headers in a single pass.
      *
      * @throws WebhookVerificationFailure {@code MISSING_HEADERS} if any of the three is absent (or
      *                                    {@code webhook-id} is blank), {@code SIGNATURE} if
-     *                                    {@code webhook-id} is duplicated or contains {@code '.'} (the
-     *                                    signed-content delimiter), or {@code TIMESTAMP} if
+     *                                    {@code webhook-id} is duplicated, exceeds {@link #MAX_ID_LENGTH},
+     *                                    contains whitespace/control characters or {@code '.'} (the
+     *                                    signed-content delimiter), or {@code webhook-signature} exceeds
+     *                                    {@link #MAX_SIGNATURE_HEADER_LENGTH}, or {@code TIMESTAMP} if
      *                                    {@code webhook-timestamp} is duplicated or not a canonical base-10
      *                                    {@code long}
      */
     static WebhookSignatureHeaders from(Map<String, List<String>> headers) throws WebhookVerificationFailure {
-        String msgId = singleHeader(headers, WebhookHeaders.ID, VerificationFailureReason.SIGNATURE);
-        String msgTimestamp = singleHeader(headers, WebhookHeaders.TIMESTAMP, VerificationFailureReason.TIMESTAMP);
-        String msgSignature = joinedHeaders(headers, WebhookHeaders.SIGNATURE);
+        String msgId = null;
+        String msgTimestamp = null;
+        List<String> sigValues = new ArrayList<>(2);
+        for (Map.Entry<String, List<String>> entry : headers.entrySet()) {
+            String key = entry.getKey();
+            List<String> values = entry.getValue();
+            if (values == null) {
+                continue;
+            }
+            if (key.equalsIgnoreCase(WebhookHeaders.ID)) {
+                for (String value : values) {
+                    if (msgId != null) {
+                        throw new WebhookVerificationFailure(
+                                VerificationFailureReason.SIGNATURE,
+                                "Multiple " + WebhookHeaders.ID + " headers are not allowed");
+                    }
+                    msgId = value;
+                }
+            } else if (key.equalsIgnoreCase(WebhookHeaders.TIMESTAMP)) {
+                for (String value : values) {
+                    if (msgTimestamp != null) {
+                        throw new WebhookVerificationFailure(
+                                VerificationFailureReason.TIMESTAMP,
+                                "Multiple " + WebhookHeaders.TIMESTAMP + " headers are not allowed");
+                    }
+                    msgTimestamp = value;
+                }
+            } else if (key.equalsIgnoreCase(WebhookHeaders.SIGNATURE)) {
+                sigValues.addAll(values);
+            }
+        }
+
+        String msgSignature =
+                PROXY_FOLDED_SIGNATURES.matcher(String.join(" ", sigValues)).replaceAll(" ");
         if (msgId == null || msgId.isBlank() || msgTimestamp == null || msgSignature.isBlank()) {
             throw new WebhookVerificationFailure(VerificationFailureReason.MISSING_HEADERS, "Missing required headers");
         }
-        if (msgId.contains(".")) {
+        if (msgId.length() > MAX_ID_LENGTH || hasInvalidIdChar(msgId)) {
             throw new WebhookVerificationFailure(
-                    VerificationFailureReason.SIGNATURE, "Invalid webhook-id header: must not contain '.'");
+                    VerificationFailureReason.SIGNATURE,
+                    "Invalid webhook-id header: must be at most "
+                            + MAX_ID_LENGTH
+                            + " printable non-whitespace characters and must not contain '.'");
+        }
+        if (msgSignature.length() > MAX_SIGNATURE_HEADER_LENGTH) {
+            throw new WebhookVerificationFailure(
+                    VerificationFailureReason.SIGNATURE, "Invalid webhook-signature header: exceeds maximum length");
         }
         long timestamp;
         try {
@@ -69,44 +116,13 @@ final class WebhookSignatureHeaders {
         return new WebhookSignatureHeaders(msgId, timestamp, msgSignature);
     }
 
-    @Nullable
-    private static String singleHeader(
-            Map<String, List<String>> headers, String name, VerificationFailureReason duplicateReason)
-            throws WebhookVerificationFailure {
-        String found = null;
-        for (Map.Entry<String, List<String>> entry : headers.entrySet()) {
-            if (entry.getKey().equalsIgnoreCase(name)) {
-                List<String> values = entry.getValue();
-                if (values == null) {
-                    continue;
-                }
-                for (String value : values) {
-                    if (found != null) {
-                        throw new WebhookVerificationFailure(
-                                duplicateReason, "Multiple " + name + " headers are not allowed");
-                    }
-                    found = value;
-                }
+    private static boolean hasInvalidIdChar(String msgId) {
+        for (int i = 0; i < msgId.length(); i++) {
+            char c = msgId.charAt(i);
+            if (c <= ' ' || c == '.' || c == 0x7f) {
+                return true;
             }
         }
-        return found;
-    }
-
-    /**
-     * Collect all header values for {@code name} (case-insensitively) joined by {@code ' '} (and normalizing
-     * RFC 9110 §5.3 {@code ", "} proxy header folding), so senders or proxies that emit or fold repeated
-     * {@code webhook-signature} header lines verify identically to a single space-delimited value.
-     */
-    private static String joinedHeaders(Map<String, List<String>> headers, String name) {
-        List<String> collected = new ArrayList<>();
-        for (Map.Entry<String, List<String>> entry : headers.entrySet()) {
-            if (entry.getKey().equalsIgnoreCase(name)) {
-                List<String> values = entry.getValue();
-                if (values != null) {
-                    collected.addAll(values);
-                }
-            }
-        }
-        return PROXY_FOLDED_SIGNATURES.matcher(String.join(" ", collected)).replaceAll(" ");
+        return false;
     }
 }

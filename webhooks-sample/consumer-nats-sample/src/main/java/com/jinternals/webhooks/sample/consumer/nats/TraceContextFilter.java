@@ -21,16 +21,18 @@ public class TraceContextFilter extends OncePerRequestFilter {
     public static final String TRACE_MDC_KEY = "traceId";
     public static final String WEBHOOK_ID_MDC_KEY = "webhook.id";
 
+    private static final int MAX_MDC_VALUE_LENGTH = 128;
+
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
         String traceId = request.getHeader(TRACE_HEADER);
-        if (traceId == null || traceId.isBlank()) {
+        if (!isSafeMdcValue(traceId)) {
             traceId = UUID.randomUUID().toString();
         }
         String webhookId = request.getHeader(WebhookHeaders.ID);
         MDC.put(TRACE_MDC_KEY, traceId);
-        if (webhookId != null && !webhookId.isBlank()) {
+        if (isSafeMdcValue(webhookId)) {
             MDC.put(WEBHOOK_ID_MDC_KEY, webhookId);
         }
         try {
@@ -39,5 +41,18 @@ public class TraceContextFilter extends OncePerRequestFilter {
             MDC.remove(TRACE_MDC_KEY);
             MDC.remove(WEBHOOK_ID_MDC_KEY);
         }
+    }
+
+    private static boolean isSafeMdcValue(String value) {
+        if (value == null || value.isEmpty() || value.length() > MAX_MDC_VALUE_LENGTH) {
+            return false;
+        }
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            if (c <= ' ' || c >= 0x7f) {
+                return false;
+            }
+        }
+        return true;
     }
 }

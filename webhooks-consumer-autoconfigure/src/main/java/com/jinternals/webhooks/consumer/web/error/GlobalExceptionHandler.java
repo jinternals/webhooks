@@ -23,13 +23,21 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+    private static final URI VERIFICATION_FAILED_TYPE = URI.create("urn:webhooks:verification-failed");
+    private static final URI PAYLOAD_VALIDATION_FAILED_TYPE = URI.create("urn:webhooks:payload-validation-failed");
+    private static final URI PAYLOAD_TOO_LARGE_TYPE = URI.create("urn:webhooks:payload-too-large");
+    private static final URI ENDPOINT_NOT_CONFIGURED_TYPE = URI.create("urn:webhooks:endpoint-not-configured");
+    private static final URI INVALID_PAYLOAD_TYPE = URI.create("urn:webhooks:invalid-payload");
+    private static final URI UNKNOWN_TYPE = URI.create("urn:webhooks:unknown-type");
+    private static final URI NO_HANDLER_TYPE = URI.create("urn:webhooks:no-handler");
+    private static final URI HANDLING_FAILED_TYPE = URI.create("urn:webhooks:handling-failed");
 
     /** Bad signature / stale-or-future timestamp / missing headers → 400. Never log the secret. */
     @ExceptionHandler(WebhookVerificationException.class)
     public ProblemDetail onVerificationFailure(WebhookVerificationException ex) {
         log.warn("Webhook verification failed: {}", ex.getMessage());
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
-        problem.setType(URI.create("urn:webhooks:verification-failed"));
+        problem.setType(VERIFICATION_FAILED_TYPE);
         problem.setTitle("Webhook verification failed");
         return problem;
     }
@@ -40,7 +48,7 @@ public class GlobalExceptionHandler {
         log.warn("{}", ex.getMessage());
         ProblemDetail problem =
                 ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Webhook payload failed validation");
-        problem.setType(URI.create("urn:webhooks:payload-validation-failed"));
+        problem.setType(PAYLOAD_VALIDATION_FAILED_TYPE);
         problem.setTitle("Payload validation failed");
         problem.setProperty("eventType", ex.getType());
         problem.setProperty("errors", ex.getErrors());
@@ -52,7 +60,7 @@ public class GlobalExceptionHandler {
     public ProblemDetail onPayloadTooLarge(PayloadTooLargeException ex) {
         log.warn("{}", ex.getMessage());
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONTENT_TOO_LARGE, ex.getMessage());
-        problem.setType(URI.create("urn:webhooks:payload-too-large"));
+        problem.setType(PAYLOAD_TOO_LARGE_TYPE);
         problem.setTitle("Payload too large");
         problem.setProperty("limitBytes", ex.getLimitBytes());
         return problem;
@@ -64,7 +72,7 @@ public class GlobalExceptionHandler {
         log.error("{}", ex.getMessage());
         ProblemDetail problem =
                 ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR, "Webhook endpoint not configured");
-        problem.setType(URI.create("urn:webhooks:endpoint-not-configured"));
+        problem.setType(ENDPOINT_NOT_CONFIGURED_TYPE);
         problem.setTitle("Endpoint not configured");
         return problem;
     }
@@ -74,7 +82,7 @@ public class GlobalExceptionHandler {
     public ProblemDetail onInvalidPayload(InvalidPayloadException ex) {
         log.warn("{}", ex.getMessage());
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
-        problem.setType(URI.create("urn:webhooks:invalid-payload"));
+        problem.setType(INVALID_PAYLOAD_TYPE);
         problem.setTitle("Invalid webhook payload");
         if (ex.getType() != null) {
             problem.setProperty("eventType", ex.getType());
@@ -87,7 +95,7 @@ public class GlobalExceptionHandler {
     public ProblemDetail onUnknownType(UnknownTypeException ex) {
         log.warn("{}", ex.getMessage());
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
-        problem.setType(URI.create("urn:webhooks:unknown-type"));
+        problem.setType(UNKNOWN_TYPE);
         problem.setTitle("Unknown webhook type");
         problem.setProperty("eventType", ex.getType());
         problem.setProperty("path", ex.getPath());
@@ -100,7 +108,7 @@ public class GlobalExceptionHandler {
         log.error("{}", ex.getMessage());
         ProblemDetail problem =
                 ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR, "No webhook handler registered");
-        problem.setType(URI.create("urn:webhooks:no-handler"));
+        problem.setType(NO_HANDLER_TYPE);
         problem.setTitle("No webhook handler");
         problem.setProperty("eventType", ex.getType());
         return problem;
@@ -112,7 +120,7 @@ public class GlobalExceptionHandler {
         log.error("Webhook handling failed", ex);
         ProblemDetail problem =
                 ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR, "Webhook handling failed");
-        problem.setType(URI.create("urn:webhooks:handling-failed"));
+        problem.setType(HANDLING_FAILED_TYPE);
         problem.setTitle("Webhook handling failed");
         return problem;
     }

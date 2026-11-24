@@ -3,6 +3,7 @@
 # whsec_MfKQ… is the Standard Webhooks spec's test secret; the whpk_ key is a sample-only key pair.
 server:
   port: 9091
+  shutdown: graceful
 
 webhooks:
   consumer:

@@ -2,6 +2,7 @@ package com.jinternals.webhooks.producer.client.registrar;
 
 import java.io.Serial;
 import java.lang.reflect.Method;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Thrown at startup when a {@code @WebhookClient} interface declares a method that does not match the
@@ -21,7 +22,7 @@ public class InvalidWebhookClientException extends RuntimeException {
     @Serial
     private static final long serialVersionUID = 1L;
 
-    private final transient Method method;
+    private final transient @Nullable Method method;
 
     public InvalidWebhookClientException(Method method, String reason) {
         super("@WebhookClient method " + method.getDeclaringClass().getSimpleName() + "#" + method.getName() + " "
@@ -39,7 +40,7 @@ public class InvalidWebhookClientException extends RuntimeException {
     }
 
     /** The offending client interface method, or {@code null} for a type-level failure. */
-    public Method getMethod() {
+    public @Nullable Method getMethod() {
         return method;
     }
 }

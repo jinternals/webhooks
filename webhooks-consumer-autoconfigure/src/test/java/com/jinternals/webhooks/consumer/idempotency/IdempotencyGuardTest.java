@@ -277,5 +277,25 @@ class IdempotencyGuardTest {
         guard.markProcessed("id-2");
         guard.markProcessed("id-3");
         assertThat(committed).hasSize(2).containsExactlyInAnyOrder("id-2", "id-3");
+
+        // 4) Exact MAX_ID_LENGTH (256) is tracked, whereas oversized (>256) IDs are bypassed without retention!
+        InMemoryIdempotencyGuard lenGuard = new InMemoryIdempotencyGuard(10, clock);
+        String id256 = "i".repeat(InMemoryIdempotencyGuard.MAX_ID_LENGTH);
+        String markOnly256 = "m".repeat(InMemoryIdempotencyGuard.MAX_ID_LENGTH);
+        String id257 = id256 + "x";
+        assertThat(lenGuard.tryBegin(id256)).isTrue();
+        assertThat(lenGuard.tryBegin(id256)).isFalse();
+        lenGuard.release(id256);
+        assertThat(lenGuard.tryBegin(id256)).isTrue();
+        lenGuard.markProcessed(id256);
+        lenGuard.markProcessed(markOnly256);
+        assertThat(lenGuard.tryBegin(markOnly256)).isFalse();
+
+        assertThat(lenGuard.tryBegin(id257)).isTrue();
+        assertThat(lenGuard.tryBegin(id257)).isTrue();
+        lenGuard.markProcessed(id257);
+        assertThat(lenGuard.tryBegin(id257)).isTrue();
+        Map<String, Instant> seenMap = (Map<String, Instant>) ReflectionTestUtils.getField(lenGuard, "seen");
+        assertThat(seenMap).containsOnlyKeys(id256, markOnly256);
     }
 }

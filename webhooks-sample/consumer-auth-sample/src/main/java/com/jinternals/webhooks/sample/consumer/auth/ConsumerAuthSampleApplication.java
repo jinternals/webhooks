@@ -8,6 +8,7 @@ import jakarta.validation.constraints.NotBlank;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.atomic.AtomicInteger;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import lombok.AllArgsConstructor;
@@ -73,7 +74,11 @@ public class ConsumerAuthSampleApplication {
             @Value("${sample.auth.jwt-secret}") String jwtSecret,
             @Value("${sample.auth.issuer}") String issuer,
             @Value("${sample.auth.audience}") String audience) {
-        SecretKey key = new SecretKeySpec(jwtSecret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
+        byte[] keyBytes = jwtSecret.getBytes(StandardCharsets.UTF_8);
+        if (keyBytes.length < 32) {
+            throw new IllegalArgumentException("sample.auth.jwt-secret must be at least 32 UTF-8 bytes for HS256");
+        }
+        SecretKey key = new SecretKeySpec(keyBytes, "HmacSHA256");
         NimbusJwtDecoder decoder = NimbusJwtDecoder.withSecretKey(key)
                 .macAlgorithm(MacAlgorithm.HS256)
                 .build();
@@ -102,6 +107,7 @@ public class ConsumerAuthSampleApplication {
                         .permitAll()
                         .anyRequest()
                         .denyAll())
+                .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .csrf(AbstractHttpConfigurer::disable);
         return http.build();
     }
@@ -111,15 +117,20 @@ public class ConsumerAuthSampleApplication {
         private static final Logger log = LoggerFactory.getLogger(AuthenticatedContactHandlers.class);
         private static final int MAX_RETAINED_IDS = 1_000;
         private final ConcurrentLinkedDeque<String> handledIds = new ConcurrentLinkedDeque<>();
+        private final AtomicInteger retainedCount = new AtomicInteger();
 
         @WebhookHandler
         public void onCreated(ContactCreated event, WebhookMetadata metadata) {
             handledIds.addLast(event.getId());
-            while (handledIds.size() > MAX_RETAINED_IDS) {
-                handledIds.pollFirst();
+            if (retainedCount.incrementAndGet() > MAX_RETAINED_IDS && handledIds.pollFirst() != null) {
+                retainedCount.decrementAndGet();
             }
-            log.info(
-                    "Authenticated + verified contact.created id={} event={}", event.getId(), metadata.redactedEvent());
+            if (log.isInfoEnabled()) {
+                log.info(
+                        "Authenticated + verified contact.created id={} event={}",
+                        event.getId(),
+                        metadata.redactedEvent());
+            }
         }
 
         public List<String> handledIds() {
@@ -128,6 +139,7 @@ public class ConsumerAuthSampleApplication {
 
         public void clear() {
             handledIds.clear();
+            retainedCount.set(0);
         }
     }
 }

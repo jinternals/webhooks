@@ -8,8 +8,10 @@ import com.jinternals.webhooks.consumer.web.error.InvalidPayloadException;
 import com.jinternals.webhooks.consumer.web.error.UnknownTypeException;
 import com.jinternals.webhooks.core.model.Envelope;
 import com.jinternals.webhooks.core.registry.WebhookTypeRegistry;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tools.jackson.core.JacksonException;
@@ -74,12 +76,13 @@ public class EventResolver {
             throw new InvalidPayloadException("envelope is missing a 'type'", null);
         }
 
+        String endpointPath = Objects.requireNonNull(endpoint.getPath(), "endpoint.path must not be null");
         if (!endpoint.accepts(type)) {
-            return unknownType(type, endpoint.getPath(), "not in endpoint allow-list");
+            return unknownType(type, endpointPath, "not in endpoint allow-list");
         }
         Class<?> eventClass = typeRegistry.classOf(type);
         if (eventClass == null) {
-            return unknownType(type, endpoint.getPath(), "no @WebhookType class");
+            return unknownType(type, endpointPath, "no @WebhookType class");
         }
         return Resolution.accepted(type, deserializeAndValidate(type, eventClass, envelope));
     }
@@ -96,8 +99,8 @@ public class EventResolver {
      * so it is wrapped as {@link InvalidPayloadException} (→ 400) rather than being allowed to escape as a
      * generic exception that the error handler would map to 500 and the sender would retry forever.
      *
-     * <p>A missing or JSON-{@code null} {@code data} node is rejected up front for the same reason: Jackson
-     * would bind it to a {@code null} event, which Bean Validation cannot validate (it throws
+     * <p>A missing or JSON-{@code null} {@code data} node (or a custom/coerced {@code null} result) is
+     * rejected up front for the same reason: Bean Validation cannot validate {@code null} (it throws
      * {@code IllegalArgumentException}) — that would escape as a 500 and the sender would retry a payload
      * that can never succeed. A signed body with no {@code data} is a malformed sender payload (→ 400).
      */
@@ -106,13 +109,16 @@ public class EventResolver {
         if (data == null || data.isNull()) {
             throw new InvalidPayloadException(type, "envelope is missing required 'data'", null);
         }
-        Object event;
+        @Nullable Object event;
         try {
             event = eventReaders
                     .computeIfAbsent(eventClass, strictEventReader::forType)
                     .readValue(data);
         } catch (JacksonException e) {
             throw new InvalidPayloadException(type, e.getOriginalMessage(), e);
+        }
+        if (event == null) {
+            throw new InvalidPayloadException(type, "envelope 'data' deserialized to null", null);
         }
         payloadValidator.validate(type, event);
         return event;

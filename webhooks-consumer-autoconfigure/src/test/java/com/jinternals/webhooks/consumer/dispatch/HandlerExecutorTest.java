@@ -874,4 +874,21 @@ class HandlerExecutorTest {
             assertThat(listener.failedTypes).containsExactly("self.interrupted");
         }
     }
+
+    @Test
+    void unwrapsUndeclaredThrowableExceptionSoCheckedHandlerExceptionsReachFailureListenerDirectly() throws Exception {
+        RecordingFailureListener listener = new RecordingFailureListener();
+        java.io.IOException checked = new java.io.IOException("disk full");
+        try (AsyncHandlerExecutor executor = new AsyncHandlerExecutor(1, 1, 10, Duration.ofSeconds(5), listener)) {
+            CountDownLatch reported = new CountDownLatch(1);
+            listenerSignal(listener, reported);
+
+            executor.execute("contact.created", () -> {
+                throw new java.lang.reflect.UndeclaredThrowableException(checked);
+            });
+
+            assertThat(reported.await(2, TimeUnit.SECONDS)).isTrue();
+            assertThat(listener.causes).containsExactly(checked);
+        }
+    }
 }

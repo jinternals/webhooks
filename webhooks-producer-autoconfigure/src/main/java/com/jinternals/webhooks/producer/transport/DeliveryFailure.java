@@ -4,6 +4,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Immutable description of an outbound webhook delivery that was <strong>given up</strong> — the
@@ -39,12 +40,12 @@ public record DeliveryFailure(
         headers = freezeHeaders(headers);
     }
 
-    private static Map<String, List<String>> freezeHeaders(Map<String, List<String>> headers) {
+    private static Map<String, List<String>> freezeHeaders(@Nullable Map<String, @Nullable List<String>> headers) {
         if (headers == null) {
             return Map.of();
         }
-        Map<String, List<String>> copy = new LinkedHashMap<>();
-        for (Map.Entry<String, List<String>> entry : headers.entrySet()) {
+        Map<String, List<String>> copy = LinkedHashMap.newLinkedHashMap(headers.size());
+        for (Map.Entry<String, @Nullable List<String>> entry : headers.entrySet()) {
             List<String> values = entry.getValue();
             copy.put(entry.getKey(), values == null ? List.of() : List.copyOf(values));
         }

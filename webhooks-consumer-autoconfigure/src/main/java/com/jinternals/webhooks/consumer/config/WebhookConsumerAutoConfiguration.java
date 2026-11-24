@@ -44,7 +44,6 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration;
 import org.springframework.boot.validation.autoconfigure.ValidationAutoConfiguration;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
@@ -69,7 +68,7 @@ import org.springframework.context.annotation.Bean;
  * <p>Registered via {@code META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports}.
  */
 @AutoConfiguration(
-        after = {JacksonAutoConfiguration.class, ValidationAutoConfiguration.class},
+        after = ValidationAutoConfiguration.class,
         afterName = {
             "org.springframework.boot.micrometer.observation.autoconfigure.ObservationAutoConfiguration",
             "org.springframework.boot.micrometer.metrics.autoconfigure.CompositeMeterRegistryAutoConfiguration"
@@ -255,7 +254,7 @@ public class WebhookConsumerAutoConfiguration {
      * the classpath; {@link ConditionalOnClass} keeps this a soft dependency.
      */
     @Bean
-    @ConditionalOnClass(name = "org.aspectj.lang.ProceedingJoinPoint")
+    @ConditionalOnClass(name = {"org.aspectj.lang.ProceedingJoinPoint", "org.aspectj.weaver.Advice"})
     @ConditionalOnMissingBean
     public ObservedAspect webhookObservedAspect(ObservationRegistry observationRegistry) {
         return new ObservedAspect(observationRegistry);

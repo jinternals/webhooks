@@ -66,4 +66,26 @@ class TraceContextFilterTest {
         assertThat(traceDuringChain.get()).isNotBlank();
         assertThat(webhookIdDuringChain.get()).isNull();
     }
+
+    @Test
+    void rejectsControlCharactersAndNewlinesInUntrustedHeadersToPreventLogInjection() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader(TraceContextFilter.TRACE_HEADER, "forged\nERROR injected");
+        request.addHeader(TraceContextFilter.WEBHOOK_ID_HEADER, "msg_1\r\nforged");
+
+        AtomicReference<String> traceDuringChain = new AtomicReference<>();
+        AtomicReference<String> webhookIdDuringChain = new AtomicReference<>();
+        MockFilterChain chain = new MockFilterChain() {
+            @Override
+            public void doFilter(jakarta.servlet.ServletRequest req, jakarta.servlet.ServletResponse res) {
+                traceDuringChain.set(MDC.get(TraceContextFilter.TRACE_MDC_KEY));
+                webhookIdDuringChain.set(MDC.get(TraceContextFilter.WEBHOOK_ID_MDC_KEY));
+            }
+        };
+
+        filter.doFilter(request, new MockHttpServletResponse(), chain);
+
+        assertThat(traceDuringChain.get()).doesNotContain("\n").doesNotContain("forged");
+        assertThat(webhookIdDuringChain.get()).isNull();
+    }
 }

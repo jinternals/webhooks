@@ -9,6 +9,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.Data;
+import org.jspecify.annotations.Nullable;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
 
@@ -85,7 +86,7 @@ public class WebhookProducerProperties {
     public static class Destination {
 
         /** Absolute URL the signed envelope is POSTed to, e.g. https://crm.example.com/webhooks. */
-        private String url;
+        private @Nullable String url;
 
         /**
          * Signing secret for this destination. The prefix selects the Standard Webhooks scheme:
@@ -93,7 +94,7 @@ public class WebhookProducerProperties {
          * private key ({@code v2a} asymmetric; see SPEC.md §19i). A {@code whsk_} key additionally
          * requires {@link #endpointId}.
          */
-        private String secret;
+        private @Nullable String secret;
 
         /**
          * Stable endpoint identifier for the <strong>asymmetric {@code v2a}</strong> scheme only (see
@@ -106,7 +107,7 @@ public class WebhookProducerProperties {
          * ignored for symmetric {@code whsec_} secrets. Must not contain a {@code '.'} (the signed-content
          * delimiter).
          */
-        private String endpointId;
+        private @Nullable String endpointId;
 
         /**
          * Additional signing secrets for zero-downtime rotation (blue/green; see SPEC.md §19a). During

@@ -282,4 +282,47 @@ class HmacWebhookVerifierTest {
         assertThat(seen).hasSize(2);
         assertThat(seen.get(1)).isSameAs(seen.get(0));
     }
+
+    @Test
+    void capsV1SignatureCandidatesAt16AndSkipsSigningWhenNoV1CandidatePresent() throws Exception {
+        String id = "msg_cap";
+        String ts = Signing.now();
+        String body = "{\"a\":1}";
+        String valid = Signing.sign(Signing.SECRET, id, ts, body);
+
+        // 15 junk v1 signatures + valid 16th -> accepted (pins exact MAX_V1_SIGNATURES == 16 boundary).
+        List<String> sixteen = new ArrayList<>();
+        for (int i = 0; i < HmacWebhookVerifier.MAX_V1_SIGNATURES - 1; i++) {
+            sixteen.add("v1,junk" + i);
+        }
+        sixteen.add(valid);
+        assertThatCode(() -> verifier.verify(
+                        List.of(Signing.SECRET), null, body, headers(id, ts, String.join(" ", sixteen))))
+                .doesNotThrowAnyException();
+
+        // 16 junk v1 signatures + valid 17th -> rejected (17th token is ignored).
+        List<String> seventeen = new ArrayList<>();
+        for (int i = 0; i < HmacWebhookVerifier.MAX_V1_SIGNATURES; i++) {
+            seventeen.add("v1,junk" + i);
+        }
+        seventeen.add(valid);
+        assertThatThrownBy(() -> verifier.verify(
+                        List.of(Signing.SECRET), null, body, headers(id, ts, String.join(" ", seventeen))))
+                .isInstanceOf(WebhookVerificationException.class)
+                .hasMessageContaining("No matching signature");
+
+        // When no v1, candidate is present (e.g. v2a-only header), doSign is skipped completely!
+        List<Webhook> invoked = new ArrayList<>();
+        HmacWebhookVerifier observing = new HmacWebhookVerifier(new NoOpTimestampValidator()) {
+            @Override
+            String doSign(Webhook webhook, String msgId, long timestamp, String rawBody)
+                    throws WebhookSigningException {
+                invoked.add(webhook);
+                return super.doSign(webhook, msgId, timestamp, rawBody);
+            }
+        };
+        assertThatThrownBy(() -> observing.verify(List.of(Signing.SECRET), null, body, headers(id, ts, "v2a,only")))
+                .isInstanceOf(WebhookVerificationException.class);
+        assertThat(invoked).isEmpty();
+    }
 }

@@ -9,6 +9,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.util.HashMap;
 import java.util.Map;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.aop.support.AopUtils;
@@ -90,7 +91,7 @@ public class WebhookDispatcher implements InitializingBean {
      * <em>uncreated</em> lazy/factory beans, which this is not. We therefore resolve the proxy's target class
      * and introspect that.
      */
-    private Class<?> handlerClassFor(String name, Class<?> type) {
+    private @Nullable Class<?> handlerClassFor(String name, Class<?> type) {
         Class<?> introspectable = java.lang.reflect.Proxy.isProxyClass(type)
                 ? AopUtils.getTargetClass(applicationContext.getBean(name))
                 : org.springframework.util.ClassUtils.getUserClass(type);

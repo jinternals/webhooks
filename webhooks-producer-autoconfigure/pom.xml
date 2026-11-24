@@ -15,6 +15,10 @@
     <name>webhooks-producer-autoconfigure</name>
     <description>Standard Webhooks producer auto-configuration — annotation-driven @WebhookClient publishing (no storage/retry). Add webhooks-producer-starter instead of depending on this directly.</description>
 
+    <properties>
+        <automatic.module.name>com.jinternals.webhooks.producer.autoconfigure</automatic.module.name>
+    </properties>
+
     <dependencies>
         <!-- Shared wire model, @WebhookType, redactor, secret SPI. Explicit version (not inherited from the
              reactor's dependencyManagement) so the INSTALLED pom is self-contained: external consumers

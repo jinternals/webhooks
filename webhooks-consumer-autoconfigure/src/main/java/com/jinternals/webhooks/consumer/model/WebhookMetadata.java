@@ -39,14 +39,14 @@ public record WebhookMetadata(
 
         // --- Endpoint context ---
         String endpointPath,
-        String sourceIp,
+        @Nullable String sourceIp,
 
         // --- The deserialized event (log it via redactedEvent(), not event().toString()) ---
         Object event,
 
         // --- Escape hatch ---
-        Map<String, String> headers, // all headers, lower-cased, signature + auth headers REDACTED
-        Map<String, Object> attributes) {
+        Map<String, @Nullable String> headers, // all headers, lower-cased, signature + auth headers REDACTED
+        Map<String, @Nullable Object> attributes) {
 
     /**
      * Defensively copies and freezes {@code headers} and {@code attributes} (preserving nullable map

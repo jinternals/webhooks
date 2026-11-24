@@ -25,14 +25,18 @@ class WebhookRequestHeadersTest {
         request.addHeader("Webhook-Id", "msg_1");
         request.addHeader("X-Multi", "a");
         request.addHeader("X-Multi", "b");
+        request.addHeader("X-Triple", "1");
+        request.addHeader("X-Triple", "2");
+        request.addHeader("X-Triple", "3");
 
         Map<String, List<String>> headers = WebhookRequestHeaders.collect(request);
 
         // Names are lower-cased (Locale.ROOT), so a canonical constant finds a mixed-case inbound header.
-        assertThat(headers).containsKey("webhook-id").containsKey("x-multi");
+        assertThat(headers).containsKey("webhook-id").containsKey("x-multi").containsKey("x-triple");
         assertThat(headers.get("webhook-id")).containsExactly("msg_1");
-        // Every value of a repeated header is preserved, in order.
+        // Every value of a repeated header is preserved, in order (exercises 2+ do-while iterations).
         assertThat(headers.get("x-multi")).containsExactly("a", "b");
+        assertThat(headers.get("x-triple")).containsExactly("1", "2", "3");
     }
 
     @Test
@@ -48,12 +52,21 @@ class WebhookRequestHeadersTest {
     }
 
     @Test
-    void collectToleratesNullHeaderNames() {
+    void collectToleratesNullHeaderNamesAndNullOrEmptyHeaderValueEnumerations() {
         // The servlet spec allows getHeaderNames() to return null; the loop guard must handle it.
         var request = mock(jakarta.servlet.http.HttpServletRequest.class);
         when(request.getHeaderNames()).thenReturn(null);
 
         assertThat(WebhookRequestHeaders.collect(request)).isEmpty();
+
+        var withEmptyAndNullValues = mock(jakarta.servlet.http.HttpServletRequest.class);
+        when(withEmptyAndNullValues.getHeaderNames()).thenReturn(Collections.enumeration(List.of("X-Empty", "X-Null")));
+        when(withEmptyAndNullValues.getHeaders("X-Empty")).thenReturn(Collections.emptyEnumeration());
+        when(withEmptyAndNullValues.getHeaders("X-Null")).thenReturn(null);
+
+        Map<String, List<String>> collected = WebhookRequestHeaders.collect(withEmptyAndNullValues);
+        assertThat(collected.get("x-empty")).isEmpty();
+        assertThat(collected.get("x-null")).isEmpty();
     }
 
     @Test

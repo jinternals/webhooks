@@ -32,4 +32,19 @@ public interface AttemptAwareWebhookTransport extends WebhookTransport {
      * @throws WebhookDeliveryException if delivery ultimately fails
      */
     void sendPerAttempt(String url, Supplier<Map<String, List<String>>> headersSupplier, String body);
+
+    /**
+     * Overload carrying the immutable {@code webhook-id} ({@code messageId}) alongside the lazy
+     * {@code headersSupplier}, allowing asynchronous/broker-backed transports (such as NATS JetStream or
+     * transactional outboxes) to enqueue the raw payload and {@code messageId} without eagerly computing a
+     * throwaway cryptographic signature on the caller's thread when a background relay will sign each HTTP
+     * delivery attempt later.
+     *
+     * <p>Defaults to delegating to {@link #sendPerAttempt(String, Supplier, String)} so existing
+     * implementations remain source- and binary-compatible.
+     */
+    default void sendPerAttempt(
+            String url, String messageId, Supplier<Map<String, List<String>>> headersSupplier, String body) {
+        sendPerAttempt(url, headersSupplier, body);
+    }
 }

@@ -69,6 +69,7 @@ class WebhookProducerAutoConfigurationTest {
             int port = server.getAddress().getPort();
             WebhookProducerProperties props = properties();
             try (java.net.http.HttpClient httpClient = autoConfig.webhookProducerHttpClient(props)) {
+                assertThat(httpClient.executor()).isPresent();
                 RestClient restClient = autoConfig.webhookProducerRestClient(emptyBuilderProvider(), httpClient, props);
                 RestClientWebhookTransport transport =
                         new RestClientWebhookTransport(restClient, new AllowAllDestinationUrlValidator());
@@ -178,6 +179,31 @@ class WebhookProducerAutoConfigurationTest {
                 .getBeanProvider(RestClient.Builder.class);
     }
 
+    private static org.springframework.beans.factory.ObjectProvider<WebhookRequestInterceptor> interceptorProvider(
+            WebhookRequestInterceptor... interceptors) {
+        org.springframework.beans.factory.support.DefaultListableBeanFactory bf =
+                new org.springframework.beans.factory.support.DefaultListableBeanFactory();
+        for (int i = 0; i < interceptors.length; i++) {
+            bf.registerSingleton("interceptor-" + i, interceptors[i]);
+        }
+        return bf.getBeanProvider(WebhookRequestInterceptor.class);
+    }
+
+    private static org.springframework.beans.factory.ObjectProvider<SecretProvider<Destination>>
+            destinationSecretProviderOf(SecretProvider<Destination> provider) {
+        org.springframework.beans.factory.support.DefaultListableBeanFactory bf =
+                new org.springframework.beans.factory.support.DefaultListableBeanFactory();
+        if (provider != null) {
+            bf.registerBeanDefinition(
+                    "customProvider",
+                    org.springframework.beans.factory.support.BeanDefinitionBuilder.genericBeanDefinition(
+                                    SecretProvider.class, () -> provider)
+                            .getBeanDefinition());
+        }
+        return bf.getBeanProvider(
+                org.springframework.core.ResolvableType.forClassWithGenerics(SecretProvider.class, Destination.class));
+    }
+
     @Test
     void transportEnforcesTheUrlValidatorBeforeSending() {
         // The produced transport must be the retrying wrapper wired with the URL validator: delivering to a
@@ -193,7 +219,7 @@ class WebhookProducerAutoConfigurationTest {
                 denyAll,
                 new NoOpWebhookDeliveryListener(),
                 new WebhookProducerProperties(),
-                List.of(),
+                interceptorProvider(),
                 emptyClockProvider());
 
         assertThatThrownBy(() -> transport.send("https://evil.example.com/webhooks", Map.of(), "{}"))
@@ -223,6 +249,7 @@ class WebhookProducerAutoConfigurationTest {
             int port = server.getAddress().getPort();
             WebhookProducerProperties props = properties();
             try (java.net.http.HttpClient httpClient = autoConfig.webhookProducerHttpClient(props)) {
+                assertThat(httpClient.executor()).isPresent();
                 RestClient restClient = autoConfig.webhookProducerRestClient(emptyBuilderProvider(), httpClient, props);
                 WebhookRequestInterceptor addBearer = (url, headers, body) -> {
                     var out = new java.util.LinkedHashMap<>(headers);
@@ -235,7 +262,7 @@ class WebhookProducerAutoConfigurationTest {
                         new AllowAllDestinationUrlValidator(),
                         new NoOpWebhookDeliveryListener(),
                         properties(),
-                        List.of(addBearer),
+                        interceptorProvider(addBearer),
                         emptyClockProvider());
 
                 transport.send("http://127.0.0.1:" + port + "/webhooks", Map.of("webhook-id", List.of("msg_1")), "{}");
@@ -296,7 +323,7 @@ class WebhookProducerAutoConfigurationTest {
                 new JsonMapper(),
                 new DefaultWebhookSigner(),
                 mock(WebhookTransport.class),
-                secretProvider,
+                destinationSecretProviderOf(secretProvider),
                 new WebhookProducerProperties(),
                 emptyClockProvider());
 
@@ -326,7 +353,7 @@ class WebhookProducerAutoConfigurationTest {
                 new JsonMapper(),
                 new DefaultWebhookSigner(),
                 recordingTransport,
-                autoConfig.destinationSecretProvider(),
+                destinationSecretProviderOf(null),
                 props,
                 emptyClockProvider());
         publisher.publish("crm", new SampleEvent());
@@ -335,6 +362,11 @@ class WebhookProducerAutoConfigurationTest {
                         org.mockito.ArgumentMatchers.eq("https://crm.example.com/webhooks"),
                         org.mockito.ArgumentMatchers.any(),
                         org.mockito.ArgumentMatchers.anyString());
+
+        // Exercise destinationValidator's ConfigDestinationSecretProvider::new fallback too!
+        DestinationValidator defaultValidator = autoConfig.webhookDestinationValidator(
+                props, new AllowAllDestinationUrlValidator(), destinationSecretProviderOf(null));
+        assertThatCode(defaultValidator::afterPropertiesSet).doesNotThrowAnyException();
 
         // Exercise transport's Clock::systemUTC fallback via an HTTP-date Retry-After response.
         WebhookProducerProperties oneAttempt = properties();
@@ -357,7 +389,7 @@ class WebhookProducerAutoConfigurationTest {
                 new AllowAllDestinationUrlValidator(),
                 new NoOpWebhookDeliveryListener(),
                 oneAttempt,
-                List.of(),
+                interceptorProvider(),
                 emptyClockProvider());
         assertThatThrownBy(() -> transport.send("https://crm.example.com/webhooks", Map.of(), "{}"))
                 .isInstanceOf(WebhookDeliveryException.class);
@@ -374,9 +406,11 @@ class WebhookProducerAutoConfigurationTest {
         properties.getDestinations().put("crm", destination);
 
         DestinationValidator validator = autoConfig.webhookDestinationValidator(
-                properties, new com.jinternals.webhooks.producer.security.AllowAllDestinationUrlValidator(), d -> {
+                properties,
+                new com.jinternals.webhooks.producer.security.AllowAllDestinationUrlValidator(),
+                destinationSecretProviderOf(d -> {
                     throw new AssertionError("secret provider should not be reached when the URL is missing");
-                });
+                }));
 
         assertThatThrownBy(validator::afterPropertiesSet)
                 .isInstanceOf(com.jinternals.webhooks.core.config.WebhookConfigurationException.class)
@@ -469,5 +503,26 @@ class WebhookProducerAutoConfigurationTest {
         ObservedAspect aspect = autoConfig.webhookObservedAspect(ObservationRegistry.create());
 
         assertThat(aspect).isNotNull();
+    }
+
+    @org.springframework.context.annotation.Configuration(proxyBeanMethods = false)
+    static class UnnamedDestinationSecretProviderConfig {
+        @org.springframework.context.annotation.Bean
+        SecretProvider<Destination> customVaultDestinationSecretProvider() {
+            return d -> List.of("whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw");
+        }
+    }
+
+    @Test
+    void honoursUnnamedHostDestinationSecretProviderBeanWithoutQualifier() {
+        new org.springframework.boot.test.context.runner.ApplicationContextRunner()
+                .withConfiguration(org.springframework.boot.autoconfigure.AutoConfigurations.of(
+                        WebhookProducerAutoConfiguration.class, JacksonAutoConfiguration.class))
+                .withUserConfiguration(UnnamedDestinationSecretProviderConfig.class)
+                .withPropertyValues("webhooks.producer.destinations.crm.url=https://crm.example.com/webhooks")
+                .run(ctx -> {
+                    assertThat(ctx).hasNotFailed();
+                    assertThat(ctx).hasSingleBean(WebhookPublisher.class);
+                });
     }
 }

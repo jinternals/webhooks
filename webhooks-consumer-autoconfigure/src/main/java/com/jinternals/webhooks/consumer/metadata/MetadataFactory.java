@@ -12,7 +12,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Builds the immutable {@link WebhookMetadata} handed to handlers (see SPEC.md §9).
@@ -50,14 +52,14 @@ public class MetadataFactory {
             Map<String, List<String>> rawHeaders,
             String endpointPath) {
 
-        Map<String, String> headers = flattenAndRedact(rawHeaders);
-        Map<String, Object> attributes = new LinkedHashMap<>();
+        Map<String, @Nullable String> headers = flattenAndRedact(rawHeaders);
+        Map<String, @Nullable Object> attributes = new LinkedHashMap<>();
         for (MetadataContributor contributor : contributors) {
             contributor.contribute(request, headers, attributes);
         }
 
         return new WebhookMetadata(
-                envelope.getType(),
+                Objects.requireNonNull(envelope.getType(), "envelope.type must not be null"),
                 first(headers, WebhookHeaders.ID),
                 parseAttemptTimestamp(first(headers, WebhookHeaders.TIMESTAMP)),
                 parseEventTimestamp(envelope.getTimestamp()),
@@ -73,8 +75,8 @@ public class MetadataFactory {
      * strings, redacting {@code webhook-signature} so the metadata object is safe to log. Reuses the
      * headers the pipeline already collected rather than re-enumerating the servlet request.
      */
-    private Map<String, String> flattenAndRedact(Map<String, List<String>> rawHeaders) {
-        Map<String, String> headers = new LinkedHashMap<>();
+    private Map<String, @Nullable String> flattenAndRedact(Map<String, List<String>> rawHeaders) {
+        Map<String, @Nullable String> headers = LinkedHashMap.newLinkedHashMap(rawHeaders.size());
         for (Map.Entry<String, List<String>> entry : rawHeaders.entrySet()) {
             String name = entry.getKey().toLowerCase(Locale.ROOT);
             if (REDACTED_HEADERS.contains(name)) {
@@ -87,12 +89,12 @@ public class MetadataFactory {
         return headers;
     }
 
-    private static String first(Map<String, String> headers, String name) {
+    private static @Nullable String first(Map<String, @Nullable String> headers, String name) {
         return headers.get(name);
     }
 
     /** webhook-timestamp is unix seconds (see STANDARD_WEBHOOKS.md §3a). */
-    private static Instant parseAttemptTimestamp(String value) {
+    private static @Nullable Instant parseAttemptTimestamp(@Nullable String value) {
         // A blank value is not special-cased: Long.parseLong("") throws and is caught below, giving
         // the same null result, so an explicit isBlank() check would be a redundant (equivalent) branch.
         if (value == null) {
@@ -106,7 +108,7 @@ public class MetadataFactory {
     }
 
     /** Body timestamp is ISO 8601 (UTC {@code Z} or numeric offset) and nullable. */
-    private static Instant parseEventTimestamp(String value) {
+    private static @Nullable Instant parseEventTimestamp(@Nullable String value) {
         // As above: blank falls through to OffsetDateTime.parse(""), which throws and is caught, so there
         // is no observable difference from an explicit blank check.
         if (value == null) {
@@ -125,7 +127,7 @@ public class MetadataFactory {
      * trusted proxy sets it, so this value is <strong>not</strong> a security control — never gate access
      * or trust decisions on it; verification (SPEC §8) is the only authentication.
      */
-    private static String clientIp(HttpServletRequest request) {
+    private static @Nullable String clientIp(HttpServletRequest request) {
         String forwarded = request.getHeader("x-forwarded-for");
         if (forwarded != null) {
             int comma = forwarded.indexOf(',');

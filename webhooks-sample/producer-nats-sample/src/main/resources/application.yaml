@@ -1,6 +1,7 @@
 # ⚠️ DEMO ONLY — public sample secret. Supply real secrets from a secret manager in production.
 server:
   port: 9092
+  shutdown: graceful
 
 sample:
   nats:

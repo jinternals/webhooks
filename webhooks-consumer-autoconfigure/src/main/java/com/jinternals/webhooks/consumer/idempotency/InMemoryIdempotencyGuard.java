@@ -45,6 +45,9 @@ public class InMemoryIdempotencyGuard implements IdempotencyGuard {
     /** Default upper bound on retained ids; override via the constructor. */
     static final int DEFAULT_MAX_SIZE = 100_000;
 
+    /** Upper bound on retained {@code webhook-id} length so unverified oversized headers cannot bloat the cache. */
+    static final int MAX_ID_LENGTH = 256;
+
     final ReentrantLock lock = new ReentrantLock();
     private final Map<String, Instant> seen;
     private final Set<String> committed = new HashSet<>();
@@ -77,18 +80,17 @@ public class InMemoryIdempotencyGuard implements IdempotencyGuard {
 
     @Override
     public boolean tryBegin(@Nullable String webhookId) {
-        if (webhookId == null || webhookId.isBlank()) {
+        if (webhookId == null || webhookId.isBlank() || webhookId.length() > MAX_ID_LENGTH) {
             return true;
         }
         Instant now = clock.instant();
-        Instant nextExpiry = now.plus(TTL);
         boolean accepted;
         lock.lock();
         try {
             Instant previousExpiry = seen.get(webhookId);
             accepted = previousExpiry == null || !previousExpiry.isAfter(now);
             if (accepted) {
-                seen.put(webhookId, nextExpiry);
+                seen.put(webhookId, now.plus(TTL));
                 committed.remove(webhookId);
             }
         } finally {
@@ -99,7 +101,7 @@ public class InMemoryIdempotencyGuard implements IdempotencyGuard {
 
     @Override
     public void markProcessed(@Nullable String webhookId) {
-        if (webhookId == null || webhookId.isBlank()) {
+        if (webhookId == null || webhookId.isBlank() || webhookId.length() > MAX_ID_LENGTH) {
             return;
         }
         // Refresh the TTL from completion time so a slow handler can't let the entry expire mid-flight.

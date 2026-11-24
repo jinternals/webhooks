@@ -1,6 +1,8 @@
 package com.jinternals.webhooks.core.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -18,33 +20,34 @@ import tools.jackson.databind.JsonNode;
  * </pre>
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
+@JsonPropertyOrder({"type", "timestamp", "data"})
 public class Envelope {
 
-    private String type;
-    private String timestamp; // ISO 8601 event occurrence time (body timestamp)
-    private JsonNode data;
+    private @Nullable String type;
+    private @Nullable String timestamp; // ISO 8601 event occurrence time (body timestamp)
+    private @Nullable JsonNode data;
 
-    public String getType() {
+    public @Nullable String getType() {
         return type;
     }
 
-    public void setType(String type) {
+    public void setType(@Nullable String type) {
         this.type = type;
     }
 
-    public String getTimestamp() {
+    public @Nullable String getTimestamp() {
         return timestamp;
     }
 
-    public void setTimestamp(String timestamp) {
+    public void setTimestamp(@Nullable String timestamp) {
         this.timestamp = timestamp;
     }
 
-    public JsonNode getData() {
+    public @Nullable JsonNode getData() {
         return data;
     }
 
-    public void setData(JsonNode data) {
+    public void setData(@Nullable JsonNode data) {
         this.data = data;
     }
 }

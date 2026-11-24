@@ -1,10 +1,13 @@
 package com.jinternals.webhooks.consumer.dispatch;
 
+import java.lang.reflect.UndeclaredThrowableException;
 import java.time.Duration;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -101,8 +104,8 @@ public class AsyncHandlerExecutor implements HandlerExecutor, AutoCloseable {
         // thread, pool.execute() has long since returned, so a post-execute() check would never see it done and
         // the dead cancel would linger in the delay queue for the full timeout. Cancelling it in the task's
         // finally block, with removeOnCancelPolicy(true), evicts it immediately regardless of which thread ran.
-        AtomicReference<ScheduledFuture<?>> scheduledCancel = new AtomicReference<>();
-        AtomicReference<NamedTask> taskRef = new AtomicReference<>();
+        AtomicReference<@Nullable ScheduledFuture<?>> scheduledCancel = new AtomicReference<>();
+        AtomicReference<@Nullable NamedTask> taskRef = new AtomicReference<>();
         // A FutureTask lets us arm the timeout cancel BEFORE running the task. This matters on the
         // CallerRunsPolicy path: when the queue is full the rejected task runs synchronously inside
         // pool.execute(...) on the request thread, so if we scheduled the cancel only after execute()
@@ -110,7 +113,9 @@ public class AsyncHandlerExecutor implements HandlerExecutor, AutoCloseable {
         // Scheduling against the task reference first means the timeout is in effect for both the pooled and
         // the caller-runs execution of the very same task.
         NamedTask task = new NamedTask(
-                type, () -> runThenClearTimeout(submitterContext, type, taskRef.get(), handlerCall, scheduledCancel));
+                type,
+                () -> runThenClearTimeout(
+                        submitterContext, type, Objects.requireNonNull(taskRef.get()), handlerCall, scheduledCancel));
         taskRef.set(task);
         ScheduledFuture<?> cancelFuture =
                 timeoutScheduler.schedule(() -> cancelIfRunning(type, task), timeout.toMillis(), TimeUnit.MILLISECONDS);
@@ -141,17 +146,17 @@ public class AsyncHandlerExecutor implements HandlerExecutor, AutoCloseable {
      * for fast handlers cannot accumulate up to ~throughput×timeout entries under load (#2).
      */
     private void runThenClearTimeout(
-            Map<String, String> submitterContext,
+            @Nullable Map<String, String> submitterContext,
             String type,
             NamedTask task,
             Runnable handlerCall,
-            AtomicReference<ScheduledFuture<?>> scheduledCancel) {
+            AtomicReference<@Nullable ScheduledFuture<?>> scheduledCancel) {
         try {
             runWithContext(submitterContext, type, task, handlerCall);
         } finally {
             // mayInterruptIfRunning=false: never interrupt the scheduler thread if the cancel is already
             // executing (i.e. the timeout fired). cancel() on an already-run/cancelled task is a harmless no-op.
-            scheduledCancel.get().cancel(false);
+            Objects.requireNonNull(scheduledCancel.get()).cancel(false);
         }
     }
 
@@ -162,7 +167,7 @@ public class AsyncHandlerExecutor implements HandlerExecutor, AutoCloseable {
      * install and the restore treat {@code null} as "clear".
      */
     private void runWithContext(
-            Map<String, String> submitterContext, String type, NamedTask task, Runnable handlerCall) {
+            @Nullable Map<String, String> submitterContext, String type, NamedTask task, Runnable handlerCall) {
         Map<String, String> previous = MDC.getCopyOfContextMap();
         setContext(submitterContext);
         try {
@@ -177,7 +182,7 @@ public class AsyncHandlerExecutor implements HandlerExecutor, AutoCloseable {
      * {@code null} map as "clear" (so a {@code null} captured context — i.e. an empty submitter MDC —
      * correctly clears the worker), letting this delegate unconditionally.
      */
-    private static void setContext(Map<String, String> context) {
+    private static void setContext(@Nullable Map<String, String> context) {
         MDC.setContextMap(context);
     }
 
@@ -196,12 +201,13 @@ public class AsyncHandlerExecutor implements HandlerExecutor, AutoCloseable {
                 // Cancelled by cancelIfRunning => timeout path; cancelIfRunning reports onHandlerTimeout.
                 return;
             }
+            Throwable unwrapped = e instanceof UndeclaredThrowableException ute ? ute.getUndeclaredThrowable() : e;
             log.error(
                     "Async webhook handler for type '{}' failed; the delivery was already acknowledged "
                             + "with 204 and will not be retried by the sender",
                     type,
-                    e);
-            notifyFailed(type, e);
+                    unwrapped);
+            notifyFailed(type, unwrapped);
         }
     }
 
@@ -291,7 +297,7 @@ public class AsyncHandlerExecutor implements HandlerExecutor, AutoCloseable {
         }
     }
 
-    private static final class NamedTask extends FutureTask<Void> {
+    private static final class NamedTask extends FutureTask<@Nullable Void> {
         final String type;
 
         NamedTask(String type, Runnable runnable) {

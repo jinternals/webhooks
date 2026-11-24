@@ -21,7 +21,7 @@ import io.micrometer.observation.ObservationRegistry;
 import io.micrometer.observation.aop.ObservedAspect;
 import java.net.http.HttpClient;
 import java.time.Clock;
-import java.util.List;
+import java.util.concurrent.Executors;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -33,7 +33,7 @@ import org.springframework.boot.restclient.autoconfigure.RestClientAutoConfigura
 import org.springframework.context.annotation.Bean;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
-import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Auto-configuration for the Standard Webhooks producer (see SPEC.md §19). An existing Spring Boot
@@ -66,6 +66,7 @@ public class WebhookProducerAutoConfiguration {
         return HttpClient.newBuilder()
                 .followRedirects(HttpClient.Redirect.NEVER)
                 .connectTimeout(properties.getHttp().getConnectTimeout())
+                .executor(Executors.newVirtualThreadPerTaskExecutor())
                 .build();
     }
 
@@ -141,11 +142,12 @@ public class WebhookProducerAutoConfiguration {
             DestinationUrlValidator urlValidator,
             WebhookDeliveryListener deliveryListener,
             WebhookProducerProperties properties,
-            List<WebhookRequestInterceptor> interceptors,
+            ObjectProvider<WebhookRequestInterceptor> interceptors,
             ObjectProvider<Clock> clockProvider) {
         RestClientWebhookTransport base = new RestClientWebhookTransport(
                 webhookProducerRestClient, urlValidator, clockProvider.getIfAvailable(Clock::systemUTC));
-        InterceptingWebhookTransport intercepting = new InterceptingWebhookTransport(base, interceptors);
+        InterceptingWebhookTransport intercepting = new InterceptingWebhookTransport(
+                base, interceptors.orderedStream().toList());
         return new RetryingWebhookTransport(intercepting, urlValidator, deliveryListener, properties.getRetry());
     }
 
@@ -166,15 +168,15 @@ public class WebhookProducerAutoConfiguration {
     /**
      * Default destination secret source: Spring config ({@code destinations.<name>.secret}).
      *
-     * <p>The condition and the injection below are keyed on the bean <strong>name</strong>
-     * ({@code destinationSecretProvider}), not the bare {@code SecretProvider} type. The consumer library
-     * also publishes a {@code SecretProvider<Endpoint>} bean; when both libraries are on the classpath
-     * (e.g. this sample), matching only by type would let the two {@code SecretProvider} beans collide —
-     * {@code @ConditionalOnMissingBean} could back this one off, and by-type autowiring of the publisher
-     * could fail mid-startup before the generic type is resolvable. Naming makes the producer's provider
-     * independent of the consumer's. Override it with your own {@code @Bean("destinationSecretProvider")}.
+     * <p>Registered as {@code defaultCandidate = false} and guarded by bean name rather than the raw
+     * {@code SecretProvider} type so it never collides with the consumer starter's
+     * {@code SecretProvider<Endpoint>} when both libraries coexist in one application. Consumers resolve
+     * {@code ObjectProvider<SecretProvider<Destination>>} (full generic type matching, preferring any
+     * host-defined {@code SecretProvider<Destination>} regardless of bean name and falling back to
+     * {@link ConfigDestinationSecretProvider}), while explicit {@code @Qualifier("destinationSecretProvider")}
+     * injection remains supported.
      */
-    @Bean("destinationSecretProvider")
+    @Bean(name = "destinationSecretProvider", defaultCandidate = false)
     @ConditionalOnMissingBean(name = "destinationSecretProvider")
     public SecretProvider<Destination> destinationSecretProvider() {
         return new ConfigDestinationSecretProvider();
@@ -190,25 +192,28 @@ public class WebhookProducerAutoConfiguration {
     public DestinationValidator webhookDestinationValidator(
             WebhookProducerProperties properties,
             DestinationUrlValidator urlValidator,
-            @Qualifier("destinationSecretProvider") SecretProvider<Destination> destinationSecretProvider) {
-        return new DestinationValidator(properties, urlValidator, destinationSecretProvider);
+            ObjectProvider<SecretProvider<Destination>> destinationSecretProvider) {
+        return new DestinationValidator(
+                properties,
+                urlValidator,
+                destinationSecretProvider.getIfAvailable(ConfigDestinationSecretProvider::new));
     }
 
     /** The engine behind every {@code @WebhookClient} proxy: build + sign + send (SPEC §19). */
     @Bean
     @ConditionalOnMissingBean
     public WebhookPublisher webhookPublisher(
-            ObjectMapper objectMapper,
+            JsonMapper jsonMapper,
             WebhookSigner signer,
             WebhookTransport transport,
-            @Qualifier("destinationSecretProvider") SecretProvider<Destination> destinationSecretProvider,
+            ObjectProvider<SecretProvider<Destination>> destinationSecretProvider,
             WebhookProducerProperties properties,
             ObjectProvider<Clock> clockProvider) {
         return new WebhookPublisher(
-                objectMapper,
+                jsonMapper,
                 signer,
                 transport,
-                destinationSecretProvider,
+                destinationSecretProvider.getIfAvailable(ConfigDestinationSecretProvider::new),
                 properties,
                 clockProvider.getIfAvailable(Clock::systemUTC));
     }
@@ -232,7 +237,7 @@ public class WebhookProducerAutoConfiguration {
      * the classpath; {@link ConditionalOnClass} keeps this a soft dependency.
      */
     @Bean
-    @ConditionalOnClass(name = "org.aspectj.lang.ProceedingJoinPoint")
+    @ConditionalOnClass(name = {"org.aspectj.lang.ProceedingJoinPoint", "org.aspectj.weaver.Advice"})
     @ConditionalOnMissingBean
     public ObservedAspect webhookObservedAspect(ObservationRegistry observationRegistry) {
         return new ObservedAspect(observationRegistry);

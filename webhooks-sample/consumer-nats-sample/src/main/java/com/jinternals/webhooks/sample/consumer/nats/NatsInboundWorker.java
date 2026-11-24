@@ -61,6 +61,12 @@ public class NatsInboundWorker implements SmartLifecycle {
     }
 
     @Override
+    public int getPhase() {
+        // Stop AFTER embedded Tomcat drains in-flight HTTP webhook deliveries, and BEFORE NATS Connection closes.
+        return 0;
+    }
+
+    @Override
     public void start() {
         if (running.compareAndSet(false, true)) {
             workers = Executors.newVirtualThreadPerTaskExecutor();
@@ -74,10 +80,13 @@ public class NatsInboundWorker implements SmartLifecycle {
     @Override
     public void stop() {
         if (running.compareAndSet(true, false) && workers != null) {
-            workers.shutdownNow();
+            workers.shutdown();
             try {
-                workers.awaitTermination(5, TimeUnit.SECONDS);
+                if (!workers.awaitTermination(5, TimeUnit.SECONDS)) {
+                    workers.shutdownNow();
+                }
             } catch (InterruptedException ie) {
+                workers.shutdownNow();
                 Thread.currentThread().interrupt();
             }
         }

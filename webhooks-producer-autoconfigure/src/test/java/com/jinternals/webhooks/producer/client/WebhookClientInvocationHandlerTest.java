@@ -112,4 +112,13 @@ class WebhookClientInvocationHandlerTest {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("Unexpected Object method");
     }
+
+    @Test
+    void unreflectDefaultWrapsIllegalAccessExceptionAsIllegalStateException() throws Exception {
+        Method stringLength = String.class.getMethod("length");
+        assertThatThrownBy(() -> WebhookClientInvocationHandler.unreflectDefault(stringLength))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Cannot access default method")
+                .hasCauseInstanceOf(IllegalAccessException.class);
+    }
 }

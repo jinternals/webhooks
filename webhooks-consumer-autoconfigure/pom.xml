@@ -15,6 +15,10 @@
     <name>webhooks-consumer-autoconfigure</name>
     <description>Standard Webhooks consumer auto-configuration (no storage). Add webhooks-consumer-starter instead of depending on this directly.</description>
 
+    <properties>
+        <automatic.module.name>com.jinternals.webhooks.consumer.autoconfigure</automatic.module.name>
+    </properties>
+
     <dependencies>
         <!-- Shared wire model, @WebhookType/@Redact, redactor, type registry, secret SPI. Explicit version
              (not inherited from the reactor's dependencyManagement) so the INSTALLED pom is self-contained:

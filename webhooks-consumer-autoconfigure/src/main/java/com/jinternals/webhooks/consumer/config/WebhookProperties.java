@@ -12,8 +12,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import lombok.Data;
+import org.jspecify.annotations.Nullable;
 import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.boot.context.properties.NestedConfigurationProperty;
 import org.springframework.util.unit.DataSize;
 import org.springframework.validation.annotation.Validated;
 
@@ -116,11 +116,9 @@ public class WebhookProperties {
         /** How {@code @WebhookHandler} methods are executed (see SPEC.md §15, §18). */
         @NotNull
         @Valid
-        @NestedConfigurationProperty
         private Handler handler = new Handler();
 
         @NotNull
-        @NestedConfigurationProperty
         private List<@Valid Endpoint> endpoints = new ArrayList<>();
 
         /**
@@ -153,7 +151,7 @@ public class WebhookProperties {
             if (endpoints == null) {
                 return true;
             }
-            Set<String> paths = new HashSet<>();
+            Set<@Nullable String> paths = new HashSet<>();
             for (Endpoint endpoint : endpoints) {
                 if (endpoint != null && !paths.add(endpoint.getPath())) {
                     return false;
@@ -228,7 +226,7 @@ public class WebhookProperties {
         /** Listen path, e.g. /webhooks/crm. Must be an absolute path starting with '/'. */
         @NotBlank
         @Pattern(regexp = "^/.*", message = "must be an absolute path starting with '/'")
-        private String path;
+        private @Nullable String path;
 
         /**
          * Verification secret for this endpoint. The prefix selects the Standard Webhooks scheme:
@@ -236,7 +234,7 @@ public class WebhookProperties {
          * public key ({@code v2a} asymmetric; see SPEC.md §8e). A {@code whpk_} key additionally requires
          * {@link #endpointId}.
          */
-        private String secret;
+        private @Nullable String secret;
 
         /**
          * Additional accepted secrets for zero-downtime rotation (see SPEC.md §8a). During a rotation
@@ -260,7 +258,7 @@ public class WebhookProperties {
          * ignored for symmetric {@code whsec_} secrets. Must not contain a {@code '.'} (the signed-content
          * delimiter).
          */
-        private String endpointId;
+        private @Nullable String endpointId;
 
         /**
          * Optional allow-list of event {@code type}s this endpoint accepts (see SPEC.md §6).

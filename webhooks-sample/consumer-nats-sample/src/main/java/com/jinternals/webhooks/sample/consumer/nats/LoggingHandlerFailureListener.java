@@ -3,6 +3,7 @@ package com.jinternals.webhooks.sample.consumer.nats;
 import com.jinternals.webhooks.consumer.dispatch.HandlerFailureListener;
 import java.util.List;
 import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -14,6 +15,7 @@ public class LoggingHandlerFailureListener implements HandlerFailureListener {
     private static final int MAX_RETAINED_FAILURES = 1_000;
 
     private final ConcurrentLinkedDeque<String> failedTypes = new ConcurrentLinkedDeque<>();
+    private final AtomicInteger retainedCount = new AtomicInteger();
 
     @Override
     public void onHandlerFailed(String type, Throwable cause) {
@@ -29,8 +31,8 @@ public class LoggingHandlerFailureListener implements HandlerFailureListener {
 
     private void record(String type) {
         failedTypes.addLast(type);
-        while (failedTypes.size() > MAX_RETAINED_FAILURES) {
-            failedTypes.pollFirst();
+        if (retainedCount.incrementAndGet() > MAX_RETAINED_FAILURES && failedTypes.pollFirst() != null) {
+            retainedCount.decrementAndGet();
         }
     }
 
@@ -40,5 +42,6 @@ public class LoggingHandlerFailureListener implements HandlerFailureListener {
 
     public void clear() {
         failedTypes.clear();
+        retainedCount.set(0);
     }
 }

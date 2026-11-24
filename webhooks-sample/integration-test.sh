@@ -26,6 +26,11 @@ PASS=0; FAIL=0
 TMP_OUT=$(mktemp)
 
 cleanup() {
+  local rc=$?
+  if [ "$rc" -ne 0 ] || [ "$FAIL" -ne 0 ]; then
+    echo "== Failure detected; dumping container logs =="
+    $COMPOSE logs || true
+  fi
   echo "== Tearing down =="
   rm -f "$TMP_OUT"
   $COMPOSE down -v --remove-orphans >/dev/null 2>&1 || true
@@ -99,6 +104,18 @@ if echo "$METRICS" | grep -E 'webhook_received_total\{[^}]*type="contact.created
   check "consumer's webhook_received_total incremented for contact.created" 0
 else
   check "consumer's webhook_received_total incremented for contact.created" 1
+fi
+if echo "$METRICS" | grep -E 'webhook_receive_seconds_count\{' | grep -qvE ' 0(\.0)?$'; then
+  check "consumer's @Observed webhook_receive_seconds_count timer incremented" 0
+else
+  check "consumer's @Observed webhook_receive_seconds_count timer incremented" 1
+fi
+
+PRODUCER_METRICS=$(curl -fsS "$PRODUCER/actuator/prometheus" || true)
+if echo "$PRODUCER_METRICS" | grep -E 'webhook_send_seconds_count\{' | grep -qvE ' 0(\.0)?$'; then
+  check "producer's @Observed webhook_send_seconds_count timer incremented" 0
+else
+  check "producer's @Observed webhook_send_seconds_count timer incremented" 1
 fi
 
 echo

@@ -88,6 +88,7 @@ class DestinationUrlValidatorTest {
         rawAllowed.add(null);
         rawAllowed.add("   ");
         rawAllowed.add("  crm.example.com  ");
+        rawAllowed.add("fqdn.example.com.");
         rawAllowed.add("::1");
         rawAllowed.add("[2001:db8::1]");
         rawAllowed.add("[");
@@ -97,6 +98,10 @@ class DestinationUrlValidatorTest {
         DestinationUrlValidator validator = new AllowListDestinationUrlValidator(rawAllowed);
 
         assertThatCode(() -> validator.validate("https://crm.example.com/webhooks"))
+                .doesNotThrowAnyException();
+        assertThatCode(() -> validator.validate("https://crm.example.com./webhooks"))
+                .doesNotThrowAnyException();
+        assertThatCode(() -> validator.validate("https://fqdn.example.com/webhooks"))
                 .doesNotThrowAnyException();
         assertThatCode(() -> validator.validate("http://[::1]:8080/webhooks")).doesNotThrowAnyException();
         assertThatCode(() -> validator.validate("http://[2001:db8::1]:8080/webhooks"))

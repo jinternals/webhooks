@@ -19,9 +19,14 @@ class WebhookSignatureHeadersTest {
     @Test
     void parsesAllThreeHeaders() throws Exception {
         WebhookSignatureHeaders parsed = WebhookSignatureHeaders.from(Map.of(
-                WebhookHeaders.ID, List.of("msg_1"),
-                WebhookHeaders.TIMESTAMP, List.of("1700000000"),
-                WebhookHeaders.SIGNATURE, List.of("v1,sig")));
+                WebhookHeaders.ID,
+                List.of("msg_1"),
+                WebhookHeaders.TIMESTAMP,
+                List.of("1700000000"),
+                WebhookHeaders.SIGNATURE,
+                List.of("v1,sig"),
+                "content-type",
+                List.of("application/json")));
 
         assertThat(parsed.msgId).isEqualTo("msg_1");
         assertThat(parsed.timestamp).isEqualTo(1700000000L);
@@ -194,5 +199,55 @@ class WebhookSignatureHeadersTest {
                 WebhookHeaders.TIMESTAMP, List.of("1700000000"),
                 WebhookHeaders.SIGNATURE, List.of("v1,sigA,extra")));
         assertThat(tampered.signature).isEqualTo("v1,sigA,extra");
+    }
+
+    @Test
+    void enforcesIdAndSignatureLengthBoundsAndPrintableNonWhitespaceIdCharacters() throws Exception {
+        // Exact boundary acceptance: 256-char id (with printable boundary chars '!' and '~') + 4096-char signature.
+        String maxValidId = "m!~" + "a".repeat(WebhookSignatureHeaders.MAX_ID_LENGTH - 3);
+        String maxValidSig = "v1," + "a".repeat(WebhookSignatureHeaders.MAX_SIGNATURE_HEADER_LENGTH - 3);
+        WebhookSignatureHeaders atLimit = WebhookSignatureHeaders.from(Map.of(
+                WebhookHeaders.ID, List.of(maxValidId),
+                WebhookHeaders.TIMESTAMP, List.of("1700000000"),
+                WebhookHeaders.SIGNATURE, List.of(maxValidSig)));
+        assertThat(atLimit.msgId).hasSize(WebhookSignatureHeaders.MAX_ID_LENGTH);
+        assertThat(atLimit.signature).hasSize(WebhookSignatureHeaders.MAX_SIGNATURE_HEADER_LENGTH);
+
+        // Over-limit id (257 chars) -> SIGNATURE failure.
+        assertThatThrownBy(() -> WebhookSignatureHeaders.from(Map.of(
+                        WebhookHeaders.ID, List.of(maxValidId + "x"),
+                        WebhookHeaders.TIMESTAMP, List.of("1700000000"),
+                        WebhookHeaders.SIGNATURE, List.of("v1,sig"))))
+                .isInstanceOf(WebhookVerificationFailure.class)
+                .satisfies(e -> assertThat(((WebhookVerificationFailure) e).reason())
+                        .isEqualTo(VerificationFailureReason.SIGNATURE));
+
+        // Over-limit signature (4097 chars) -> SIGNATURE failure.
+        assertThatThrownBy(() -> WebhookSignatureHeaders.from(Map.of(
+                        WebhookHeaders.ID, List.of("msg_1"),
+                        WebhookHeaders.TIMESTAMP, List.of("1700000000"),
+                        WebhookHeaders.SIGNATURE, List.of(maxValidSig + "x"))))
+                .isInstanceOf(WebhookVerificationFailure.class)
+                .satisfies(e -> assertThat(((WebhookVerificationFailure) e).reason())
+                        .isEqualTo(VerificationFailureReason.SIGNATURE));
+
+        // Whitespace (' ', '\t') and ASCII DEL (0x7f) inside webhook-id -> SIGNATURE failure.
+        for (String badId : List.of("msg 1", "msg\t1", "msg\u007f1", "msg_1 ")) {
+            assertThatThrownBy(() -> WebhookSignatureHeaders.from(Map.of(
+                            WebhookHeaders.ID, List.of(badId),
+                            WebhookHeaders.TIMESTAMP, List.of("1700000000"),
+                            WebhookHeaders.SIGNATURE, List.of("v1,sig"))))
+                    .isInstanceOf(WebhookVerificationFailure.class)
+                    .satisfies(e -> assertThat(((WebhookVerificationFailure) e).reason())
+                            .isEqualTo(VerificationFailureReason.SIGNATURE));
+        }
+
+        // Unrelated header mapped to null is ignored cleanly.
+        java.util.Map<String, List<String>> withNullOther = new java.util.LinkedHashMap<>();
+        withNullOther.put("x-unrelated", null);
+        withNullOther.put(WebhookHeaders.ID, List.of("msg_ok"));
+        withNullOther.put(WebhookHeaders.TIMESTAMP, List.of("1700000000"));
+        withNullOther.put(WebhookHeaders.SIGNATURE, List.of("v1,sig"));
+        assertThat(WebhookSignatureHeaders.from(withNullOther).msgId).isEqualTo("msg_ok");
     }
 }

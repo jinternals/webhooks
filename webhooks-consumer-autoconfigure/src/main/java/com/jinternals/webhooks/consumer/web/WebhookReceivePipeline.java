@@ -17,10 +17,12 @@ import com.jinternals.webhooks.core.model.WebhookHeaders;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
 import java.util.Map;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import tools.jackson.core.JacksonException;
+import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.ObjectReader;
 
@@ -35,6 +37,8 @@ import tools.jackson.databind.ObjectReader;
 public class WebhookReceivePipeline {
 
     private static final Logger log = LoggerFactory.getLogger(WebhookReceivePipeline.class);
+    private static final ResponseEntity<Void> NO_CONTENT =
+            ResponseEntity.noContent().build();
 
     private final WebhookBodyVerifier bodyVerifier;
     private final IdempotencyGuard idempotency;
@@ -54,7 +58,8 @@ public class WebhookReceivePipeline {
             TimedHandlerDispatcher eventDispatcher) {
         this.bodyVerifier = bodyVerifier;
         this.idempotency = idempotency;
-        this.envelopeReader = objectMapper.readerFor(Envelope.class);
+        this.envelopeReader =
+                objectMapper.readerFor(Envelope.class).with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
         this.eventResolver = eventResolver;
         this.metadataFactory = metadataFactory;
         this.observability = observability;
@@ -81,7 +86,7 @@ public class WebhookReceivePipeline {
         String webhookId = WebhookRequestHeaders.first(headers, WebhookHeaders.ID);
         if (!idempotency.tryBegin(webhookId)) {
             log.info("Duplicate webhook-id {} ignored", webhookId);
-            return ResponseEntity.noContent().build();
+            return NO_CONTENT;
         }
         try {
             return processReserved(request, endpoint, rawBody, headers, webhookId);
@@ -97,7 +102,7 @@ public class WebhookReceivePipeline {
             Endpoint endpoint,
             String rawBody,
             Map<String, List<String>> headers,
-            String webhookId) {
+            @Nullable String webhookId) {
         // 3) Parse the envelope, then route + (strict) deserialize + validate the event. A malformed body
         // is a sender 400; an unaccepted or unmodelled type resolves to Ignored under ack-and-ignore
         // (→ 204) or throws under reject (→ 400).
@@ -106,14 +111,14 @@ public class WebhookReceivePipeline {
             case Resolution.Ignored ignored -> {
                 // Nothing to process, but the id was reserved: commit it so a retry is still deduped.
                 idempotency.markProcessed(webhookId);
-                return ResponseEntity.noContent().build();
+                return NO_CONTENT;
             }
             case Resolution.Accepted accepted -> {
                 dispatch(request, endpoint, envelope, headers, accepted);
                 // Reached only when dispatch returned normally: sync → the handler succeeded; async → the
                 // delivery was accepted. Either way the id is now safely committed.
                 idempotency.markProcessed(webhookId);
-                return ResponseEntity.noContent().build(); // 204 => accepted (sync: also processed)
+                return NO_CONTENT; // 204 => accepted (sync: also processed)
             }
         }
     }
@@ -135,7 +140,7 @@ public class WebhookReceivePipeline {
     /** Parse the verified raw body into an {@link Envelope}, mapping a malformed body to a 400. */
     private Envelope parse(String rawBody) {
         try {
-            Envelope envelope = envelopeReader.readValue(rawBody);
+            @Nullable Envelope envelope = envelopeReader.readValue(rawBody);
             if (envelope == null) {
                 throw new InvalidPayloadException("Webhook payload must be a JSON object", null);
             }

@@ -5,14 +5,16 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.locks.ReentrantLock;
 import org.jspecify.annotations.Nullable;
 
 /**
  * Sample reserve-then-commit {@link IdempotencyGuard} (see {@code docs/reference/beans-and-spis.md}).
  *
- * <p>Mirrors Redis {@code SET NX EX} ({@link #tryBegin}), {@code SET EX} ({@link #markProcessed}), and
- * {@code DEL} ({@link #release}) semantics against a pluggable {@link KeyValueStore}.
+ * <p>Mirrors Redis {@code SET NX EX} ({@link #tryBegin}), {@code SET EX} ({@link #markProcessed}), and a
+ * compare-and-delete Lua CAS script ({@link #release}) against a pluggable {@link KeyValueStore} so a stalled
+ * caller whose reservation expired never deletes a sibling instance's {@code "processed"} state.
  */
 public class SharedStoreIdempotencyGuard implements IdempotencyGuard {
 
@@ -21,13 +23,16 @@ public class SharedStoreIdempotencyGuard implements IdempotencyGuard {
 
         void set(String key, String value, Duration ttl);
 
-        void delete(String key);
+        boolean deleteIfValueMatches(String key, String expectedValue);
     }
+
+    private record OwnedReservation(String webhookId, String token) {}
 
     private static final Duration IN_FLIGHT_TTL = Duration.ofMinutes(2);
     private static final Duration PROCESSED_TTL = Duration.ofDays(1);
 
     private final KeyValueStore store;
+    private final ThreadLocal<OwnedReservation> currentReservation = new ThreadLocal<>();
 
     public SharedStoreIdempotencyGuard(KeyValueStore store) {
         this.store = store;
@@ -36,22 +41,38 @@ public class SharedStoreIdempotencyGuard implements IdempotencyGuard {
     @Override
     public boolean tryBegin(@Nullable String webhookId) {
         if (webhookId == null || webhookId.isBlank()) {
+            currentReservation.remove();
             return true;
         }
-        return store.setIfAbsent("wh:" + webhookId, "in-flight", IN_FLIGHT_TTL);
+        OwnedReservation existing = currentReservation.get();
+        if (existing != null && !webhookId.equals(existing.webhookId())) {
+            currentReservation.remove();
+        }
+        String token = "in-flight:" + UUID.randomUUID();
+        boolean acquired = store.setIfAbsent("wh:" + webhookId, token, IN_FLIGHT_TTL);
+        if (acquired) {
+            currentReservation.set(new OwnedReservation(webhookId, token));
+        }
+        return acquired;
     }
 
     @Override
     public void markProcessed(@Nullable String webhookId) {
         if (webhookId != null && !webhookId.isBlank()) {
             store.set("wh:" + webhookId, "processed", PROCESSED_TTL);
+            OwnedReservation owned = currentReservation.get();
+            if (owned != null && webhookId.equals(owned.webhookId())) {
+                currentReservation.remove();
+            }
         }
     }
 
     @Override
     public void release(@Nullable String webhookId) {
-        if (webhookId != null && !webhookId.isBlank()) {
-            store.delete("wh:" + webhookId);
+        OwnedReservation owned = currentReservation.get();
+        currentReservation.remove();
+        if (webhookId != null && !webhookId.isBlank() && owned != null && webhookId.equals(owned.webhookId())) {
+            store.deleteIfValueMatches("wh:" + webhookId, owned.token());
         }
     }
 
@@ -96,10 +117,15 @@ public class SharedStoreIdempotencyGuard implements IdempotencyGuard {
         }
 
         @Override
-        public void delete(String key) {
+        public boolean deleteIfValueMatches(String key, String expectedValue) {
             lock.lock();
             try {
-                entries.remove(key);
+                Entry existing = entries.get(key);
+                if (existing != null && expectedValue.equals(existing.value())) {
+                    entries.remove(key);
+                    return true;
+                }
+                return false;
             } finally {
                 lock.unlock();
             }

@@ -228,5 +228,13 @@ class SafeUrlTest {
         assertThat(SafeUrl.sanitize("ht tp://broken/path?token=line1\nsecret_line2"))
                 .isEqualTo("ht tp://broken/path")
                 .doesNotContain("secret_line2");
+
+        // HTTP client echo that stripped userinfo@ while keeping ?token=LEAK_QUERY still has ?token redacted!
+        String rawUserInfoAndQuery = "https://alice:s3cr3t@crm.example.com/webhooks?token=LEAK_QUERY#frag";
+        String userInfoStrippedEcho =
+                "I/O error on POST request for \"https://crm.example.com/webhooks?token=LEAK_QUERY\": timeout";
+        assertThat(SafeUrl.redactMessage(userInfoStrippedEcho, rawUserInfoAndQuery))
+                .isEqualTo("I/O error on POST request for \"https://crm.example.com/webhooks\": timeout")
+                .doesNotContain("LEAK_QUERY");
     }
 }

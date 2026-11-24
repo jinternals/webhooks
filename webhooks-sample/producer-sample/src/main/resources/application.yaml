@@ -3,6 +3,7 @@
 # Standard Webhooks spec's test secret; the whsk_ PRIVATE key is a sample-only key pair — anyone can sign with it.
 server:
   port: 9090
+  shutdown: graceful
 
 webhooks:
   # ── Producer side ──────────────────────────────────────────────────────

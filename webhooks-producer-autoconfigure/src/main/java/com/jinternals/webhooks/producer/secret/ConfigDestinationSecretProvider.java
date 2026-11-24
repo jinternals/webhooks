@@ -4,6 +4,7 @@ import com.jinternals.webhooks.core.secret.SecretProvider;
 import com.jinternals.webhooks.producer.config.WebhookProducerProperties.Destination;
 import java.util.ArrayList;
 import java.util.List;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Default producer {@link SecretProvider}: resolves the signing secret(s) from the destination's Spring
@@ -12,9 +13,8 @@ import java.util.List;
  * entries are dropped, and an all-blank destination yields an empty list so signing fails fast rather
  * than producing an unsigned delivery.
  *
- * <p>Override with a {@code @Bean("destinationSecretProvider") SecretProvider<Destination>} to pull the
- * secret from a secrets manager instead (keyed by bean name so it never collides with the consumer's
- * {@code SecretProvider<Endpoint>}).
+ * <p>Override with a {@code @Bean SecretProvider<Destination>} (or {@code @Bean("destinationSecretProvider")})
+ * to pull the secret from a secrets manager instead.
  */
 public class ConfigDestinationSecretProvider implements SecretProvider<Destination> {
 
@@ -28,7 +28,7 @@ public class ConfigDestinationSecretProvider implements SecretProvider<Destinati
         return secrets;
     }
 
-    private static void addIfPresent(List<String> secrets, String secret) {
+    private static void addIfPresent(List<String> secrets, @Nullable String secret) {
         if (secret != null && !secret.isBlank()) {
             secrets.add(secret);
         }

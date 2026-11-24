@@ -8,6 +8,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Shared helpers for reading inbound webhook request headers consistently (see SPEC.md §9b, §10). HTTP
@@ -32,7 +33,7 @@ public final class WebhookRequestHeaders {
         while (names != null && names.hasMoreElements()) {
             String name = names.nextElement();
             String lower = name.toLowerCase(Locale.ROOT);
-            List<String> incoming = Collections.list(request.getHeaders(name));
+            List<String> incoming = collectValues(request.getHeaders(name));
             headers.merge(lower, incoming, (existing, extra) -> {
                 List<String> merged = new ArrayList<>(existing);
                 merged.addAll(extra);
@@ -42,12 +43,28 @@ public final class WebhookRequestHeaders {
         return headers;
     }
 
+    private static List<String> collectValues(@Nullable Enumeration<String> values) {
+        if (values == null || !values.hasMoreElements()) {
+            return List.of();
+        }
+        String first = values.nextElement();
+        if (!values.hasMoreElements()) {
+            return Collections.singletonList(first);
+        }
+        List<String> list = new ArrayList<>(4);
+        list.add(first);
+        do {
+            list.add(values.nextElement());
+        } while (values.hasMoreElements());
+        return list;
+    }
+
     /**
      * The first value of a header (matched case-insensitively with {@link Locale#ROOT}), or {@code null} when
      * absent or empty — works uniformly for lower-cased maps built by {@link #collect(HttpServletRequest)} and
      * mixed-case maps supplied directly by callers.
      */
-    public static String first(Map<String, List<String>> headers, String name) {
+    public static @Nullable String first(Map<String, List<String>> headers, String name) {
         for (Map.Entry<String, List<String>> entry : headers.entrySet()) {
             if (entry.getKey().equalsIgnoreCase(name)) {
                 List<String> values = entry.getValue();

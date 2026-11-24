@@ -9,9 +9,11 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentMap;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.util.ConcurrentReferenceHashMap;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
@@ -32,6 +34,7 @@ public class RestClientWebhookTransport implements WebhookTransport {
     private final RestClient restClient;
     private final DestinationUrlValidator urlValidator;
     private final Clock clock;
+    private final ConcurrentMap<String, URI> parsedUris = new ConcurrentReferenceHashMap<>();
 
     public RestClientWebhookTransport(RestClient restClient, DestinationUrlValidator urlValidator) {
         this(restClient, urlValidator, Clock.systemUTC());
@@ -52,7 +55,7 @@ public class RestClientWebhookTransport implements WebhookTransport {
         try {
             restClient
                     .post()
-                    .uri(URI.create(url))
+                    .uri(parsedUris.computeIfAbsent(url, URI::create))
                     .contentType(MediaType.APPLICATION_JSON)
                     .headers(h -> headers.forEach(h::addAll))
                     .body(body)

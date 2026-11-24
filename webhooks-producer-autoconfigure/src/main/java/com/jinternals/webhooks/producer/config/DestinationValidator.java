@@ -13,6 +13,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.List;
 import java.util.Map;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.InitializingBean;
@@ -66,7 +67,7 @@ public class DestinationValidator implements InitializingBean {
         }
     }
 
-    private void validateUrl(String name, String url) {
+    private void validateUrl(String name, @Nullable String url) {
         String base = "webhooks.producer.destinations." + name;
         if (url == null || url.isBlank()) {
             throw new WebhookConfigurationException(

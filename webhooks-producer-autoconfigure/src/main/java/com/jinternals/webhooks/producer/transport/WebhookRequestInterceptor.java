@@ -4,8 +4,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Pluggable <strong>outbound-request interceptor</strong> for the producer (see SPEC.md §19,
- * <a href="../../../../../../../../docs/guides/transport-authentication.md">transport authentication</a>).
+ * Pluggable <strong>outbound-request interceptor</strong> for the producer (see SPEC.md §19 and
+ * {@code docs/guides/transport-authentication.md}).
  * An interceptor observes a fully-signed webhook request and returns the headers to actually send — the
  * natural seam for adding <strong>transport authentication</strong> such as an OAuth2
  * {@code Authorization: Bearer} token, <em>without</em> replacing the delivery transport.

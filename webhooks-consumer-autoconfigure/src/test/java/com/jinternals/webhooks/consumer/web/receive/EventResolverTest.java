@@ -166,6 +166,20 @@ class EventResolverTest {
     }
 
     @Test
+    void dataNodeCoercedToNullByLenientMapperIsRejectedAsInvalidPayloadBeforeValidation() throws Exception {
+        when(typeRegistry.classOf("contact.created")).thenReturn((Class) ContactCreated.class);
+        JsonMapper lenient = JsonMapper.builder()
+                .enable(tools.jackson.databind.DeserializationFeature.ACCEPT_EMPTY_STRING_AS_NULL_OBJECT)
+                .build();
+        EventResolver lenientResolver = new EventResolver(typeRegistry, payloadValidator, lenient, properties);
+
+        assertThatThrownBy(() -> lenientResolver.resolve(endpoint(List.of()), envelope("contact.created", "\"\"")))
+                .isInstanceOf(InvalidPayloadException.class)
+                .hasMessageContaining("deserialized to null");
+        org.mockito.Mockito.verifyNoInteractions(payloadValidator);
+    }
+
+    @Test
     void malformedDataValueFailsAsInvalidPayload() {
         // A data value that cannot bind (object where a String is expected) is a Jackson failure
         // wrapped as InvalidPayloadException (400).

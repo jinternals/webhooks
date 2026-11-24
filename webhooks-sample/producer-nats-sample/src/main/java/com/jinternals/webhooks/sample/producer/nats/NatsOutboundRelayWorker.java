@@ -107,6 +107,13 @@ public class NatsOutboundRelayWorker implements SmartLifecycle {
     }
 
     @Override
+    public int getPhase() {
+        // Stop AFTER embedded Tomcat finishes draining inbound HTTP requests (DEFAULT_PHASE - 1024),
+        // and BEFORE the NATS Connection bean is destroyed.
+        return 0;
+    }
+
+    @Override
     public void start() {
         if (running.compareAndSet(false, true)) {
             workers = Executors.newVirtualThreadPerTaskExecutor();
@@ -120,10 +127,13 @@ public class NatsOutboundRelayWorker implements SmartLifecycle {
     @Override
     public void stop() {
         if (running.compareAndSet(true, false) && workers != null) {
-            workers.shutdownNow();
+            workers.shutdown();
             try {
-                workers.awaitTermination(5, TimeUnit.SECONDS);
+                if (!workers.awaitTermination(5, TimeUnit.SECONDS)) {
+                    workers.shutdownNow();
+                }
             } catch (InterruptedException ie) {
+                workers.shutdownNow();
                 Thread.currentThread().interrupt();
             }
         }
@@ -350,7 +360,7 @@ public class NatsOutboundRelayWorker implements SmartLifecycle {
     }
 
     private Duration computeDelay(long attempt, Duration retryAfter) {
-        long multiplier = 1L << Math.min(attempt - 1L, 10L);
+        long multiplier = 1L << Math.clamp(attempt - 1L, 0L, 10L);
         Duration exp = natsProperties.getBaseRetryDelay().multipliedBy(multiplier);
         Duration effective = (retryAfter != null && retryAfter.compareTo(exp) > 0) ? retryAfter : exp;
         return effective.compareTo(natsProperties.getMaxRetryDelay()) > 0

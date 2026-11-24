@@ -1,6 +1,7 @@
 package com.jinternals.webhooks.consumer.web.error;
 
 import java.io.Serial;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Raised when a <strong>verified</strong> request body cannot be parsed as a Standard Webhooks envelope,
@@ -17,22 +18,22 @@ public class InvalidPayloadException extends RuntimeException {
     @Serial
     private static final long serialVersionUID = 1L;
 
-    private final String type;
+    private final @Nullable String type;
 
     /** Envelope could not be parsed at all (no modelled type is known yet). */
-    public InvalidPayloadException(String reason, Throwable cause) {
+    public InvalidPayloadException(@Nullable String reason, @Nullable Throwable cause) {
         super("Webhook payload could not be parsed: " + reason, cause);
         this.type = null;
     }
 
     /** The {@code data} node could not be deserialized into the {@code @WebhookType} class for {@code type}. */
-    public InvalidPayloadException(String type, String reason, Throwable cause) {
+    public InvalidPayloadException(String type, @Nullable String reason, @Nullable Throwable cause) {
         super("Webhook payload for type '" + type + "' could not be deserialized: " + reason, cause);
         this.type = type;
     }
 
     /** The event type whose payload was invalid, or {@code null} when the envelope itself was unparseable. */
-    public String getType() {
+    public @Nullable String getType() {
         return type;
     }
 }

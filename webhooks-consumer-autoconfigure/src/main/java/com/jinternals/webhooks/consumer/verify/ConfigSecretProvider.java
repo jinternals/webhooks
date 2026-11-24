@@ -4,6 +4,7 @@ import com.jinternals.webhooks.consumer.config.WebhookProperties.Endpoint;
 import com.jinternals.webhooks.core.secret.SecretProvider;
 import java.util.ArrayList;
 import java.util.List;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Default consumer {@link SecretProvider}: resolves secrets from Spring configuration (see SPEC.md
@@ -23,7 +24,7 @@ public class ConfigSecretProvider implements SecretProvider<Endpoint> {
         return secrets;
     }
 
-    private static void addIfPresent(List<String> secrets, String secret) {
+    private static void addIfPresent(List<String> secrets, @Nullable String secret) {
         if (secret != null && !secret.isBlank()) {
             secrets.add(secret);
         }

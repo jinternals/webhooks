@@ -2,11 +2,12 @@ package com.jinternals.webhooks.consumer.web;
 
 import com.jinternals.webhooks.consumer.config.WebhookProperties;
 import com.jinternals.webhooks.consumer.config.WebhookProperties.Endpoint;
-import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletRequest;
 import java.lang.reflect.Method;
+import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.InitializingBean;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.util.ReflectionUtils;
 import org.springframework.web.bind.annotation.RequestMethod;
@@ -18,7 +19,7 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandl
  * {@link WebhookReceiveController#handle} method (see SPEC.md §7). Adapted from
  * {@code dynamic-rest-api}'s {@code DynamicEndpointRegistry}.
  */
-public class WebhookEndpointRegistry {
+public class WebhookEndpointRegistry implements InitializingBean {
 
     private static final Logger log = LoggerFactory.getLogger(WebhookEndpointRegistry.class);
 
@@ -35,18 +36,22 @@ public class WebhookEndpointRegistry {
         this.properties = properties;
     }
 
-    @PostConstruct
+    @Override
+    public void afterPropertiesSet() {
+        registerEndpoints();
+    }
+
     public void registerEndpoints() {
         // handle(...) is a declared method of this same class, so findMethod never returns null;
         // requireNonNull documents the invariant without an unreachable, uncoverable branch.
-        Method handle = java.util.Objects.requireNonNull(
+        Method handle = Objects.requireNonNull(
                 ReflectionUtils.findMethod(
                         WebhookReceiveController.class, "handle", HttpServletRequest.class, String.class),
                 "WebhookReceiveController.handle(...) not found");
 
         for (Endpoint endpoint : properties.getConsumer().getEndpoints()) {
-            RequestMappingInfo.Builder builder =
-                    RequestMappingInfo.paths(endpoint.getPath()).methods(RequestMethod.POST);
+            String path = Objects.requireNonNull(endpoint.getPath(), "endpoint.path must not be null");
+            RequestMappingInfo.Builder builder = RequestMappingInfo.paths(path).methods(RequestMethod.POST);
             RequestMappingInfo.BuilderConfiguration config = handlerMapping.getBuilderConfiguration();
             if (config != null) {
                 builder.options(config);
@@ -54,7 +59,7 @@ public class WebhookEndpointRegistry {
             handlerMapping.registerMapping(builder.build(), controller, handle);
             log.info(
                     "Registered webhook endpoint POST {} accepting types {}",
-                    endpoint.getPath(),
+                    path,
                     endpoint.getTypes().isEmpty() ? "[ALL]" : endpoint.getTypes());
         }
     }

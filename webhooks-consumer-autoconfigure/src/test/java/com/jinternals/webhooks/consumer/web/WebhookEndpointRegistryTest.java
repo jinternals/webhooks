@@ -44,7 +44,7 @@ class WebhookEndpointRegistryTest {
 
         WebhookEndpointRegistry registry = new WebhookEndpointRegistry(handlerMapping, controller, properties);
         try (LogCapture logs = LogCapture.forClass(WebhookEndpointRegistry.class)) {
-            registry.registerEndpoints();
+            registry.afterPropertiesSet();
 
             // The accept-all endpoint (empty types) renders "[ALL]"; the type-scoped one renders its
             // explicit list. Asserting both kills the mutant that forces the isEmpty() ternary to a

@@ -423,4 +423,41 @@ class WebhookPublisherTest {
                     assertThat(root.get("data").get("issuedAt").asString()).isEqualTo("2026-01-15T10:30:00Z");
                 });
     }
+
+    @Test
+    void passesMessageIdToFourArgAttemptAwareWebhookTransportWithoutEagerlyEvaluatingHeadersSupplier() {
+        when(secretProvider.secretsFor(crm)).thenReturn(List.of("whsec_abc"));
+        java.util.concurrent.atomic.AtomicReference<String> capturedId =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        com.jinternals.webhooks.producer.transport.AttemptAwareWebhookTransport queueTransport =
+                new com.jinternals.webhooks.producer.transport.AttemptAwareWebhookTransport() {
+                    @Override
+                    public void send(String url, Map<String, List<String>> headers, String body) {}
+
+                    @Override
+                    public void sendPerAttempt(
+                            String url,
+                            java.util.function.Supplier<Map<String, List<String>>> headersSupplier,
+                            String body) {
+                        throw new AssertionError("4-arg sendPerAttempt should be invoked directly");
+                    }
+
+                    @Override
+                    public void sendPerAttempt(
+                            String url,
+                            String messageId,
+                            java.util.function.Supplier<Map<String, List<String>>> headersSupplier,
+                            String body) {
+                        capturedId.set(messageId);
+                    }
+                };
+
+        WebhookPublisher queuePublisher =
+                new WebhookPublisher(objectMapper, signer, queueTransport, secretProvider, properties);
+        queuePublisher.publish("crm", new ContactCreated());
+
+        assertThat(capturedId.get()).startsWith("msg_");
+        org.mockito.Mockito.verify(signer, org.mockito.Mockito.never())
+                .sign(anyString(), org.mockito.ArgumentMatchers.any(), anyString(), anyLong(), anyString());
+    }
 }

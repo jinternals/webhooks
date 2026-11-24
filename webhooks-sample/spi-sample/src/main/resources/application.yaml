@@ -1,6 +1,7 @@
 # ⚠️ DEMO ONLY — secrets are resolved dynamically via custom SecretProvider beans in SpiSampleApplication.
 server:
   port: 9096
+  shutdown: graceful
 
 webhooks:
   consumer:

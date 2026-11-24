@@ -57,22 +57,22 @@ public class Ed25519WebhookVerifier implements WebhookVerifier {
         throw new WebhookVerificationFailure(VerificationFailureReason.SIGNATURE, "No matching signature found");
     }
 
-    /**
-     * Whether this {@code whpk_} public key verifies any {@code v2a} signature in the header for the content.
-     * Package-private so {@link DefaultWebhookVerifier} can reuse it per-secret without re-running the shared
-     * header/timestamp skeleton, while still enforcing {@link #requireValidEndpointId(String)}.
-     */
     /** Upper bound on {@code v2a} signature tokens checked per request to bound CPU against hostile headers. */
     static final int MAX_V2A_SIGNATURES = 16;
 
     private static final String VERSION_PREFIX = Ed25519Signatures.VERSION + ",";
 
+    /**
+     * Whether this {@code whpk_} public key verifies any {@code v2a} signature in the header for the content.
+     * Package-private so {@link DefaultWebhookVerifier} can reuse it per-secret without re-running the shared
+     * header/timestamp skeleton, while still enforcing {@link #requireValidEndpointId(String)}.
+     */
     boolean matches(String secret, @Nullable String endpointId, String rawBody, WebhookSignatureHeaders parsed)
             throws WebhookVerificationFailure {
-        requireValidEndpointId(endpointId);
+        String validEndpointId = requireValidEndpointId(endpointId);
         PublicKey publicKey = publicKeys.computeIfAbsent(secret, Ed25519WebhookVerifier::newPublicKey);
         List<String> candidates = new ArrayList<>();
-        for (String versioned : parsed.signature.split(" ")) {
+        for (String versioned : parsed.tokens) {
             if (!versioned.startsWith(VERSION_PREFIX)) {
                 continue;
             }
@@ -81,7 +81,8 @@ public class Ed25519WebhookVerifier implements WebhookVerifier {
                 break;
             }
         }
-        return Ed25519Signatures.verifyAny(publicKey, endpointId, parsed.msgId, parsed.timestamp, rawBody, candidates);
+        return Ed25519Signatures.verifyAny(
+                publicKey, validEndpointId, parsed.msgId, parsed.timestamp, rawBody, candidates);
     }
 
     private static PublicKey newPublicKey(String secret) {
@@ -96,7 +97,7 @@ public class Ed25519WebhookVerifier implements WebhookVerifier {
      * A {@code v2a} verification cannot proceed without a valid, dot-free endpoint id that is part of the
      * signed content.
      */
-    private static void requireValidEndpointId(@Nullable String endpointId) throws WebhookVerificationFailure {
+    private static String requireValidEndpointId(@Nullable String endpointId) throws WebhookVerificationFailure {
         if (endpointId == null || endpointId.isBlank()) {
             throw new WebhookVerificationFailure(
                     VerificationFailureReason.NO_SECRET,
@@ -108,5 +109,6 @@ public class Ed25519WebhookVerifier implements WebhookVerifier {
                     VerificationFailureReason.NO_SECRET,
                     "endpoint-id must not contain '.' — it is the signed-content delimiter");
         }
+        return endpointId;
     }
 }

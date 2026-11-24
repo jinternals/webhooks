@@ -62,6 +62,14 @@ class SpiSampleApplicationTest {
                 .isInstanceOf(WebhookDeliveryException.class)
                 .hasMessageContaining("Blocked private/link-local destination IP");
 
+        assertThatThrownBy(() -> urlValidator.validate("http://100.100.100.200/latest/meta-data"))
+                .isInstanceOf(WebhookDeliveryException.class)
+                .hasMessageContaining("Blocked private/link-local destination IP");
+
+        assertThatThrownBy(() -> urlValidator.validate("http://[64:ff9b::a9fe:a9fe]/latest/meta-data"))
+                .isInstanceOf(WebhookDeliveryException.class)
+                .hasMessageContaining("Blocked private/link-local destination IP");
+
         assertThatThrownBy(() -> urlValidator.validate("http://10.0.0.5/internal"))
                 .isInstanceOf(WebhookDeliveryException.class)
                 .hasMessageContaining("Blocked private/link-local destination IP");
@@ -95,6 +103,9 @@ class SpiSampleApplicationTest {
         idempotencyGuard.release("msg_spi_99");
         assertThat(idempotencyGuard.tryBegin("msg_spi_99")).isTrue();
         idempotencyGuard.markProcessed("msg_spi_99");
+        assertThat(idempotencyGuard.tryBegin("msg_spi_99")).isFalse();
+        // A late/unowned release must NEVER delete an already-committed "processed" entry!
+        idempotencyGuard.release("msg_spi_99");
         assertThat(idempotencyGuard.tryBegin("msg_spi_99")).isFalse();
 
         // Also exercise RecordedHooks HandlerFailureListener callbacks + bounded InMemoryKeyValueStore cap

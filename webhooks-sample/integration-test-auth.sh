@@ -16,6 +16,11 @@ PASS=0; FAIL=0
 TMP_OUT=$(mktemp)
 
 cleanup() {
+  local rc=$?
+  if [ "$rc" -ne 0 ] || [ "$FAIL" -ne 0 ]; then
+    echo "== Failure detected; dumping auth stack logs =="
+    $COMPOSE logs || true
+  fi
   echo "== Tearing down auth stack =="
   rm -f "$TMP_OUT"
   $COMPOSE down -v --remove-orphans >/dev/null 2>&1 || true

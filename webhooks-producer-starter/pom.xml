@@ -15,6 +15,12 @@
     <name>webhooks-producer-starter</name>
     <description>Starter for the Standard Webhooks producer: add this one dependency to sign and send webhooks via @WebhookClient.</description>
 
+    <properties>
+        <automatic.module.name>com.jinternals.webhooks.producer.starter</automatic.module.name>
+        <maven.source.skip>true</maven.source.skip>
+        <maven.javadoc.skip>true</maven.javadoc.skip>
+    </properties>
+
     <!--
       Thin starter (the canonical Spring Boot pattern): it carries no code of its own. Adding it to a
       Spring Boot app pulls in the producer auto-configuration and every runtime dependency the sender

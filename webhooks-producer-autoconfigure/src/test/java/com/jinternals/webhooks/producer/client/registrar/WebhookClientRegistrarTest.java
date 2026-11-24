@@ -475,4 +475,26 @@ class WebhookClientRegistrarTest {
                 .hasMessageContaining("com.jinternals.webhooks.NoSuchClient")
                 .hasCauseInstanceOf(ClassNotFoundException.class);
     }
+
+    @WebhookClient(destination = "crm")
+    interface RedeclaredObjectMethodsClient {
+        void contactCreated(com.jinternals.webhooks.producer.fixtures.ContactCreated event);
+
+        @Override
+        String toString();
+
+        @Override
+        int hashCode();
+
+        @Override
+        boolean equals(Object other);
+    }
+
+    @Test
+    void validationSkipsRedeclaredObjectMethodsOnInterface() throws Exception {
+        assertThat(WebhookClientRegistrar.isWebhookMethod(RedeclaredObjectMethodsClient.class.getMethod("toString")))
+                .isFalse();
+        assertThat(WebhookClientRegistrar.validateClientMethods(RedeclaredObjectMethodsClient.class))
+                .isEqualTo(1);
+    }
 }

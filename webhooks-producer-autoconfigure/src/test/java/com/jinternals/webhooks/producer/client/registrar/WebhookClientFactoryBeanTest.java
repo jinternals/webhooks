@@ -9,11 +9,10 @@ import static org.mockito.Mockito.when;
 
 import com.jinternals.webhooks.producer.annotations.WebhookClient;
 import com.jinternals.webhooks.producer.client.WebhookPublisher;
-import java.lang.reflect.Field;
 import java.lang.reflect.Proxy;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.BeanFactory;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.util.ReflectionUtils;
 
 /**
  * Unit test for {@link WebhookClientFactoryBean}: it must report the client interface as its product type,
@@ -34,9 +33,9 @@ class WebhookClientFactoryBeanTest {
         WebhookClientFactoryBean<CrmWebhooks> factoryBean = new WebhookClientFactoryBean<>(CrmWebhooks.class);
         ObjectProvider<WebhookPublisher> provider = mock(ObjectProvider.class);
         when(provider.getObject()).thenReturn(publisher);
-        Field field = ReflectionUtils.findField(WebhookClientFactoryBean.class, "publisher");
-        ReflectionUtils.makeAccessible(field);
-        ReflectionUtils.setField(field, factoryBean, provider);
+        BeanFactory beanFactory = mock(BeanFactory.class);
+        when(beanFactory.getBeanProvider(WebhookPublisher.class)).thenReturn(provider);
+        factoryBean.setBeanFactory(beanFactory);
         return factoryBean;
     }
 

@@ -5,6 +5,7 @@ import com.standardwebhooks.Webhook;
 import com.standardwebhooks.exceptions.WebhookSigningException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentMap;
@@ -68,22 +69,35 @@ public class HmacWebhookVerifier implements WebhookVerifier {
         throw new WebhookVerificationFailure(VerificationFailureReason.SIGNATURE, "No matching signature found");
     }
 
+    /** Upper bound on {@code v1} signature tokens checked per request to bound CPU against hostile headers. */
+    static final int MAX_V1_SIGNATURES = 16;
+
+    private static final String VERSION_PREFIX = "v1,";
+
     /**
      * Whether the computed {@code v1} signature for this secret matches any of the (space-separated) header
      * signatures. Package-private so {@link DefaultWebhookVerifier} can reuse it per-secret without re-running
      * the shared header/timestamp skeleton.
      */
-    private static final String VERSION_PREFIX = "v1,";
-
     boolean matches(String secret, String rawBody, WebhookSignatureHeaders parsed) {
-        byte[] expectedBytes = expectedSignature(secret, parsed.msgId, parsed.timestamp, rawBody)
-                .getBytes(StandardCharsets.UTF_8);
-        for (String versioned : parsed.signature.split(" ")) {
+        Webhook webhook = webhooks.computeIfAbsent(secret, HmacWebhookVerifier::newWebhook);
+        List<String> candidates = new ArrayList<>();
+        for (String versioned : parsed.tokens) {
             if (!versioned.startsWith(VERSION_PREFIX)) {
                 continue;
             }
-            if (MessageDigest.isEqual(
-                    versioned.substring(VERSION_PREFIX.length()).getBytes(StandardCharsets.UTF_8), expectedBytes)) {
+            candidates.add(versioned.substring(VERSION_PREFIX.length()));
+            if (candidates.size() == MAX_V1_SIGNATURES) {
+                break;
+            }
+        }
+        if (candidates.isEmpty()) {
+            return false;
+        }
+        byte[] expectedBytes = expectedSignature(webhook, parsed.msgId, parsed.timestamp, rawBody)
+                .getBytes(StandardCharsets.UTF_8);
+        for (String candidate : candidates) {
+            if (MessageDigest.isEqual(candidate.getBytes(StandardCharsets.UTF_8), expectedBytes)) {
                 return true;
             }
         }
@@ -91,9 +105,8 @@ public class HmacWebhookVerifier implements WebhookVerifier {
     }
 
     /** The bare (unversioned) expected signature for the inputs, via the official library's HMAC. */
-    private String expectedSignature(String secret, String msgId, long timestamp, String rawBody) {
+    private String expectedSignature(Webhook webhook, String msgId, long timestamp, String rawBody) {
         try {
-            Webhook webhook = webhooks.computeIfAbsent(secret, HmacWebhookVerifier::newWebhook);
             // Webhook#sign returns "v1,<base64>"; we compare the base64 portion.
             String signed = doSign(webhook, msgId, timestamp, rawBody);
             return signed.substring(signed.indexOf(',') + 1);

@@ -4,7 +4,8 @@ import com.jinternals.webhooks.consumer.metrics.WebhookMetrics;
 import com.jinternals.webhooks.consumer.model.WebhookMetadata;
 import java.time.Clock;
 import java.time.Duration;
-import java.util.Optional;
+import java.time.Instant;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,11 +36,18 @@ public class ReceiveObservabilityRecorder {
     }
 
     public void record(String type, WebhookMetadata metadata) {
-        Optional<Duration> deliveryLag = metadata.deliveryLag(clock);
-        Optional<Duration> eventLag = metadata.eventLag(clock);
+        Instant now = clock.instant();
+        Instant attemptTimestamp = metadata.attemptTimestamp();
+        Instant eventTimestamp = metadata.eventTimestamp();
+        Duration deliveryLag = attemptTimestamp != null ? Duration.between(attemptTimestamp, now) : null;
+        Duration eventLag = eventTimestamp != null ? Duration.between(eventTimestamp, now) : null;
         metrics.received(type);
-        deliveryLag.ifPresent(metrics::deliveryLag);
-        eventLag.ifPresent(metrics::eventLag);
+        if (deliveryLag != null) {
+            metrics.deliveryLag(deliveryLag);
+        }
+        if (eventLag != null) {
+            metrics.eventLag(eventLag);
+        }
         log.info(
                 "Webhook verified type={} deliveryLag={} eventLag={}",
                 type,
@@ -47,8 +55,8 @@ public class ReceiveObservabilityRecorder {
                 formatLag(eventLag));
     }
 
-    private static String formatLag(Optional<Duration> lag) {
-        return lag.map(d -> saturatingMillis(d) + "ms").orElse("n/a");
+    private static String formatLag(@Nullable Duration lag) {
+        return lag != null ? saturatingMillis(lag) + "ms" : "n/a";
     }
 
     static long saturatingMillis(Duration duration) {

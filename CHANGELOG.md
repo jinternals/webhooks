@@ -114,5 +114,13 @@ contain breaking changes; they will always be called out under **Changed** or **
   requests before opening the servlet `InputStream`, and included `spring-boot-starter-restclient`
   (`spring-boot-starter-jackson`) in `webhooks-producer-autoconfigure` for out-of-the-box `java.time`
   serialization in non-web apps.
+- Configured virtual-thread `HttpClient` executor on `webhookProducerHttpClient` (preventing per-request OS
+  thread creation in `JdkClientHttpRequestFactory`), completed JSpecify `@NullMarked` / `@Nullable` coverage
+  across all 28 packages (`lombok.addNullAnnotations = jspecify`), injected `JsonMapper` in auto-configurations,
+  added `Automatic-Module-Name` manifests and reproducible `<project.build.outputTimestamp>`, capped
+  `webhook-id`/`webhook-signature` lengths and `v1` signature counts (`16`), unwrapped checked handler
+  exceptions (`UndeclaredThrowableException`) in `AsyncHandlerExecutor`, cached parsed `URI`s and `@WebhookClient`
+  `default`-method `MethodHandle`s, skipped throwaway enqueue signing on `AttemptAwareWebhookTransport` queue
+  transports, and hardened NATS/auth/SPI samples and non-root Dockerfiles.
 
 [Unreleased]: https://github.com/jinternals/webhooks/commits/main

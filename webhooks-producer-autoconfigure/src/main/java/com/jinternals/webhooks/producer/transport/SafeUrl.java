@@ -126,7 +126,9 @@ public final class SafeUrl {
         }
         String sanitized = sanitize(url);
         String withoutFragment = FRAGMENT.matcher(url).replaceFirst("");
-        String replaced = message.replace(url, sanitized).replace(withoutFragment, sanitized);
+        String replaced = message.replace(url, sanitized)
+                .replace(withoutFragment, sanitized)
+                .replace(stripUserInfo(withoutFragment), sanitized);
         return EMBEDDED_USERINFO.matcher(replaced).replaceAll("$1");
     }
 }

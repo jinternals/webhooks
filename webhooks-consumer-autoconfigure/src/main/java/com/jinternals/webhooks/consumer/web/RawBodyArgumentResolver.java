@@ -5,6 +5,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import org.jspecify.annotations.Nullable;
 import org.springframework.core.MethodParameter;
 import org.springframework.web.bind.support.WebDataBinderFactory;
 import org.springframework.web.context.request.NativeWebRequest;
@@ -38,9 +39,9 @@ class RawBodyArgumentResolver implements HandlerMethodArgumentResolver {
     @Override
     public Object resolveArgument(
             MethodParameter parameter,
-            ModelAndViewContainer mavContainer,
+            @Nullable ModelAndViewContainer mavContainer,
             NativeWebRequest webRequest,
-            WebDataBinderFactory binderFactory)
+            @Nullable WebDataBinderFactory binderFactory)
             throws Exception {
         HttpServletRequest request = webRequest.getNativeRequest(HttpServletRequest.class);
         if (request == null) {
@@ -57,8 +58,8 @@ class RawBodyArgumentResolver implements HandlerMethodArgumentResolver {
      * {@link PayloadTooLargeException} without buffering the whole body.
      */
     private String readBounded(InputStream in) throws Exception {
-        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-        byte[] chunk = new byte[8192];
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream(1024);
+        byte[] chunk = new byte[4096];
         long total = 0;
         int read;
         while ((read = in.read(chunk)) != -1) {

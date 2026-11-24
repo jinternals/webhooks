@@ -27,10 +27,11 @@ import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
+import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration;
 import org.springframework.boot.webmvc.autoconfigure.WebMvcAutoConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
-import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Web-layer auto-configuration for the Standard Webhooks consumer (see SPEC.md §14), activated only in a
@@ -47,7 +48,8 @@ import tools.jackson.databind.ObjectMapper;
  *       intercepts the host app's own controllers.</li>
  * </ul>
  */
-@AutoConfiguration(after = {WebMvcAutoConfiguration.class, WebhookConsumerAutoConfiguration.class})
+@AutoConfiguration(
+        after = {JacksonAutoConfiguration.class, WebMvcAutoConfiguration.class, WebhookConsumerAutoConfiguration.class})
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @ConditionalOnBean(name = "requestMappingHandlerMapping")
 public class WebhookConsumerWebAutoConfiguration {
@@ -71,7 +73,7 @@ public class WebhookConsumerWebAutoConfiguration {
             ObjectProvider<SecretProvider<Endpoint>> secretProvider,
             WebhookTypeRegistry webhookTypeRegistry,
             PayloadValidator payloadValidator,
-            ObjectMapper objectMapper,
+            JsonMapper jsonMapper,
             WebhookProperties properties,
             IdempotencyGuard idempotencyGuard,
             MetadataFactory metadataFactory,
@@ -81,15 +83,14 @@ public class WebhookConsumerWebAutoConfiguration {
             ObjectProvider<Clock> clockProvider) {
         WebhookBodyVerifier bodyVerifier =
                 new WebhookBodyVerifier(verifier, secretProvider.getIfAvailable(ConfigSecretProvider::new), metrics);
-        EventResolver eventResolver =
-                new EventResolver(webhookTypeRegistry, payloadValidator, objectMapper, properties);
+        EventResolver eventResolver = new EventResolver(webhookTypeRegistry, payloadValidator, jsonMapper, properties);
         ReceiveObservabilityRecorder observabilityRecorder =
                 new ReceiveObservabilityRecorder(metrics, clockProvider.getIfAvailable(Clock::systemUTC));
         TimedHandlerDispatcher eventDispatcher = new TimedHandlerDispatcher(handlerExecutor, dispatcher, metrics);
         return new WebhookReceivePipeline(
                 bodyVerifier,
                 idempotencyGuard,
-                objectMapper,
+                jsonMapper,
                 eventResolver,
                 metadataFactory,
                 observabilityRecorder,

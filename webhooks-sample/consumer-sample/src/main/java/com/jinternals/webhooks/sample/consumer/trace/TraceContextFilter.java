@@ -50,17 +50,19 @@ public class TraceContextFilter extends OncePerRequestFilter {
     /** MDC key for the webhook id; referenced by the log pattern ({@code %X{webhook.id}}). */
     public static final String WEBHOOK_ID_MDC_KEY = "webhook.id";
 
+    private static final int MAX_MDC_VALUE_LENGTH = 128;
+
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
         String traceId = request.getHeader(TRACE_HEADER);
-        if (traceId == null || traceId.isBlank()) {
+        if (!isSafeMdcValue(traceId)) {
             traceId = UUID.randomUUID().toString();
         }
         MDC.put(TRACE_MDC_KEY, traceId);
 
         String webhookId = request.getHeader(WEBHOOK_ID_HEADER);
-        if (webhookId != null && !webhookId.isBlank()) {
+        if (isSafeMdcValue(webhookId)) {
             MDC.put(WEBHOOK_ID_MDC_KEY, webhookId);
         }
         try {
@@ -69,5 +71,19 @@ public class TraceContextFilter extends OncePerRequestFilter {
             MDC.remove(TRACE_MDC_KEY);
             MDC.remove(WEBHOOK_ID_MDC_KEY);
         }
+    }
+
+    /** Rejects blank, oversized, or control/whitespace characters so untrusted headers cannot forge log lines. */
+    private static boolean isSafeMdcValue(String value) {
+        if (value == null || value.isEmpty() || value.length() > MAX_MDC_VALUE_LENGTH) {
+            return false;
+        }
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            if (c <= ' ' || c >= 0x7f) {
+                return false;
+            }
+        }
+        return true;
     }
 }

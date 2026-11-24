@@ -67,7 +67,12 @@ public class NatsKvIdempotencyGuard implements IdempotencyGuard {
     @Override
     public boolean tryBegin(@Nullable String webhookId) {
         if (webhookId == null || webhookId.isBlank()) {
+            currentLease.remove();
             return true;
+        }
+        OwnedLease existing = currentLease.get();
+        if (existing != null && !webhookId.equals(existing.webhookId())) {
+            currentLease.remove();
         }
         String key = encodeKey(webhookId);
         try {
@@ -137,24 +142,24 @@ public class NatsKvIdempotencyGuard implements IdempotencyGuard {
     @Override
     public void release(@Nullable String webhookId) {
         if (webhookId == null || webhookId.isBlank()) {
+            currentLease.remove();
             return;
         }
         OwnedLease lease = currentLease.get();
+        currentLease.remove();
         boolean matchedLease = lease != null && webhookId.equals(lease.webhookId());
-        String key = matchedLease ? lease.encodedKey() : encodeKey(webhookId);
-        Long ownedRevision = matchedLease ? lease.revision() : null;
-        if (matchedLease) {
-            currentLease.remove();
+        if (!matchedLease) {
+            log.debug(
+                    "Skipping idempotency release for webhook-id={} without an owned lease on this thread", webhookId);
+            return;
         }
+        String key = lease.encodedKey();
+        long ownedRevision = lease.revision();
         try {
-            if (ownedRevision != null) {
-                // Revision-checked CAS delete: never wipe out a sibling pod's reclaimed lease or "processed" state!
-                keyValue.delete(key, ownedRevision);
-            } else {
-                keyValue.delete(key);
-            }
+            // Revision-checked CAS delete: never wipe out a sibling pod's reclaimed lease or "processed" state!
+            keyValue.delete(key, ownedRevision);
         } catch (JetStreamApiException e) {
-            if (ownedRevision != null && e.getApiErrorCode() == JS_WRONG_LAST_SEQUENCE) {
+            if (e.getApiErrorCode() == JS_WRONG_LAST_SEQUENCE) {
                 log.info("Skipping stale idempotency release for webhook-id={} (lease already reclaimed)", webhookId);
                 return;
             }

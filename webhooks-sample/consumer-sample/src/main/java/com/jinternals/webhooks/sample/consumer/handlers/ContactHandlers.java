@@ -27,7 +27,9 @@ public class ContactHandlers {
      */
     @WebhookHandler
     public void onCreated(ContactCreated event, WebhookMetadata metadata) {
-        log.info("contact.created id={} event={}", event.getId(), metadata.redactedEvent());
+        if (log.isInfoEnabled()) {
+            log.info("contact.created id={} event={}", event.getId(), metadata.redactedEvent());
+        }
     }
 
     /**

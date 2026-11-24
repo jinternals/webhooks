@@ -8,7 +8,9 @@ import java.lang.reflect.Modifier;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.beans.factory.support.AbstractBeanDefinition;
 import org.springframework.beans.factory.support.BeanDefinitionBuilder;
@@ -18,6 +20,7 @@ import org.springframework.context.annotation.ImportBeanDefinitionRegistrar;
 import org.springframework.core.type.AnnotationMetadata;
 import org.springframework.core.type.filter.AnnotationTypeFilter;
 import org.springframework.util.ClassUtils;
+import org.springframework.util.ReflectionUtils;
 
 /**
  * Discovers {@code @WebhookClient} interfaces and registers a {@link WebhookClientFactoryBean} for each
@@ -54,7 +57,7 @@ public class WebhookClientRegistrar implements ImportBeanDefinitionRegistrar {
         ClassPathScanningCandidateComponentProvider scanner = clientScanner();
         for (String basePackage : resolveBasePackages(metadata, attributes)) {
             for (BeanDefinition candidate : scanner.findCandidateComponents(basePackage)) {
-                clientClassNames.add(candidate.getBeanClassName());
+                clientClassNames.add(Objects.requireNonNull(candidate.getBeanClassName()));
             }
         }
 
@@ -64,7 +67,8 @@ public class WebhookClientRegistrar implements ImportBeanDefinitionRegistrar {
     }
 
     /** The scan targets: anchors' packages + string packages; or the annotated class's package if none set. */
-    static Set<String> resolveBasePackages(AnnotationMetadata metadata, Map<String, Object> attributes) {
+    static Set<String> resolveBasePackages(
+            AnnotationMetadata metadata, @Nullable Map<String, @Nullable Object> attributes) {
         Set<String> packages = new LinkedHashSet<>();
         for (Class<?> anchor : attribute(attributes, "basePackageClasses")) {
             packages.add(anchor.getPackageName());
@@ -180,6 +184,9 @@ public class WebhookClientRegistrar implements ImportBeanDefinitionRegistrar {
         if (Modifier.isStatic(method.getModifiers())) {
             return false;
         }
+        if (ReflectionUtils.isObjectMethod(method)) {
+            return false;
+        }
         return !method.isDefault();
     }
 
@@ -210,18 +217,18 @@ public class WebhookClientRegistrar implements ImportBeanDefinitionRegistrar {
     // When @EnableWebhookClients is absent, metadata.getAnnotationAttributes(...) returns null; otherwise
     // Spring always populates every attribute with its (possibly empty) default array, so a present map
     // never holds a null value for a declared attribute.
-    private static Class<?>[] attribute(Map<String, Object> attributes, String name) {
+    private static Class<?>[] attribute(@Nullable Map<String, @Nullable Object> attributes, String name) {
         if (attributes == null) {
             return new Class<?>[0];
         }
-        return (Class<?>[]) attributes.get(name);
+        return (Class<?>[]) Objects.requireNonNull(attributes.get(name));
     }
 
-    private static String[] stringAttribute(Map<String, Object> attributes, String name) {
+    private static String[] stringAttribute(@Nullable Map<String, @Nullable Object> attributes, String name) {
         if (attributes == null) {
             return new String[0];
         }
-        return (String[]) attributes.get(name);
+        return (String[]) Objects.requireNonNull(attributes.get(name));
     }
 
     private void registerClient(BeanDefinitionRegistry registry, String className) {

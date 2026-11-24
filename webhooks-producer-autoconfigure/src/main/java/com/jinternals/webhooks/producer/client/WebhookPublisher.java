@@ -18,6 +18,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.Supplier;
+import org.jspecify.annotations.Nullable;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
@@ -110,7 +111,7 @@ public class WebhookPublisher {
         }
 
         if (transport instanceof AttemptAwareWebhookTransport attemptAware) {
-            attemptAware.sendPerAttempt(destination.getUrl(), headersSupplier, body);
+            attemptAware.sendPerAttempt(destination.getUrl(), messageId, headersSupplier, body);
         } else {
             transport.send(destination.getUrl(), headersSupplier.get(), body);
         }
@@ -132,7 +133,7 @@ public class WebhookPublisher {
     }
 
     private Map<String, List<String>> signedHeaders(
-            String endpointId, List<String> secrets, String messageId, String body) {
+            @Nullable String endpointId, List<String> secrets, String messageId, String body) {
         long attemptSeconds = clock.instant().getEpochSecond();
         String signature = sign(secrets, endpointId, messageId, attemptSeconds, body);
         return Map.of(
@@ -155,13 +156,14 @@ public class WebhookPublisher {
      * the same payload, so a receiver that accepts the primary <em>or</em> any additional secret
      * verifies successfully — zero-downtime blue/green rotation.
      */
-    private String sign(List<String> secrets, String endpointId, String messageId, long timestamp, String payload) {
-        String combined = null;
+    private String sign(
+            List<String> secrets, @Nullable String endpointId, String messageId, long timestamp, String payload) {
+        @Nullable String combined = null;
         for (String secret : secrets) {
             String sig = signer.sign(secret, endpointId, messageId, timestamp, payload);
             combined = (combined == null) ? sig : combined + " " + sig;
         }
-        return combined;
+        return java.util.Objects.requireNonNull(combined);
     }
 
     /** The {@code type} string from the event's {@link WebhookType} annotation, cached per event class. */

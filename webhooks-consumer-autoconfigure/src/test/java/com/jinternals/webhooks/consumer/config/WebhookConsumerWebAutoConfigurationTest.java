@@ -128,6 +128,30 @@ class WebhookConsumerWebAutoConfigurationTest {
         verify(metrics).received("contact.created");
         verify(metrics).deliveryLag(any());
         verify(metrics).eventLag(any());
+
+        // Even if the host JsonMapper disables FAIL_ON_TRAILING_TOKENS, the pipeline rejects trailing tokens!
+        JsonMapper lenientMapper = JsonMapper.builder()
+                .disable(tools.jackson.databind.DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
+                .build();
+        WebhookReceivePipeline strictPipeline = autoConfig.webhookReceivePipeline(
+                verifier,
+                emptySecretProvider(),
+                typeRegistry,
+                mock(PayloadValidator.class),
+                lenientMapper,
+                new WebhookProperties(),
+                idempotency,
+                metadataFactory,
+                sync,
+                dispatcher,
+                metrics,
+                clockProvider);
+        assertThatThrownBy(() -> strictPipeline.process(
+                        req,
+                        ep,
+                        "{\"type\":\"contact.created\",\"data\":{\"id\":\"1\"}} trailing",
+                        Map.of("webhook-id", List.of("msg_2"), "webhook-timestamp", List.of("1700000000"))))
+                .isInstanceOf(com.jinternals.webhooks.consumer.web.error.InvalidPayloadException.class);
     }
 
     @Test

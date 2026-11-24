@@ -19,5 +19,6 @@ RUN --mount=type=cache,target=/root/.m2 \
 FROM eclipse-temurin:21-jre
 WORKDIR /app
 COPY --from=build /workspace/app.jar app.jar
+USER ubuntu
 EXPOSE 9092
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]

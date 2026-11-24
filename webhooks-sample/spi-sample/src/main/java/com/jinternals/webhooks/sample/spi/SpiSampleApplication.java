@@ -20,6 +20,7 @@ import com.jinternals.webhooks.producer.transport.WebhookDeliveryListener;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.atomic.AtomicInteger;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -116,14 +117,16 @@ public class SpiSampleApplication {
     public static class RecordedHooks implements HandlerFailureListener, WebhookDeliveryListener {
         private static final int MAX_RETAINED = 1_000;
         private final ConcurrentLinkedDeque<DeliveryFailure> deliveryFailures = new ConcurrentLinkedDeque<>();
+        private final AtomicInteger deliveryFailureCount = new AtomicInteger();
         private final ConcurrentLinkedDeque<String> asyncHandlerFailures = new ConcurrentLinkedDeque<>();
+        private final AtomicInteger asyncFailureCount = new AtomicInteger();
 
         @Override
         public void onDeliveryFailed(DeliveryFailure failure) {
             log.warn("Captured abandoned delivery url={} reason={}", SafeUrl.sanitize(failure.url()), failure.reason());
             deliveryFailures.addLast(failure);
-            while (deliveryFailures.size() > MAX_RETAINED) {
-                deliveryFailures.pollFirst();
+            if (deliveryFailureCount.incrementAndGet() > MAX_RETAINED && deliveryFailures.pollFirst() != null) {
+                deliveryFailureCount.decrementAndGet();
             }
         }
 
@@ -139,8 +142,8 @@ public class SpiSampleApplication {
 
         private void recordAsync(String entry) {
             asyncHandlerFailures.addLast(entry);
-            while (asyncHandlerFailures.size() > MAX_RETAINED) {
-                asyncHandlerFailures.pollFirst();
+            if (asyncFailureCount.incrementAndGet() > MAX_RETAINED && asyncHandlerFailures.pollFirst() != null) {
+                asyncFailureCount.decrementAndGet();
             }
         }
 
@@ -157,14 +160,17 @@ public class SpiSampleApplication {
     public static class ContactHandlers {
         private static final int MAX_RETAINED = 1_000;
         private final ConcurrentLinkedDeque<WebhookMetadata> received = new ConcurrentLinkedDeque<>();
+        private final AtomicInteger retainedCount = new AtomicInteger();
 
         @WebhookHandler
         public void onCreated(ContactCreated event, WebhookMetadata metadata) {
             received.addLast(metadata);
-            while (received.size() > MAX_RETAINED) {
-                received.pollFirst();
+            if (retainedCount.incrementAndGet() > MAX_RETAINED && received.pollFirst() != null) {
+                retainedCount.decrementAndGet();
             }
-            log.info("Handled {} via custom SPIs: {}", metadata.webhookId(), metadata.redactedEvent());
+            if (log.isInfoEnabled()) {
+                log.info("Handled {} via custom SPIs: {}", metadata.webhookId(), metadata.redactedEvent());
+            }
         }
 
         public List<WebhookMetadata> received() {
@@ -173,6 +179,7 @@ public class SpiSampleApplication {
 
         public void clear() {
             received.clear();
+            retainedCount.set(0);
         }
     }
 
