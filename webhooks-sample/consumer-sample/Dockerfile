@@ -6,7 +6,7 @@
 #
 #   docker build -f webhooks-sample/consumer-sample/Dockerfile -t webhooks-consumer-sample .
 #
-FROM maven:3.9-eclipse-temurin-21 AS build
+FROM maven:3.9-eclipse-temurin-26 AS build
 WORKDIR /workspace
 
 # 1) Build + install the libraries into the local repo. The root reactor lists all library modules, so
