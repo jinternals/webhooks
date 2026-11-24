@@ -20,13 +20,10 @@
     </properties>
 
     <dependencies>
-        <!-- Shared wire model, @WebhookType/@Redact, redactor, type registry, secret SPI. Explicit version
-             (not inherited from the reactor's dependencyManagement) so the INSTALLED pom is self-contained:
-             external consumers resolving this artifact still pull webhooks-core transitively. -->
+        <!-- Shared wire model, @WebhookType/@Redact, redactor, type registry, secret SPI (version managed by parent pom). -->
         <dependency>
             <groupId>io.github.jinternals</groupId>
             <artifactId>webhooks-core</artifactId>
-            <version>${project.version}</version>
         </dependency>
 
         <!-- Spring MVC: the listener registers POST mappings at runtime. -->

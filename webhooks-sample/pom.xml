@@ -56,6 +56,11 @@
         <dependencies>
             <dependency>
                 <groupId>io.github.jinternals</groupId>
+                <artifactId>webhooks-core</artifactId>
+                <version>${webhooks.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.jinternals</groupId>
                 <artifactId>webhooks-consumer-starter</artifactId>
                 <version>${webhooks.version}</version>
             </dependency>
@@ -68,6 +73,16 @@
                 <groupId>io.nats</groupId>
                 <artifactId>jnats</artifactId>
                 <version>${jnats.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.google.errorprone</groupId>
+                <artifactId>error_prone_core</artifactId>
+                <version>${errorprone.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.uber.nullaway</groupId>
+                <artifactId>nullaway</artifactId>
+                <version>${nullaway.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
@@ -105,12 +120,10 @@
                             <path>
                                 <groupId>com.google.errorprone</groupId>
                                 <artifactId>error_prone_core</artifactId>
-                                <version>${errorprone.version}</version>
                             </path>
                             <path>
                                 <groupId>com.uber.nullaway</groupId>
                                 <artifactId>nullaway</artifactId>
-                                <version>${nullaway.version}</version>
                             </path>
                         </annotationProcessorPaths>
                     </configuration>

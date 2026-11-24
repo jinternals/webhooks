@@ -1220,10 +1220,11 @@ destination points at the consumer app's `/webhooks/crm` endpoint, so `POST /pub
 publishes a real signed webhook the consumer side then receives — a full cross-library round-trip (brought
 up together and asserted by `webhooks-sample/integration-test.sh`).
 
-> **Published POMs are self-contained.** The consumer and producer autoconfigure modules declare their
-> `webhooks-core` dependency with an explicit `<version>` (not inherited from the reactor's
-> `dependencyManagement`), so an app resolving the starters as published artifacts — as the sample apps do
-> — still pulls `webhooks-core` (and the consumer's `spring-boot-starter-webmvc`) transitively.
+> **Centralized parent `dependencyManagement`.** All dependency and plugin versions are managed in the
+> published `webhooks` parent POM's `<dependencyManagement>` (importing `spring-boot-dependencies` as a BOM
+> alongside internal `webhooks-*` and third-party coordinates) and `<pluginManagement>`, so child module POMs
+> carry zero inline `<version>` tags while downstream apps resolving the starters still inherit every
+> transitive version cleanly.
 
 > **Shared core, no config leakage.** `webhooks-core` is config-free: the secret SPI is a generic
 > `SecretProvider<T>` so each side binds its own target (`SecretProvider<Endpoint>` on the consumer,
