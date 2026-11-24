@@ -231,7 +231,8 @@ public class NatsInboundWorker implements SmartLifecycle {
                 ? webhookId
                 : java.util.UUID.randomUUID().toString();
         try {
-            PublishOptions options = PublishOptions.builder().stream(properties.getDlqStream())
+            PublishOptions options = PublishOptions.builder()
+                    .expectedStream(properties.getDlqStream())
                     .messageId("dlq_" + dedupKey)
                     .build();
             jetStream.publish(properties.getDlqSubject(), rawPayload, options);

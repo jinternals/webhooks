@@ -77,7 +77,8 @@ public class NatsJetStreamWebhookTransport implements AttemptAwareWebhookTranspo
 
         try {
             byte[] payload = messageWriter.writeValueAsBytes(new OutboundWebhookMessage(url, webhookId, body, traceId));
-            PublishOptions options = PublishOptions.builder().stream(properties.getStream())
+            PublishOptions options = PublishOptions.builder()
+                    .expectedStream(properties.getStream())
                     .messageId(webhookId)
                     .build();
             PublishAck ack = jetStream.publish(properties.getSubject(), payload, options);

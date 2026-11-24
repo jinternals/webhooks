@@ -44,7 +44,7 @@
         <!-- Version of the published webhooks-* libraries the samples consume. -->
         <webhooks.version>0.1.0-SNAPSHOT</webhooks.version>
         <!-- NATS Java client (JetStream + KeyValue) for the zero-loss queue sample apps. -->
-        <jnats.version>2.20.5</jnats.version>
+        <jnats.version>2.27.0</jnats.version>
         <!-- Code formatting, matching the libraries' house style (Palantir Java Format: 4-space, 120-col). -->
         <spotless.version>3.12.0</spotless.version>
         <!-- Compile-time JSpecify nullness verification against the published webhooks-* JARs. -->

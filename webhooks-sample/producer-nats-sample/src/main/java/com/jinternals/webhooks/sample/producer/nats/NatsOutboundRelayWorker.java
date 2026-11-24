@@ -344,7 +344,8 @@ public class NatsOutboundRelayWorker implements SmartLifecycle {
                 ? webhookId
                 : java.util.UUID.randomUUID().toString();
         try {
-            PublishOptions options = PublishOptions.builder().stream(natsProperties.getDlqStream())
+            PublishOptions options = PublishOptions.builder()
+                    .expectedStream(natsProperties.getDlqStream())
                     .messageId("dlq_" + dedupKey)
                     .build();
             jetStream.publish(natsProperties.getDlqSubject(), rawPayload, options);

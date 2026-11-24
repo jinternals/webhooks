@@ -204,7 +204,7 @@ WebhookTransport natsWebhookTransport(JetStream jetStream, ObjectMapper mapper) 
             byte[] payload = mapper.writeValueAsBytes(
                     new OutboundWebhookMessage(url, webhookId, body, MDC.get("traceId")));
             jetStream.publish("webhooks.outbound.send", payload,
-                    PublishOptions.builder().stream("WEBHOOKS_OUTBOUND").messageId(webhookId).build());
+                    PublishOptions.builder().expectedStream("WEBHOOKS_OUTBOUND").messageId(webhookId).build());
         } catch (Exception e) {
             throw new WebhookDeliveryException("Failed to enqueue webhook to NATS JetStream", e);
         }

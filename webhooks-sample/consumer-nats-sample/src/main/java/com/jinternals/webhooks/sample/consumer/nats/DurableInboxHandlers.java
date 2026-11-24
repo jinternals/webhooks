@@ -48,7 +48,7 @@ public class DurableInboxHandlers {
                 event);
         try {
             byte[] bytes = inboundWriter.writeValueAsBytes(inbound);
-            PublishOptions.Builder opts = PublishOptions.builder().stream(properties.getStream());
+            PublishOptions.Builder opts = PublishOptions.builder().expectedStream(properties.getStream());
             if (metadata.webhookId() != null && !metadata.webhookId().isBlank()) {
                 opts.messageId(metadata.webhookId());
             }
