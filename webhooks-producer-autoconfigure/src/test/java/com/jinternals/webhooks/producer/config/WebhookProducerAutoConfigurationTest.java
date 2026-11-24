@@ -372,8 +372,8 @@ class WebhookProducerAutoConfigurationTest {
         WebhookProducerProperties oneAttempt = properties();
         oneAttempt.getRetry().setMaxAttempts(1);
         RestClient dateFailingClient = RestClient.builder()
-                .requestFactory(
-                        (uri, method) -> new org.springframework.mock.http.client.MockClientHttpRequest(method, uri) {
+                .requestFactory((uri, method) ->
+                        new org.springframework.mock.http.client.MockClientHttpRequest(method, uri) {
                             @Override
                             protected org.springframework.http.client.ClientHttpResponse executeInternal() {
                                 org.springframework.mock.http.client.MockClientHttpResponse resp =

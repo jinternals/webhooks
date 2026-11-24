@@ -40,18 +40,20 @@ class WebhookPropertiesBindTimeValidationTest {
 
     @Test
     void contextFailsWhenMaxBodySizeIsZero() {
-        runner.withPropertyValues("webhooks.consumer.max-body-size=0B").run(context -> assertThat(context)
-                .hasFailed()
-                .getFailure()
-                .hasStackTraceContaining("max-body-size must be positive"));
+        runner.withPropertyValues("webhooks.consumer.max-body-size=0B")
+                .run(context -> assertThat(context)
+                        .hasFailed()
+                        .getFailure()
+                        .hasStackTraceContaining("max-body-size must be positive"));
     }
 
     @Test
     void contextFailsWhenHandlerTimeoutIsZero() {
-        runner.withPropertyValues("webhooks.consumer.handler.timeout=0s").run(context -> assertThat(context)
-                .hasFailed()
-                .getFailure()
-                .hasStackTraceContaining("timeout must be positive"));
+        runner.withPropertyValues("webhooks.consumer.handler.timeout=0s")
+                .run(context -> assertThat(context)
+                        .hasFailed()
+                        .getFailure()
+                        .hasStackTraceContaining("timeout must be positive"));
     }
 
     @Test

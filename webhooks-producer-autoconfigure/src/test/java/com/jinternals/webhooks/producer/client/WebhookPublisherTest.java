@@ -225,8 +225,9 @@ class WebhookPublisherTest {
 
         Map<String, List<String>> headers = sentHeaders.getValue();
         assertThat(headers).doesNotContainKey(WebhookHeaders.SIGNATURE);
-        assertThat(headers.get(WebhookHeaders.ID)).hasSize(1).allSatisfy(id -> assertThat(id)
-                .startsWith("msg_"));
+        assertThat(headers.get(WebhookHeaders.ID))
+                .hasSize(1)
+                .allSatisfy(id -> assertThat(id).startsWith("msg_"));
         assertThat(headers.get(WebhookHeaders.TIMESTAMP)).hasSize(1);
         assertThat(sentUrl.getValue()).isEqualTo("https://crm.example.com/webhooks");
         // Body is still the full signed-shape envelope, just delivered unsigned.

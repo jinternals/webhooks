@@ -49,30 +49,36 @@ public final class MicrometerWebhookMetrics implements WebhookMetrics {
     @Override
     public void received(String type) {
         receivedCounters
-                .computeIfAbsent(type, t -> Counter.builder("webhook.received")
-                        .description("Verified webhooks accepted for dispatch")
-                        .tag("type", t)
-                        .register(registry))
+                .computeIfAbsent(
+                        type,
+                        t -> Counter.builder("webhook.received")
+                                .description("Verified webhooks accepted for dispatch")
+                                .tag("type", t)
+                                .register(registry))
                 .increment();
     }
 
     @Override
     public void verificationFailed(String reason) {
         verificationFailedCounters
-                .computeIfAbsent(reason, r -> Counter.builder("webhook.verification.failed")
-                        .description("Inbound webhooks that failed verification")
-                        .tag("reason", r)
-                        .register(registry))
+                .computeIfAbsent(
+                        reason,
+                        r -> Counter.builder("webhook.verification.failed")
+                                .description("Inbound webhooks that failed verification")
+                                .tag("reason", r)
+                                .register(registry))
                 .increment();
     }
 
     @Override
     public void handled(String type, Duration duration) {
         handleTimers
-                .computeIfAbsent(type, t -> Timer.builder("webhook.handle.duration")
-                        .description("Handler execution time")
-                        .tag("type", t)
-                        .register(registry))
+                .computeIfAbsent(
+                        type,
+                        t -> Timer.builder("webhook.handle.duration")
+                                .description("Handler execution time")
+                                .tag("type", t)
+                                .register(registry))
                 .record(duration);
     }
 
