@@ -36,7 +36,7 @@ Three workflows under [`.github/workflows/`](../../.github/workflows) handle con
    - Verifies that `vX.Y.Z` matches `<version>` in [`pom.xml`](../../pom.xml) and `<webhooks.version>` in [`webhooks-sample/pom.xml`](../../webhooks-sample/pom.xml), rejects `-SNAPSHOT` versions, and verifies the commit is reachable from `origin/main` or an `origin/N.x` / `origin/N.M.x` maintenance branch.
    - Runs the full quality gate and sample + AOT verification on the tagged commit.
    - GPG-signs and uploads the release bundle (`mvn -Prelease deploy -DskipTests`) to Sonatype Central Portal (`autoPublish` controlled by repo variable `CENTRAL_AUTO_PUBLISH`, defaulting to `false`).
-   - Publishes the GitHub Release from [`CHANGELOG.md`](../../CHANGELOG.md) using `--latest=legacy` (SemVer comparison) so a `v1.0.4` security backport on `1.0.x` never steals the **Latest** badge from `v2.0.0`.
+   - Publishes the GitHub Release from [`CHANGELOG.md`](../../CHANGELOG.md) using GitHub's automatic latest-release selection (date + SemVer) so a `v1.0.4` security backport on `1.0.x` never steals the **Latest** badge from `v2.0.0`.
 3. **`security-scan.yml` (weekly Monday 03:00 UTC + manual dispatch):**
    - Dynamically discovers `main` plus every active `N.x` / `N.M.x` branch on `origin` (excluding any comma-separated branches in repo variable `EOL_BRANCHES`) and runs OWASP `dependency-check` (`CVSS >= 7` gate) on every supported release line in parallel.
 

@@ -120,12 +120,10 @@ jobs:
             RELEASE_FLAGS+=(--generate-notes)
           fi
 
-          # `--latest=legacy` uses SemVer comparison across all releases so a backport patch (e.g. v1.0.4 on
-          # Spring Boot 4.x) never steals the "Latest" badge after v2.0.0 (Spring Boot 5.x) has shipped.
+          # Omitting `--latest` uses GitHub's default automatic selection (date + SemVer) so a backport patch
+          # (e.g. v1.0.4 on Spring Boot 4.x) does not steal the "Latest" badge after v2.0.0 (Spring Boot 5.x) ships.
           if [[ "${PRERELEASE}" == "true" ]]; then
             RELEASE_FLAGS+=(--prerelease)
-          else
-            RELEASE_FLAGS+=(--latest=legacy)
           fi
 
           if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
