@@ -8,6 +8,8 @@ generations (`1.x` for Spring Boot `4.x`, `2.x` for Spring Boot `5.x`).
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-11-25
+
 ### Added
 
 - Initial public release of the Webhooks Toolkit for Spring Boot (`io.github.jinternals`):
@@ -123,4 +125,5 @@ generations (`1.x` for Spring Boot `4.x`, `2.x` for Spring Boot `5.x`).
   `default`-method `MethodHandle`s, skipped throwaway enqueue signing on `AttemptAwareWebhookTransport` queue
   transports, and hardened NATS/auth/SPI samples and non-root Dockerfiles.
 
-[Unreleased]: https://github.com/jinternals/webhooks/commits/main
+[Unreleased]: https://github.com/jinternals/webhooks/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/jinternals/webhooks/releases/tag/v1.0.0
