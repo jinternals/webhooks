@@ -13,6 +13,13 @@ on:
 permissions:
   contents: read
 
+env:
+  # Retry transient Maven Central HTTP 429 / 503 responses on shared GitHub Actions runner IPs.
+  MAVEN_OPTS: >-
+    -Daether.transport.http.retryHandler.count=5
+    -Daether.transport.http.retryHandler.interval=5000
+    -Daether.transport.http.retryHandler.serviceUnavailable=429,503
+
 jobs:
   discover-branches:
     name: Discover supported branches

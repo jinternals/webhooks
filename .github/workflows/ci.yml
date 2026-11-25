@@ -17,6 +17,13 @@ concurrency:
   # Cancel superseded PR runs immediately, but never abort an in-flight push / snapshot deploy on main or *.x.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+env:
+  # Retry transient Maven Central HTTP 429 / 503 responses on shared GitHub Actions runner IPs.
+  MAVEN_OPTS: >-
+    -Daether.transport.http.retryHandler.count=5
+    -Daether.transport.http.retryHandler.interval=5000
+    -Daether.transport.http.retryHandler.serviceUnavailable=429,503
+
 jobs:
   build:
     name: Build & quality gate (JDK 21)
