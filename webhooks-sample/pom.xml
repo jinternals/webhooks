@@ -24,7 +24,7 @@
 
     <groupId>io.github.jinternals.webhooks.sample</groupId>
     <artifactId>webhooks-sample</artifactId>
-    <version>1.0.0</version>
+    <version>1.1.0-SNAPSHOT</version>
     <packaging>pom</packaging>
     <name>webhooks-sample</name>
     <description>Standalone sample apps for the webhooks toolkit (quickstart, NATS JetStream, OAuth2 auth, custom SPIs)</description>
