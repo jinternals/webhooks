@@ -24,7 +24,7 @@
 
     <groupId>io.github.jinternals.webhooks.sample</groupId>
     <artifactId>webhooks-sample</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>1.0.0-SNAPSHOT</version>
     <packaging>pom</packaging>
     <name>webhooks-sample</name>
     <description>Standalone sample apps for the webhooks toolkit (quickstart, NATS JetStream, OAuth2 auth, custom SPIs)</description>
@@ -41,8 +41,8 @@
 
     <properties>
         <java.version>21</java.version>
-        <!-- Version of the published webhooks-* libraries the samples consume. -->
-        <webhooks.version>0.1.0-SNAPSHOT</webhooks.version>
+        <!-- Version of the published webhooks-* libraries the samples consume (defaults to matching sample version). -->
+        <webhooks.version>${project.version}</webhooks.version>
         <!-- NATS Java client (JetStream + KeyValue) for the zero-loss queue sample apps. -->
         <jnats.version>2.27.0</jnats.version>
         <!-- Code formatting, matching the libraries' house style (Palantir Java Format: 4-space, 120-col). -->

@@ -3,8 +3,8 @@
 All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
-[Semantic Versioning](https://semver.org/spec/v2.0.0.html). While the version is `0.x`, minor releases may
-contain breaking changes; they will always be called out under **Changed** or **Removed**.
+[Semantic Versioning](https://semver.org/spec/v2.0.0.html). Major release lines track Spring Boot major
+generations (`1.x` for Spring Boot `4.x`, `2.x` for Spring Boot `5.x`).
 
 ## [Unreleased]
 

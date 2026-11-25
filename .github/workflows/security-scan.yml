@@ -2,19 +2,63 @@ name: Dependency vulnerability scan
 
 on:
   schedule:
-    - cron: '0 3 * * 1' # every Monday 03:00 UTC
+    - cron: '0 3 * * 1' # every Monday 03:00 UTC across main + all active maintenance branches
   workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Specific branch to scan (leave blank to scan main + all active *.x maintenance branches)'
+        required: false
+        type: string
 
 permissions:
   contents: read
 
 jobs:
-  owasp:
-    name: OWASP dependency-check
+  discover-branches:
+    name: Discover supported branches
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 5
+    outputs:
+      branches: ${{ steps.list.outputs.branches }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+
+      - name: Resolve active release lines
+        id: list
+        env:
+          INPUT_BRANCH: ${{ inputs.branch }}
+          EOL_BRANCHES: ${{ vars.EOL_BRANCHES }}
+        run: |
+          if [[ -n "${INPUT_BRANCH}" ]]; then
+            BRANCHES_JSON=$(python3 -c 'import json, os; print(json.dumps([os.environ["INPUT_BRANCH"]]))')
+          else
+            RAW_BRANCHES=$(git ls-remote --heads origin | awk '{sub("refs/heads/", "", $2); print $2}' | grep -E '^(main|[0-9]+\.x|[0-9]+\.[0-9]+\.x)$' | sort -V)
+            BRANCHES_JSON=$(RAW_BRANCHES="${RAW_BRANCHES}" python3 - <<'PY'
+          import json, os
+          eol = {b.strip() for b in os.environ.get("EOL_BRANCHES", "").split(",") if b.strip()}
+          branches = [b for b in os.environ.get("RAW_BRANCHES", "").splitlines() if b and b not in eol]
+          print(json.dumps(branches or ["main"]))
+          PY
+            )
+          fi
+          echo "Scanning branches: ${BRANCHES_JSON}"
+          echo "branches=${BRANCHES_JSON}" >> "${GITHUB_OUTPUT}"
+
+  owasp:
+    name: OWASP dependency-check (${{ matrix.branch }})
+    needs: discover-branches
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        branch: ${{ fromJson(needs.discover-branches.outputs.branches) }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ matrix.branch }}
 
       - uses: actions/setup-java@v6
         with:
@@ -25,16 +69,16 @@ jobs:
       # Fails on any CVSS >= 7 finding (see the `security-scan` profile in pom.xml).
       # Add an NVD API key as the NVD_API_KEY repository secret to avoid slow, throttled downloads:
       # https://nvd.nist.gov/developers/request-an-api-key
-      - name: dependency-check
+      - name: dependency-check (${{ matrix.branch }})
         env:
           NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
         run: mvn -B -ntp -Psecurity-scan verify -DskipTests
 
-      - name: Upload report
+      - name: Upload report (${{ matrix.branch }})
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: dependency-check-report
+          name: dependency-check-report-${{ matrix.branch }}
           path: '**/target/dependency-check-report.html'
           if-no-files-found: ignore
           retention-days: 30

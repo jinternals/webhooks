@@ -85,7 +85,7 @@ Other conventions:
   references fail it (CI checks this on every PR).
 - Keep the docs in sync: user-visible behaviour changes should update [`README.md`](README.md), the relevant page
   under [`docs/`](docs/README.md), and — for spec-level behaviour — [`docs/reference/SPEC.md`](docs/reference/SPEC.md).
-- Add an entry under **Unreleased** in [`CHANGELOG.md`](CHANGELOG.md) for any user-visible change.
+- Add an entry under **Unreleased** in [`CHANGELOG.md`](CHANGELOG.md) for any user-visible change (see [`docs/operations/releasing.md`](docs/operations/releasing.md) for the release and maintenance-branch workflow).
 
 ## Pull request process
 

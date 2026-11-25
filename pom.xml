@@ -7,7 +7,7 @@
 
     <groupId>io.github.jinternals</groupId>
     <artifactId>webhooks</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>1.0.0-SNAPSHOT</version>
     <packaging>pom</packaging>
     <name>webhooks</name>
     <description>Standard Webhooks for Spring Boot — shared core + consumer + producer (no storage)</description>
@@ -50,6 +50,19 @@
         <url>https://github.com/jinternals/webhooks/issues</url>
     </issueManagement>
 
+    <!--
+      Snapshot distribution to Sonatype Central Portal Snapshots (`mvn -Psnapshot deploy`).
+      Release artifacts intentionally have NO <repository> entry here — releases MUST go through the
+      `release` profile (`central-publishing-maven-plugin` + GPG + Javadoc), so an accidental `mvn deploy`
+      without `-Prelease` on a non-SNAPSHOT version fails fast instead of uploading unsigned artifacts.
+    -->
+    <distributionManagement>
+        <snapshotRepository>
+            <id>central</id>
+            <url>https://central.sonatype.com/repository/maven-snapshots/</url>
+        </snapshotRepository>
+    </distributionManagement>
+
     <modules>
         <module>webhooks-core</module>
         <module>webhooks-consumer-autoconfigure</module>
@@ -64,7 +77,7 @@
         <maven.compiler.parameters>true</maven.compiler.parameters>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-        <project.build.outputTimestamp>2026-01-01T00:00:00Z</project.build.outputTimestamp>
+        <project.build.outputTimestamp>2026-11-25T08:11:42Z</project.build.outputTimestamp>
 
         <spring-boot.version>4.2.0</spring-boot.version>
         <standardwebhooks.version>1.3.0</standardwebhooks.version>
@@ -100,6 +113,7 @@
         <maven-javadoc-plugin.version>3.12.0</maven-javadoc-plugin.version>
         <maven-gpg-plugin.version>3.2.8</maven-gpg-plugin.version>
         <central-publishing-plugin.version>0.12.0</central-publishing-plugin.version>
+        <central.autoPublish>false</central.autoPublish>
     </properties>
 
     <dependencyManagement>
@@ -373,7 +387,7 @@
                     <version>${central-publishing-plugin.version}</version>
                     <configuration>
                         <publishingServerId>central</publishingServerId>
-                        <autoPublish>false</autoPublish>
+                        <autoPublish>${central.autoPublish}</autoPublish>
                     </configuration>
                 </plugin>
             </plugins>
@@ -425,6 +439,30 @@
                                 <phase>verify</phase>
                                 <goals>
                                     <goal>check</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <!--
+          Central Portal Snapshots (`mvn -Psnapshot deploy -DskipTests`): attaches -sources jars (including
+          thin-starter placeholders) for IDE navigation without paying GPG or Javadoc overhead on every merge.
+        -->
+        <profile>
+            <id>snapshot</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-source-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>attach-sources</id>
+                                <goals>
+                                    <goal>jar-no-fork</goal>
                                 </goals>
                             </execution>
                         </executions>

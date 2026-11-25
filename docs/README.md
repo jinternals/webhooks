@@ -58,6 +58,7 @@ replaceable bean, every annotation); Operations covers running it in production.
 
 ### Operations
 - **[Runbook](./operations/runbook.md)** — deployment topology, scaling, failure modes, what to alert on.
+- **[Releasing & maintenance](./operations/releasing.md)** — `1.x` / `2.x` Spring Boot alignment, `-SNAPSHOT` & Maven Central CI/CD, and security backports.
 - **[FAQ](./operations/faq.md)** — common questions and gotchas.
 
 ### Deep references

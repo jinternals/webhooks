@@ -5,13 +5,15 @@ priority.
 
 ## Supported versions
 
-The project is pre-1.0. Security fixes are made on `main` and shipped in the next release; only the latest
-released version receives fixes.
+Major release lines align with Spring Boot major generations so older Spring Boot baselines continue to receive
+security backports via dedicated maintenance branches (`N.x` / `N.M.x`) even after `main` moves to the next
+Spring Boot major:
 
-| Version | Supported |
-| --- | --- |
-| latest `0.x` release | ✅ |
-| older releases | ❌ |
+| `webhooks` Line | Spring Boot Baseline | Maintenance Branch | Security Fixes |
+| --- | --- | --- | --- |
+| **`1.x`** (latest minor) | Spring Boot `4.x` (`4.2+`) | `main` / `1.x` / `1.<latest>.x` | ✅ Supported |
+| **`2.x`** *(future)* | Spring Boot `5.x` | `main` (once Boot 5 ships; `1.x` continues on `1.x`) | Planned |
+| Superseded minors within a major | — | — | ❌ Upgrade to latest patch on active minor |
 
 ## Reporting a vulnerability
 

@@ -8,9 +8,7 @@
 [![Standard Webhooks](https://img.shields.io/badge/Standard_Webhooks-compliant-8A2BE2)](https://www.standardwebhooks.com/)
 
 > [!NOTE]
-> **Status: pre-1.0.** The toolkit is feature-complete and fully tested, but until 1.0 the public API and
-> configuration properties may change between minor versions. Breaking changes are always called out in the
-> [CHANGELOG](./CHANGELOG.md).
+> **Spring Boot compatibility:** Major release lines align with Spring Boot majors — **`1.x`** targets **Spring Boot `4.x`** (Java 21+, Spring Framework 7, Jackson 3), and **`2.x`** is reserved for **Spring Boot `5.x`**. Active maintenance branches receive security backports; see [SECURITY.md](./SECURITY.md) and [Releasing & maintenance](./docs/operations/releasing.md).
 
 A [Standard Webhooks](https://www.standardwebhooks.com/)–compliant toolkit for sending and receiving
 webhooks in Spring Boot applications. The toolkit provides two drop-in auto-configuration libraries:
@@ -35,7 +33,7 @@ see [Replay window](#replay-window)).
 > [Zero-webhook-loss queueing (NATS)](./docs/guides/zero-loss-queueing.md) ·
 > [Observability](./docs/guides/observability.md) ·
 > [Configuration reference](./docs/reference/configuration.md) · [Runbook](./docs/operations/runbook.md) ·
-> [FAQ](./docs/operations/faq.md). This README is the quick reference; the docs site is the home.
+> [Releasing](./docs/operations/releasing.md) · [FAQ](./docs/operations/faq.md). This README is the quick reference; the docs site is the home.
 
 ## Table of contents
 
@@ -88,11 +86,10 @@ The project is a Maven reactor of five library modules — `webhooks-core` plus 
 
 ## Requirements
 
-| Requirement | Version |
-| --- | --- |
-| Java | 21 |
-| Spring Boot | 4.2.x |
-| Maven | 3.9 or later |
+| `webhooks` Line | Spring Boot | Java | Maven |
+| --- | --- | --- | --- |
+| **`1.x`** | `4.2.x` (`4.x`) | 21+ | 3.9+ |
+| **`2.x`** *(planned)* | `5.x` | 21 / 25+ | 3.9+ |
 
 ## Consumer quick start
 
@@ -102,7 +99,7 @@ The project is a Maven reactor of five library modules — `webhooks-core` plus 
 <dependency>
     <groupId>io.github.jinternals</groupId>
     <artifactId>webhooks-consumer-starter</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>1.0.0</version>
 </dependency>
 ```
 
@@ -202,7 +199,7 @@ instrumented with a Micrometer `webhook.send` observation (see [Observability](#
 <dependency>
     <groupId>io.github.jinternals</groupId>
     <artifactId>webhooks-producer-starter</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>1.0.0</version>
 </dependency>
 ```
 
